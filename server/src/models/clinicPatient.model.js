@@ -28,6 +28,16 @@ const clinicPatientSchema = new mongoose.Schema({
     gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
     dob:    { type: Date, default: null },
 
+    // ABDM / ABHA Integration
+    abdm: {
+        abhaNumber: { type: String, sparse: true, trim: true, default: null },
+        abhaAddress: { type: String, sparse: true, trim: true, default: null },
+        isVerified: { type: Boolean, default: false },
+        verifiedAt: { type: Date, default: null },
+        linkedAt: { type: Date, default: null },
+        status: { type: String, enum: ['Not Linked', 'Verified', 'Pending', 'Failed'], default: 'Not Linked' }
+    },
+
     // Medical profile
     bloodGroup:        { type: String, default: '' },
     address:           { type: String, default: '' },

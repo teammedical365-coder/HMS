@@ -36,26 +36,64 @@ const CustomSelect = ({
         }
 
         const parsed = [];
-        React.Children.forEach(children, child => {
-            if (!child) return;
-            if (child.type === 'option') {
-                const val = child.props.value !== undefined ? child.props.value : child.props.children;
-                parsed.push({
-                    value: val,
-                    label: child.props.children !== undefined ? child.props.children : val,
-                    disabled: !!child.props.disabled
-                });
-            }
-        });
+        const extractOptions = (node) => {
+            if (!node) return;
+            React.Children.forEach(node, child => {
+                if (!child) return;
+                // Handle fragments or nested arrays/containers
+                if (child.type === React.Fragment || (child.props && child.props.children && child.type !== 'option')) {
+                    if (child.type === React.Fragment || !child.type) {
+                        extractOptions(child.props.children);
+                        return;
+                    }
+                }
+                if (child.type === 'option') {
+                    const val = child.props.value !== undefined ? child.props.value : child.props.children;
+                    parsed.push({
+                        value: val,
+                        label: child.props.children !== undefined ? child.props.children : val,
+                        disabled: !!child.props.disabled
+                    });
+                }
+            });
+        };
+        extractOptions(children);
         return parsed;
     }, [options, children]);
+
+    // Dynamically elevate parent card and field so dropdown never hides behind subsequent cards
+    useEffect(() => {
+        if (containerRef.current) {
+            const card = containerRef.current.closest('.reg-form-card');
+            const field = containerRef.current.closest('.reg-field');
+            if (isOpen) {
+                if (card) {
+                    card.classList.add('has-open-select');
+                    card.style.zIndex = '50';
+                }
+                if (field) {
+                    field.classList.add('has-open-select');
+                    field.style.zIndex = '60';
+                }
+            } else {
+                if (card) {
+                    card.classList.remove('has-open-select');
+                    card.style.zIndex = '';
+                }
+                if (field) {
+                    field.classList.remove('has-open-select');
+                    field.style.zIndex = '';
+                }
+            }
+        }
+    }, [isOpen]);
 
     // Check if dropdown should open upward or downward based on viewport space
     useEffect(() => {
         if (isOpen && containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const spaceBelow = window.innerHeight - rect.bottom;
-            const dropdownHeight = maxVisibleItems * 38 + 10;
+            const dropdownHeight = (maxVisibleItems * 38) + 10;
             if (spaceBelow < dropdownHeight && rect.top > dropdownHeight) {
                 setOpenUpward(true);
             } else {
@@ -134,8 +172,8 @@ const CustomSelect = ({
 
     return (
         <div 
-            className={`custom-select-container ${disabled ? 'disabled' : ''} ${className}`}
-            style={{ position: 'relative', width: '100%', ...style }}
+            className={`custom-select-container ${disabled ? 'disabled' : ''} ${isOpen ? 'open' : ''} ${className}`}
+            style={{ position: 'relative', width: '100%', zIndex: isOpen ? 1000 : 'auto', ...style }}
             ref={containerRef}
             id={id}
         >
@@ -160,8 +198,8 @@ const CustomSelect = ({
                     ref={dropdownRef}
                     className={`custom-select-dropdown ${openUpward ? 'upward' : ''}`}
                     style={{
-                        // 3 items visible: each item is 38px, so 3 * 38 = 114px
-                        maxHeight: `${maxVisibleItems * 38}px`
+                        // Exactly 3 items visible: each item is 38px + 2px borders = 116px
+                        maxHeight: `${(maxVisibleItems * 38) + 2}px`
                     }}
                 >
                     {items.map((item, idx) => {

@@ -44,6 +44,7 @@ import ClinicPatientProfile from './ClinicPatientProfile';
 import FamilyHealthTree from './FamilyHealthTree';
 import PatientVialsSection from '../../components/vials/PatientVialsSection';
 import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
+import AbdmSection from '../../components/abdm/AbdmSection';
 
 const HospitalPatientProfileContent = () => {
     const { id: patientId, department: deptParam } = useParams();
@@ -678,17 +679,16 @@ const HospitalPatientProfileContent = () => {
                          permissions.includes('reception_access') ||
                          permissions.includes('admin_manage_roles');
 
-    // Tab definitions (Clean icons, no raw emojis, merged clinical history into timeline)
+    // Tab definitions (Clean icons, no raw emojis, unified documents tab)
     const tabs = [
         { key: 'timeline', label: 'Timeline', icon: <FiClock />, count: displayTimeline?.length },
         { key: 'ipdOrders', label: 'IPD Orders', icon: <FiActivity /> },
         { key: 'familyHistory', label: 'Family Tree', icon: <FiUsers /> },
         { key: 'vitals', label: 'Vitals', icon: <FiHeart /> },
         { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText />, count: medications?.length },
-        { key: 'reports', label: 'Reports', icon: <FiFolder />, count: recentLabs?.length },
         { key: 'notes', label: 'Notes', icon: <FiMessageSquare /> },
         ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial Location', icon: <FiBox /> }] : []),
-        { key: 'documents', label: 'Documents', icon: <FiFile />, count: displayDocuments?.length },
+        { key: 'documents', label: 'Documents', icon: <FiFileText />, count: (displayDocuments?.length || 0) + (consentList?.length || 0) + (recentLabs?.length || 0) },
     ];
 
     // Gender & Blood Group display
@@ -872,6 +872,20 @@ const HospitalPatientProfileContent = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ====== ABDM / ABHA INTEGRATION SECTION ====== */}
+            <AbdmSection 
+                patient={patientData} 
+                onPatientUpdate={(updatedAbha) => {
+                    setPatientData(prev => ({
+                        ...prev,
+                        abdm: {
+                            ...(prev.abdm || {}),
+                            ...updatedAbha
+                        }
+                    }));
+                }} 
+            />
 
             {/* ====== TAB NAVIGATION ====== */}
             <div className="upp-tab-nav-wrapper">
@@ -1328,38 +1342,7 @@ const HospitalPatientProfileContent = () => {
                         </div>
                     )}
 
-                    {/* Reports Tab */}
-                    {activeTab === 'reports' && (
-                        <div className="upp-section-card">
-                            <div className="upp-section-header">
-                                <h2 className="upp-section-title">
-                                    <FiFileText style={{ color: '#8b5cf6' }} /> Lab Reports
-                                </h2>
-                                <span className="upp-section-count">{recentLabs.length}</span>
-                            </div>
-                            {recentLabs.length === 0 ? (
-                                <div className="upp-empty-state">No lab reports found.</div>
-                            ) : (
-                                <div className="upp-list-items">
-                                    {recentLabs.map((lab, i) => (
-                                        <div key={i} className="upp-list-card">
-                                            <div className="upp-list-info">
-                                                <span className="upp-list-title">{lab.data?.testName || lab.data?.reportName || (lab.data?.testNames?.join(', ')) || 'Diagnostic Lab Test'}</span>
-                                                <span className="upp-list-sub">{new Date(lab.date).toLocaleDateString('en-IN')} • {lab.data?.reportStatus === 'UPLOADED' ? 'Completed' : (lab.data?.reportStatus || 'Pending')}</span>
-                                            </div>
-                                            {(lab.data?.reportFile?.url || lab.data?.fileUrl) && (
-                                                <div className="upp-list-action">
-                                                    <a href={lab.data?.reportFile?.url || lab.data?.fileUrl} target="_blank" rel="noopener noreferrer" className="upp-mini-btn">
-                                                        <FiEye /> View
-                                                    </a>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
+
 
                     {/* Notes Tab */}
                     {activeTab === 'notes' && (
@@ -1388,8 +1371,8 @@ const HospitalPatientProfileContent = () => {
                         </div>
                     )}
 
-                    {/* Documents Tab */}
-                    {activeTab === 'documents' && (
+                    {/* Documents Tab (Unified: Consents, Lab Reports, Uploaded Files) */}
+                    {(activeTab === 'documents' || activeTab === 'reports') && (
                         <>
                             {/* Consent Forms */}
                             <div className="upp-section-card">
@@ -1400,69 +1383,21 @@ const HospitalPatientProfileContent = () => {
                                     <span className="upp-section-count">{consentList.length}</span>
                                 </div>
 
-                                {/* Upload box */}
-                                <form className="upp-consent-box" onSubmit={handleConsentUpload}>
-                                    <div className="upp-consent-form">
-                                        <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--upp-text-main)' }}>Upload New Consent Form (PDF/Img)</span>
-                                        <input 
-                                            id="consent-file-input"
-                                            type="file" 
-                                            accept="application/pdf,image/*" 
-                                            onChange={(e) => setConsentFile(e.target.files[0])} 
-                                            className="upp-file-input"
-                                            required
-                                        />
-                                    </div>
-                                    <button type="submit" className="upp-btn-submit-consent" disabled={!consentFile || uploadingConsent}>
-                                        <FiUpload /> {uploadingConsent ? 'Uploading...' : 'Upload Consent Form'}
-                                    </button>
-                                </form>
-
-                                {/* Generate Auto-Filled Consent */}
-                                <div style={{ marginTop: '12px', padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', border: '1.5px dashed #cbd5e1' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                        <FiFileText style={{ color: '#6366f1', fontSize: '14px' }} />
-                                        <span style={{ fontSize: '12px', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Generate Auto-Filled Consent
-                                        </span>
-                                    </div>
-                                    <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 8px 0' }}>
-                                        Select a template to generate auto-filled PDF with <strong>{patientData?.name || 'Patient'}</strong>'s details.
-                                    </p>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                        <select 
-                                            value={selectedConsentTemplate} 
-                                            onChange={(e) => setSelectedConsentTemplate(e.target.value)}
-                                            style={{ flex: 1, minWidth: '180px', padding: '8px 10px', borderRadius: '6px', border: '1.5px solid #cbd5e1', fontSize: '12.5px', background: '#fff', color: '#1e293b', fontWeight: 600 }}
-                                        >
-                                            {consentTemplates.length === 0 ? (
-                                                <option value="">No templates available</option>
-                                            ) : (
-                                                consentTemplates.map(t => (
-                                                    <option key={t._id} value={t._id}>{t.name} ({t.categoryId?.name || t.category || 'General'})</option>
-                                                ))
-                                            )}
-                                        </select>
-                                        <button 
-                                            type="button" 
-                                            onClick={handleGenerateConsentPDF}
-                                            disabled={!selectedConsentTemplate || generatingConsentPdf || consentTemplates.length === 0}
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '8px 14px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: '700', fontSize: '12px', cursor: (!selectedConsentTemplate || generatingConsentPdf) ? 'not-allowed' : 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.2)' }}
-                                        >
-                                            <FiDownload /> {generatingConsentPdf ? 'Generating...' : 'Download PDF'}
-                                        </button>
-                                    </div>
-                                </div>
-
                                 {consentList.length === 0 ? (
-                                    <div className="upp-empty-state" style={{ marginTop: '12px' }}>No consent forms uploaded yet.</div>
+                                    <div className="upp-empty-state">No consent forms uploaded yet.</div>
                                 ) : (
-                                    <div className="upp-list-items" style={{ marginTop: '12px' }}>
+                                    <div className="upp-list-items">
                                         {consentList.map((c, i) => (
                                             <div key={i} className="upp-list-card">
                                                 <div className="upp-list-info">
-                                                    <span className="upp-list-title">{c.fileName || `Consent Form #${i + 1}`}</span>
-                                                    <span className="upp-list-sub">{c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString('en-IN') : 'Saved'}</span>
+                                                    <span className="upp-list-title">
+                                                        {c.procedureName || c.title || c.fileName || `Consent Form #${i + 1}`}
+                                                    </span>
+                                                    <span className="upp-list-sub">
+                                                        {c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Saved'}
+                                                        {c.doctorName ? ` • Dr. ${c.doctorName.replace(/^Dr\.\s*/i, '')}` : ''}
+                                                        {c.witnessName ? ` • Signatory: ${c.witnessName} (${c.witnessRelation || 'Self'})` : ''}
+                                                    </span>
                                                 </div>
                                                 <div className="upp-list-action">
                                                     {c.url && (
@@ -1475,9 +1410,6 @@ const HospitalPatientProfileContent = () => {
                                                             </a>
                                                         </>
                                                     )}
-                                                    <button type="button" onClick={() => handleDeleteConsent(i, c.fileId)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
-                                                        <FiTrash2 />
-                                                    </button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1485,11 +1417,45 @@ const HospitalPatientProfileContent = () => {
                                 )}
                             </div>
 
-                            {/* Reports & Documents */}
+                            {/* Lab & Diagnostic Reports */}
                             <div className="upp-section-card">
                                 <div className="upp-section-header">
                                     <h3 className="upp-section-title">
-                                        <FiFolder style={{ color: '#6366f1' }} /> Reports & Documents
+                                        <FiFileText style={{ color: '#8b5cf6' }} /> Lab Reports
+                                    </h3>
+                                    <span className="upp-section-count">{recentLabs.length}</span>
+                                </div>
+                                {recentLabs.length === 0 ? (
+                                    <div className="upp-empty-state">No lab reports found.</div>
+                                ) : (
+                                    <div className="upp-list-items">
+                                        {recentLabs.map((lab, i) => (
+                                            <div key={i} className="upp-list-card">
+                                                <div className="upp-list-info">
+                                                    <span className="upp-list-title">{lab.data?.testName || lab.data?.reportName || (lab.data?.testNames?.join(', ')) || 'Diagnostic Lab Test'}</span>
+                                                    <span className="upp-list-sub">{new Date(lab.date).toLocaleDateString('en-IN')} • {lab.data?.reportStatus === 'UPLOADED' ? 'Completed' : (lab.data?.reportStatus || 'Pending')}</span>
+                                                </div>
+                                                {(lab.data?.reportFile?.url || lab.data?.fileUrl) && (
+                                                    <div className="upp-list-action">
+                                                        <a href={lab.data?.reportFile?.url || lab.data?.fileUrl} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
+                                                            <FiEye />
+                                                        </a>
+                                                        <a href={lab.data?.reportFile?.url || lab.data?.fileUrl} download target="_blank" rel="noopener noreferrer" className="upp-icon-btn upp-icon-btn-download" title="Download">
+                                                            <FiDownload />
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Uploaded Documents */}
+                            <div className="upp-section-card">
+                                <div className="upp-section-header">
+                                    <h3 className="upp-section-title">
+                                        <FiFolder style={{ color: '#6366f1' }} /> Uploaded Clinical Documents
                                     </h3>
                                     <span className="upp-section-count">{displayDocuments.length}</span>
                                 </div>

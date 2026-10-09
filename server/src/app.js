@@ -281,6 +281,11 @@ app.use('/api/packages', require('./routes/package.routes'));
 app.use('/api/migrations', require('./routes/migration.routes'));
 app.use('/api/local-agent', require('./routes/localAgent.routes'));
 app.use('/api/local-sync', require('./routes/localSync.routes'));
+app.use('/api/abdm/abha', require('./modules/abdm/abha.routes'));
+const { bridgeRouter: abdmBridgeRouter, webhookRouter: abdmWebhookRouter } = require('./modules/abdm/abdm.bridge.routes');
+app.use('/api/abdm/bridge', abdmBridgeRouter);
+app.use('/api/abdm/v0.5', abdmWebhookRouter);
+app.use('/v0.5', abdmWebhookRouter);
 
 // ── Serve Frontend in Production (if client/dist exists) ──────────────────────
 const clientDistPath = path.join(__dirname, '../../client/dist');
