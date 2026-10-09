@@ -102,6 +102,14 @@ server.listen(PORT, '0.0.0.0', () => {
             console.warn('⚠️ [AI Wallet Init Warning]:', walletInitErr.message);
         }
 
+        // 6. Start ABDM inbox recovery worker (async callback processor)
+        try {
+            require('./src/modules/abdm/abdm.inbox.processor').startInboxWorker();
+            console.log('✅ [ABDM] Inbox recovery worker started');
+        } catch (inboxErr) {
+            console.warn('⚠️ [ABDM Inbox Worker Warning]:', inboxErr.message);
+        }
+
         if (DEPLOYMENT_MODE === 'local') {
             // Start sync service — pushes stats to cloud every 15 min
             const syncService = require('./src/utils/syncService');

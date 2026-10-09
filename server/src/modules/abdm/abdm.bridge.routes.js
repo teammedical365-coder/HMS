@@ -1,49 +1,33 @@
+'use strict';
 /**
- * abdm.bridge.routes.js — Router for ABDM Bridge Management and Official Callbacks
+ * abdm.bridge.routes.js - ADMIN endpoints only. Mount at /api/abdm/bridge.
+ * (The public ABDM callbacks live in abdm.callbacks.js, mounted at the app root.)
  *
- * Base Mounts:
- *   - /api/abdm/bridge (Admin bridge configuration endpoints)
- *   - /api/abdm/v0.5 and /v0.5 (ABDM Gateway callback webhooks)
+ * Platform actions are superadmin/centraladmin ONLY. A hospital admin must never be able to
+ * change the shared bridge URL or reassign HIP IDs: that would redirect every hospital.
  */
-
 const express = require('express');
-const router = express.Router();
 const { verifyToken } = require('../../middleware/auth.middleware');
-const bridgeController = require('./abdm.bridge.controller');
-const webhookController = require('./abdm.webhook.controller');
+const c = require('./abdm.bridge.controller');
 
-// Middleware to enforce Hospital Admin or Superadmin role
+const router = express.Router();
+
+const requirePlatformAdmin = (req, res, next) => {
+    const role = req.user && req.user.role;
+    if (role === 'superadmin' || role === 'centraladmin') return next();
+    return res.status(403).json({ success: false, message: 'Platform administrator access required' });
+};
 const requireHospitalAdmin = (req, res, next) => {
-    const role = req.user?.role;
-    const allowedRoles = ['hospitaladmin', 'superadmin', 'centraladmin'];
-    const permissions = req.user?._roleData?.permissions || [];
-
-    if (allowedRoles.includes(role) || permissions.includes('*') || permissions.includes('admin_manage_roles')) {
-        return next();
-    }
-    return res.status(403).json({
-        success: false,
-        message: 'Access denied: Hospital Administrator credentials required to manage ABDM Bridge'
-    });
+    const role = req.user && req.user.role;
+    if (['hospitaladmin', 'superadmin', 'centraladmin'].includes(role)) return next();
+    return res.status(403).json({ success: false, message: 'Hospital administrator access required' });
 };
 
-// ── Bridge Configuration Endpoints (Requires Hospital Admin Auth) ─────────────
-router.get('/config', verifyToken, requireHospitalAdmin, bridgeController.getBridgeConfig);
-router.patch('/url', verifyToken, requireHospitalAdmin, bridgeController.updateBridgeUrl);
-router.post('/services', verifyToken, requireHospitalAdmin, bridgeController.registerHipService);
-router.get('/verify', verifyToken, requireHospitalAdmin, bridgeController.verifyServices);
+router.get('/config', verifyToken, requirePlatformAdmin, c.getConfig);
+router.patch('/url', verifyToken, requirePlatformAdmin, c.registerUrl);   // kept path for the existing UI; body ignored
+router.get('/probe', verifyToken, requirePlatformAdmin, c.probe);
+router.get('/verify', verifyToken, requirePlatformAdmin, c.verify);
+router.put('/hospitals/:hospitalId/hip', verifyToken, requirePlatformAdmin, c.registerHospital);
+router.get('/hospital', verifyToken, requireHospitalAdmin, c.ownHospitalStatus);
 
-// ── Webhook Callback Router Factory ──────────────────────────────────────────
-const webhookRouter = express.Router();
-
-webhookRouter.post('/users/auth/on-init', webhookController.handleAuthOnInit);
-webhookRouter.post('/users/auth/on-confirm', webhookController.handleAuthOnConfirm);
-webhookRouter.post('/users/auth/on-fetch-modes', webhookController.handleAuthOnFetchModes);
-webhookRouter.post('/patients/profile/on-share', webhookController.handleProfileOnShare);
-webhookRouter.post('/links/link/on-init', webhookController.handleLinkOnInit);
-webhookRouter.post('/links/link/on-confirm', webhookController.handleLinkOnConfirm);
-
-module.exports = {
-    bridgeRouter: router,
-    webhookRouter
-};
+module.exports = { bridgeRouter: router };

@@ -1,351 +1,189 @@
+'use strict';
 /**
- * abha.service.js — Business Logic & Tenant Security for Medical365 ABHA Integration
+ * abha.service.js - ABHA create / link-existing on ABDM V3 (Milestone 1).
  *
- * Enforces:
- *   - Strict Tenant Isolation (hospitalId checked against authenticated user session)
- *   - Duplicate ABHA Detection within tenant
- *   - Separation between Medical365 MRN and ABDM ABHA
- *   - Data Persistence across Master and Tenant DBs
- *   - Privacy Masking for UI Presentation
+ * Differences from the old version:
+ *  - V3 endpoints; Aadhaar/mobile/OTP are RSA-encrypted (inside abdm.client.js).
+ *  - Aadhaar is NEVER read from the patient record and NEVER stored or logged.
+ *  - Every txnId is bound server-side to hospital + patient + user (no replay across patients).
+ *  - Captures abhaName/gender/yearOfBirth exactly as ABDM returns them (needed for link tokens).
  */
-
-const mongoose = require('mongoose');
 const User = require('../../models/user.model');
-const abdmClient = require('./abdm.client');
+const AbdmTxn = require('../../models/abdmTxn.model');
+const client = require('./abdm.client');
+const config = require('./abdm.config');
 const { getTenantConnection } = require('../../db/tenantDb');
 const { getTenantModels } = require('../../db/tenantModels');
 
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+const notConfigured = () => ({
+    success: false,
+    configured: false,
+    message: 'ABDM is not configured. Set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.',
+});
+
 class AbhaService {
-    /**
-     * Mask ABHA Number for safe UI presentation (e.g. 14-8293-8472-9102 -> **-****-****-9102)
-     */
-    maskAbhaNumber(abhaNumber) {
-        if (!abhaNumber || typeof abhaNumber !== 'string') return '';
-        const clean = abhaNumber.trim();
-        if (clean.length <= 4) return '****';
-        const last4 = clean.slice(-4);
-        return `**-****-****-${last4}`;
+    maskAbhaNumber(n) {
+        if (!n || typeof n !== 'string') return '';
+        const clean = n.trim();
+        return clean.length <= 4 ? '****' : `**-****-****-${clean.slice(-4)}`;
     }
 
-    /**
-     * Mask ABHA Address for safe UI presentation (e.g. rohit.verma@abdm -> r***a@abdm)
-     */
-    maskAbhaAddress(abhaAddress) {
-        if (!abhaAddress || typeof abhaAddress !== 'string') return '';
-        const parts = abhaAddress.trim().split('@');
-        if (parts.length < 2) return '******@abdm';
-        const user = parts[0];
-        const domain = parts[1];
+    maskAbhaAddress(a) {
+        if (!a || typeof a !== 'string') return '';
+        const [user, domain] = a.trim().split('@');
+        if (!domain) return '******@abdm';
         if (user.length <= 2) return `${user[0]}*@${domain}`;
-        const maskedUser = `${user[0]}***${user[user.length - 1]}`;
-        return `${maskedUser}@${domain}`;
+        return `${user[0]}***${user[user.length - 1]}@${domain}`;
     }
 
-    /**
-     * Helper to retrieve patient document strictly scoped to the hospital tenant
-     */
     async getPatientForTenant(hospitalId, patientId) {
-        if (!patientId) {
-            const err = new Error('Patient ID is required');
-            err.status = 400;
-            throw err;
-        }
-
-        const query = { _id: patientId };
-        if (hospitalId) {
-            query.hospitalId = hospitalId;
-        }
-
-        const patient = await User.findOne(query);
-        if (!patient) {
-            const err = new Error('Patient record not found in this hospital tenant');
-            err.status = 404;
-            throw err;
-        }
-
+        if (!hospitalId) throw httpError(400, 'hospitalId is required');
+        if (!patientId) throw httpError(400, 'Patient ID is required');
+        const patient = await User.findOne({ _id: patientId, hospitalId });
+        if (!patient) throw httpError(404, 'Patient record not found in this hospital');
         return patient;
     }
 
-    /**
-     * Fetch the current ABHA status for a patient
-     */
+    async bindTxn({ txnId, flow, hospitalId, patientId, userId, meta }) {
+        if (!txnId) throw httpError(502, 'ABDM did not return a transaction id');
+        await AbdmTxn.findOneAndUpdate(
+            { txnId: String(txnId), flow },
+            { $set: { hospitalId, patientId, userId: userId || null, meta: meta || {}, attempts: 0, createdAt: new Date() } },
+            { upsert: true }
+        );
+    }
+
+    async takeTxn({ txnId, flow, hospitalId, patientId, userId }) {
+        const t = await AbdmTxn.findOne({ txnId: String(txnId), flow, hospitalId, patientId, userId: userId || null });
+        if (!t) throw httpError(403, 'Invalid or expired transaction. Please start again.');
+        return t;
+    }
+
     async getStatus(hospitalId, patientId) {
         const patient = await this.getPatientForTenant(hospitalId, patientId);
-        const isConfigured = abdmClient.isConfigured();
-
-        const abdmData = patient.abdm || {
-            abhaNumber: null,
-            abhaAddress: null,
-            isVerified: false,
-            status: 'Not Linked'
-        };
-
+        const a = patient.abdm || {};
         return {
             success: true,
-            isConfigured,
+            isConfigured: client.isConfigured(),
             patientId: patient._id,
             name: patient.name,
-            mrn: patient.patientId || patient.mrn || patient.uhid || 'N/A',
+            mrn: patient.patientId || 'N/A',
             abdm: {
-                status: abdmData.status || (abdmData.isVerified ? 'Verified' : 'Not Linked'),
-                isVerified: Boolean(abdmData.isVerified),
-                verifiedAt: abdmData.verifiedAt || null,
-                linkedAt: abdmData.linkedAt || null,
-                maskedAbhaNumber: abdmData.abhaNumber ? this.maskAbhaNumber(abdmData.abhaNumber) : null,
-                maskedAbhaAddress: abdmData.abhaAddress ? this.maskAbhaAddress(abdmData.abhaAddress) : null
-            }
+                status: a.status || (a.isVerified ? 'Verified' : 'Not Linked'),
+                isVerified: Boolean(a.isVerified),
+                verifiedAt: a.verifiedAt || null,
+                linkedAt: a.linkedAt || null,
+                maskedAbhaNumber: a.abhaNumber ? this.maskAbhaNumber(a.abhaNumber) : null,
+                maskedAbhaAddress: a.abhaAddress ? this.maskAbhaAddress(a.abhaAddress) : null,
+            },
         };
     }
 
-    /**
-     * Step 1: Start Link Existing ABHA Flow
-     */
-    async startLink(hospitalId, patientId, { abhaIdentifier, authMethod = 'AADHAAR_OTP' }) {
-        if (!abdmClient.isConfigured()) {
-            return {
-                success: false,
-                configured: false,
-                message: 'ABDM Sandbox is not configured. Please set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.'
-            };
-        }
-
-        if (!abhaIdentifier || typeof abhaIdentifier !== 'string' || abhaIdentifier.trim().length < 4) {
-            const err = new Error('Valid ABHA Number or ABHA Address is required');
-            err.status = 400;
-            throw err;
-        }
-
+    // ── Create new ABHA (Aadhaar OTP) ────────────────────────────────────────
+    async startCreate(hospitalId, patientId, userId, { aadhaarNumber }) {
+        if (!client.isConfigured()) return notConfigured();
         const patient = await this.getPatientForTenant(hospitalId, patientId);
+        if (patient.abdm && patient.abdm.isVerified) throw httpError(409, 'ABHA already linked to this patient');
 
-        // Check if patient is already verified
-        if (patient.abdm?.isVerified) {
-            const err = new Error('ABHA already linked to this patient');
-            err.status = 409;
-            throw err;
+        const aadhaar = String(aadhaarNumber || '').trim();
+        if (!/^\d{12}$/.test(aadhaar)) throw httpError(400, 'A valid 12-digit Aadhaar number is required');
+
+        const r = await client.requestEnrolOtp({ aadhaar }); // encrypted inside the client
+        await this.bindTxn({ txnId: r.txnId, flow: 'ENROL', hospitalId: patient.hospitalId, patientId: patient._id, userId });
+        return { success: true, configured: true, txnId: r.txnId, message: 'OTP sent to the Aadhaar-registered mobile number' };
+    }
+
+    async verifyCreate(hospitalId, patientId, userId, { txnId, otp, mobile }) {
+        if (!client.isConfigured()) return notConfigured();
+        if (!txnId || !otp) throw httpError(400, 'txnId and otp are required');
+        const patient = await this.getPatientForTenant(hospitalId, patientId);
+        await this.takeTxn({ txnId, flow: 'ENROL', hospitalId: patient.hospitalId, patientId: patient._id, userId });
+
+        const mob = String(mobile || patient.phone || '').replace(/\D/g, '').slice(-10);
+        const { profile } = await client.enrolByAadhaar({ txnId, otp: String(otp).trim(), mobile: mob || undefined });
+        if (!profile) throw httpError(502, 'ABDM did not return the created ABHA');
+
+        const abha = await this.persist(patient, profile);
+        await AbdmTxn.deleteOne({ txnId: String(txnId), flow: 'ENROL' });
+        return { success: true, message: 'ABHA created and linked to the patient', abha };
+    }
+
+    // ── Link existing ABHA (by 14-digit ABHA number) ─────────────────────────
+    async startLink(hospitalId, patientId, userId, { abhaIdentifier, authMethod = 'AADHAAR_OTP' }) {
+        if (!client.isConfigured()) return notConfigured();
+        const patient = await this.getPatientForTenant(hospitalId, patientId);
+        if (patient.abdm && patient.abdm.isVerified) throw httpError(409, 'ABHA already linked to this patient');
+
+        const digits = String(abhaIdentifier || '').replace(/\D/g, '');
+        if (digits.length !== 14) {
+            throw httpError(400, 'Enter the 14-digit ABHA number (ABHA-address login is not supported yet)');
         }
+        const abhaNumber = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10)}`;
 
-        // Prevent duplicate ABHA within the same hospital tenant
-        const cleanId = abhaIdentifier.trim();
-        const duplicateCheck = await User.findOne({
-            hospitalId: patient.hospitalId,
-            _id: { $ne: patient._id },
-            $or: [
-                { 'abdm.abhaNumber': cleanId },
-                { 'abdm.abhaAddress': cleanId }
-            ]
+        const dup = await User.findOne({ hospitalId: patient.hospitalId, _id: { $ne: patient._id }, 'abdm.abhaNumber': abhaNumber });
+        if (dup) throw httpError(409, 'This ABHA is already linked to another patient in this hospital');
+
+        const viaAadhaar = String(authMethod).toUpperCase() !== 'MOBILE_OTP';
+        const scope = viaAadhaar ? ['abha-login', 'aadhaar-verify'] : ['abha-login'];
+        const r = await client.requestLoginOtp({
+            loginHint: 'abha-number', loginId: abhaNumber, otpSystem: viaAadhaar ? 'aadhaar' : 'abdm', scope,
         });
-
-        if (duplicateCheck) {
-            const err = new Error('This ABHA is already linked to another patient in this hospital');
-            err.status = 409;
-            throw err;
-        }
-
-        // Initiate with official ABDM Gateway
-        const result = await abdmClient.initLink({ abhaIdentifier: cleanId, authMethod });
-
-        return {
-            success: true,
-            configured: true,
-            txnId: result.txnId,
-            authMode: result.authMode,
-            message: 'OTP sent to registered mobile by ABDM'
-        };
+        await this.bindTxn({ txnId: r.txnId, flow: 'LOGIN', hospitalId: patient.hospitalId, patientId: patient._id, userId, meta: { scope } });
+        return { success: true, configured: true, txnId: r.txnId, authMode: authMethod, message: 'OTP sent by ABDM' };
     }
 
-    /**
-     * Step 2: Verify Link Existing ABHA with OTP & Save to Patient
-     */
-    async verifyLink(hospitalId, patientId, { txnId, otp }) {
-        if (!abdmClient.isConfigured()) {
-            return {
-                success: false,
-                configured: false,
-                message: 'ABDM Sandbox is not configured. Please set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.'
-            };
-        }
-
-        if (!txnId || !otp) {
-            const err = new Error('Transaction ID (txnId) and OTP are required');
-            err.status = 400;
-            throw err;
-        }
-
+    async verifyLink(hospitalId, patientId, userId, { txnId, otp }) {
+        if (!client.isConfigured()) return notConfigured();
+        if (!txnId || !otp) throw httpError(400, 'txnId and otp are required');
         const patient = await this.getPatientForTenant(hospitalId, patientId);
+        const t = await this.takeTxn({ txnId, flow: 'LOGIN', hospitalId: patient.hospitalId, patientId: patient._id, userId });
 
-        // Confirm with official ABDM Gateway
-        const abdmProfile = await abdmClient.confirmLink({ txnId, otp });
+        const { profile } = await client.verifyLogin({ txnId, otp: String(otp).trim(), scope: (t.meta && t.meta.scope) || ['abha-login'] });
+        if (!profile) throw httpError(502, 'ABDM did not return verified ABHA details');
 
-        if (!abdmProfile.abhaNumber && !abdmProfile.abhaAddress) {
-            const err = new Error('ABDM did not return verified ABHA credentials');
-            err.status = 502;
-            throw err;
-        }
+        const abha = await this.persist(patient, profile);
+        await AbdmTxn.deleteOne({ txnId: String(txnId), flow: 'LOGIN' });
+        return { success: true, message: 'ABHA verified and linked', abha };
+    }
 
-        // Final duplicate check
-        if (abdmProfile.abhaNumber) {
-            const dup = await User.findOne({
-                hospitalId: patient.hospitalId,
-                _id: { $ne: patient._id },
-                'abdm.abhaNumber': abdmProfile.abhaNumber
-            });
-            if (dup) {
-                const err = new Error('ABHA already linked to another patient in this hospital');
-                err.status = 409;
-                throw err;
-            }
+    // ── shared ───────────────────────────────────────────────────────────────
+    async persist(patient, profile) {
+        const abhaNumber = profile.ABHANumber || null;
+        const abhaAddress = String((profile.phrAddress && profile.phrAddress[0]) || profile.preferredAbhaAddress || '').toLowerCase() || null;
+        if (!abhaNumber && !abhaAddress) throw httpError(502, 'ABDM did not return ABHA credentials');
+
+        const name = profile.name || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ') || null;
+        const yobMatch = String(profile.yearOfBirth || profile.dob || '').match(/(19|20)\d{2}/);
+        const g = profile.gender ? String(profile.gender).trim()[0].toUpperCase() : null;
+
+        if (abhaNumber) {
+            const dup = await User.findOne({ hospitalId: patient.hospitalId, _id: { $ne: patient._id }, 'abdm.abhaNumber': abhaNumber });
+            if (dup) throw httpError(409, 'ABHA already linked to another patient in this hospital');
         }
 
         const now = new Date();
-        const abdmUpdate = {
-            abhaNumber: abdmProfile.abhaNumber || null,
-            abhaAddress: abdmProfile.abhaAddress || null,
-            isVerified: true,
-            verifiedAt: now,
-            linkedAt: now,
-            status: 'Verified'
+        const update = {
+            abhaNumber, abhaAddress,
+            abhaName: name, abhaGender: g, abhaYearOfBirth: yobMatch ? Number(yobMatch[0]) : null,
+            kycVerified: Boolean(profile.kycVerified),
+            isVerified: true, verifiedAt: now, linkedAt: now, status: 'Verified',
         };
-
-        patient.abdm = abdmUpdate;
+        patient.abdm = update;
         await patient.save();
 
-        // Also update in tenant DB if active
-        if (patient.hospitalId) {
-            try {
-                const tenantDb = await getTenantConnection(String(patient.hospitalId));
-                const tenantModels = getTenantModels(tenantDb);
-                if (tenantModels.User) {
-                    await tenantModels.User.findByIdAndUpdate(patient._id, { $set: { abdm: abdmUpdate } });
-                }
-            } catch (_) {}
+        try {
+            const tdb = await getTenantConnection(String(patient.hospitalId));
+            const tm = getTenantModels(tdb);
+            if (tm.User) await tm.User.findByIdAndUpdate(patient._id, { $set: { abdm: update } });
+        } catch (err) {
+            console.error('[ABHA] tenant DB sync failed:', err.message); // no PHI in the log
         }
 
         return {
-            success: true,
-            message: 'ABHA successfully linked and verified',
-            abha: {
-                status: 'Verified',
-                isVerified: true,
-                maskedAbhaNumber: this.maskAbhaNumber(abdmUpdate.abhaNumber),
-                maskedAbhaAddress: this.maskAbhaAddress(abdmUpdate.abhaAddress)
-            }
-        };
-    }
-
-    /**
-     * Step 1: Start Create ABHA with Aadhaar OTP
-     */
-    async startCreate(hospitalId, patientId, { aadhaarNumber }) {
-        if (!abdmClient.isConfigured()) {
-            return {
-                success: false,
-                configured: false,
-                message: 'ABDM Sandbox is not configured. Please set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.'
-            };
-        }
-
-        const patient = await this.getPatientForTenant(hospitalId, patientId);
-
-        if (patient.abdm?.isVerified) {
-            const err = new Error('ABHA already created and linked to this patient');
-            err.status = 409;
-            throw err;
-        }
-
-        // Use patient's existing Aadhaar if not passed explicitly
-        const targetAadhaar = aadhaarNumber || patient.aadhaarNumber;
-        if (!targetAadhaar || !/^\d{12}$/.test(String(targetAadhaar).trim())) {
-            const err = new Error('Valid 12-digit Aadhaar number is required for ABHA creation');
-            err.status = 400;
-            throw err;
-        }
-
-        const result = await abdmClient.generateCreateOtp({ aadhaarNumber: targetAadhaar });
-
-        return {
-            success: true,
-            configured: true,
-            txnId: result.txnId,
-            message: 'Aadhaar OTP sent to Aadhaar-registered mobile number'
-        };
-    }
-
-    /**
-     * Step 2: Verify Create ABHA with Aadhaar OTP & Save to Patient
-     */
-    async verifyCreate(hospitalId, patientId, { txnId, otp }) {
-        if (!abdmClient.isConfigured()) {
-            return {
-                success: false,
-                configured: false,
-                message: 'ABDM Sandbox is not configured. Please set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.'
-            };
-        }
-
-        if (!txnId || !otp) {
-            const err = new Error('Transaction ID (txnId) and OTP are required');
-            err.status = 400;
-            throw err;
-        }
-
-        const patient = await this.getPatientForTenant(hospitalId, patientId);
-
-        // Verify with official ABDM Gateway
-        const abdmProfile = await abdmClient.verifyCreateOtp({ txnId, otp });
-
-        if (!abdmProfile.abhaNumber && !abdmProfile.abhaAddress) {
-            const err = new Error('ABDM did not return created ABHA details');
-            err.status = 502;
-            throw err;
-        }
-
-        // Prevent duplicate ABHA within same tenant
-        if (abdmProfile.abhaNumber) {
-            const dup = await User.findOne({
-                hospitalId: patient.hospitalId,
-                _id: { $ne: patient._id },
-                'abdm.abhaNumber': abdmProfile.abhaNumber
-            });
-            if (dup) {
-                const err = new Error('Created ABHA is already linked to another patient in this hospital');
-                err.status = 409;
-                throw err;
-            }
-        }
-
-        const now = new Date();
-        const abdmUpdate = {
-            abhaNumber: abdmProfile.abhaNumber || null,
-            abhaAddress: abdmProfile.abhaAddress || null,
-            isVerified: true,
-            verifiedAt: now,
-            linkedAt: now,
-            status: 'Verified'
-        };
-
-        patient.abdm = abdmUpdate;
-        await patient.save();
-
-        // Also update in tenant DB if active
-        if (patient.hospitalId) {
-            try {
-                const tenantDb = await getTenantConnection(String(patient.hospitalId));
-                const tenantModels = getTenantModels(tenantDb);
-                if (tenantModels.User) {
-                    await tenantModels.User.findByIdAndUpdate(patient._id, { $set: { abdm: abdmUpdate } });
-                }
-            } catch (_) {}
-        }
-
-        return {
-            success: true,
-            message: 'New ABHA successfully created and linked to patient',
-            abha: {
-                status: 'Verified',
-                isVerified: true,
-                maskedAbhaNumber: this.maskAbhaNumber(abdmUpdate.abhaNumber),
-                maskedAbhaAddress: this.maskAbhaAddress(abdmUpdate.abhaAddress)
-            }
+            status: 'Verified', isVerified: true,
+            maskedAbhaNumber: this.maskAbhaNumber(abhaNumber),
+            maskedAbhaAddress: this.maskAbhaAddress(abhaAddress),
         };
     }
 }

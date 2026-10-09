@@ -99,6 +99,12 @@ const hospitalSchema = new mongoose.Schema({
     // Entity type — 'hospital' for full hospitals, 'clinic' for small simple clinics
     clinicType: { type: String, enum: ['hospital', 'clinic'], default: 'hospital' },
 
+    // ABDM / HIP Configuration (National Health Authority)
+    abdm: {
+        enabled: { type: Boolean, default: false },
+        hipId:   { type: String, trim: true, unique: true, sparse: true },   // = HFR facility ID in production
+    },
+
     // Subscription plan specific to clinics
     clinicPlan: { type: String, enum: ['starter', 'basic'], default: 'starter' },
 

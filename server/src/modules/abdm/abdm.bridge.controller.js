@@ -1,108 +1,36 @@
-/**
- * abdm.bridge.controller.js — Request Handlers for ABDM Bridge & HIP Configuration
- *
- * Enforces:
- *   - Authenticated Hospital Admin / Central Admin permissions
- *   - Strict Tenant Isolation (never trust hospitalId from client body/params for scoped users)
- *   - Safe structured error responses without leaking credentials
- */
+'use strict';
+const svc = require('./abdm.bridge.service');
 
-const abdmBridgeService = require('./abdm.bridge.service');
+const fail = (res, err) => res.status(err.status || 500).json({ success: false, message: err.message || 'ABDM bridge request failed' });
 
-function getEffectiveHospitalId(req) {
-    // Never trust hospitalId from client body/query for tenant-scoped users
-    if (req.user?.hospitalId) {
-        return String(req.user.hospitalId);
-    }
-    // Superadmins and Central Admins can specify hospitalId in headers/query
-    if (req.user?.role === 'superadmin' || req.user?.role === 'centraladmin') {
-        return req.headers['x-hospital-id'] || req.body?.hospitalId || req.query?.hospitalId || null;
-    }
-    return null;
-}
+exports.getConfig = async (req, res) => { try { res.json(await svc.getBridgeConfig()); } catch (e) { fail(res, e); } };
 
-/**
- * GET /api/abdm/bridge/config
- * Retrieve current Bridge configuration, registered HIP services, and gateway status
- */
-exports.getBridgeConfig = async (req, res) => {
+// The URL is taken ONLY from ABDM_BRIDGE_URL. Any body value is ignored on purpose.
+exports.registerUrl = async (req, res) => {
     try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const result = await abdmBridgeService.getBridgeConfig(hospitalId);
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to retrieve ABDM Bridge configuration'
-        });
-    }
+        res.json(await svc.registerBridgeUrl({ userId: req.user && req.user._id, skipProbe: req.body && req.body.skipProbe === true }));
+    } catch (e) { fail(res, e); }
 };
 
-/**
- * PATCH /api/abdm/bridge/url
- * Updates the public HTTPS callback URL for ABDM Bridge (PATCH /gateway/v1/bridges)
- */
-exports.updateBridgeUrl = async (req, res) => {
+exports.verify = async (req, res) => { try { res.json(await svc.verifyServices()); } catch (e) { fail(res, e); } };
+
+exports.probe = async (req, res) => {
     try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { bridgeUrl } = req.body;
-
-        const result = await abdmBridgeService.updateBridgeUrl(hospitalId, {
-            bridgeUrl,
-            userId: req.user?._id
-        });
-
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to update ABDM Bridge URL'
-        });
-    }
+        const url = svc.validateBridgeUrl(require('./abdm.config').bridgeUrl);
+        res.json({ success: true, bridgeUrl: url, probe: await svc.probeBridge(url) });
+    } catch (e) { fail(res, e); }
 };
 
-/**
- * POST /api/abdm/bridge/services
- * Registers Medical365's HIP service (POST /gateway/v1/bridges/addUpdateServices)
- */
-exports.registerHipService = async (req, res) => {
+exports.registerHospital = async (req, res) => {
     try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { serviceId, serviceName, alias } = req.body;
-
-        const result = await abdmBridgeService.registerHipService(hospitalId, {
-            serviceId,
-            serviceName,
-            alias,
-            userId: req.user?._id
-        });
-
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to register HIP service on ABDM Bridge'
-        });
-    }
+        res.json(await svc.registerHospitalHip(req.params.hospitalId, req.body || {}, req.user && req.user._id));
+    } catch (e) { fail(res, e); }
 };
 
-/**
- * GET /api/abdm/bridge/verify
- * Calls GET /gateway/v1/bridges/getServices to verify live registration status
- */
-exports.verifyServices = async (req, res) => {
+// Hospital admins may only READ their own hospital's status
+exports.ownHospitalStatus = async (req, res) => {
     try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const result = await abdmBridgeService.verifyServices(hospitalId);
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to verify services with ABDM Gateway'
-        });
-    }
+        if (!req.user || !req.user.hospitalId) return res.status(400).json({ success: false, message: 'No hospital on this account' });
+        res.json(await svc.getHospitalStatus(req.user.hospitalId));
+    } catch (e) { fail(res, e); }
 };

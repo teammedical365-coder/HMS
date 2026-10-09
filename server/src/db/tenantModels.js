@@ -38,12 +38,16 @@ const userSchema = new mongoose.Schema({
     isAadhaarVerified: { type: Boolean, default: false },
     // ABDM / ABHA Integration
     abdm: {
-        abhaNumber: { type: String, sparse: true, trim: true, default: null },
-        abhaAddress: { type: String, sparse: true, trim: true, default: null },
-        isVerified: { type: Boolean, default: false },
-        verifiedAt: { type: Date, default: null },
-        linkedAt: { type: Date, default: null },
-        status: { type: String, enum: ['Not Linked', 'Verified', 'Pending', 'Failed'], default: 'Not Linked' }
+        abhaNumber:      { type: String, sparse: true, trim: true, default: null },
+        abhaAddress:     { type: String, sparse: true, trim: true, lowercase: true, default: null },
+        abhaName:        { type: String, default: null },   // exactly as ABDM returns it (needed for link tokens)
+        abhaGender:      { type: String, default: null },   // 'M' | 'F' | 'O'
+        abhaYearOfBirth: { type: Number, default: null },
+        kycVerified:     { type: Boolean, default: false },
+        isVerified:      { type: Boolean, default: false },
+        verifiedAt:      { type: Date, default: null },
+        linkedAt:        { type: Date, default: null },
+        status:          { type: String, enum: ['Not Linked', 'Verified', 'Pending', 'Failed'], default: 'Not Linked' },
     },
     age: { type: Number, required: true, min: 1 },
     patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },

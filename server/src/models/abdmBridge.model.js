@@ -1,51 +1,16 @@
+'use strict';
 const mongoose = require('mongoose');
 
-const abdmBridgeSchema = new mongoose.Schema({
-    hospitalId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Hospital',
-        sparse: true,
-        index: true
-    },
-    clientId: {
-        type: String,
-        required: true,
-        trim: true,
-        index: true
-    },
-    bridgeUrl: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    services: [
-        {
-            id: { type: String, required: true, trim: true },
-            name: { type: String, required: true, trim: true },
-            type: { type: String, default: 'HIP', trim: true },
-            active: { type: Boolean, default: true },
-            alias: [{ type: String, trim: true }],
-            registeredAt: { type: Date, default: Date.now }
-        }
-    ],
-    lastVerifiedAt: {
-        type: Date,
-        default: null
-    },
-    gatewayStatus: {
-        statusCode: { type: Number, default: null },
-        code: { type: String, default: null },
-        message: { type: String, default: null },
-        isSubscriptionActive: { type: Boolean, default: false },
-        checkedAt: { type: Date, default: null }
-    },
-    updatedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    }
-}, {
-    timestamps: true
-});
+// PLATFORM-LEVEL singleton: ABDM keeps exactly ONE bridge URL per client ID,
+// so this is NOT per hospital. (Old per-hospital documents must be dropped:
+// db.abdmbridges.drop() before first deploy.)
+const schema = new mongoose.Schema({
+    clientId: { type: String, required: true, unique: true, trim: true },
+    bridgeUrl: { type: String, required: true, trim: true },
+    lastRegisteredAt: { type: Date, default: null },
+    lastStatus: { type: String, default: null },   // 'ACCEPTED' | 'FAILED'
+    lastMessage: { type: String, default: null },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+}, { timestamps: true });
 
-module.exports = mongoose.model('AbdmBridge', abdmBridgeSchema);
+module.exports = mongoose.models.AbdmBridge || mongoose.model('AbdmBridge', schema);

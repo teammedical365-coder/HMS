@@ -1761,7 +1761,14 @@ export const abdmAPI = {
     startLink: async (data) => (await apiClient.post('/api/abdm/abha/link/start', data)).data,
     verifyLink: async (data) => (await apiClient.post('/api/abdm/abha/link/verify', data)).data,
     startCreate: async (data) => (await apiClient.post('/api/abdm/abha/create/start', data)).data,
-    verifyCreate: async (data) => (await apiClient.post('/api/abdm/abha/create/verify', data)).data
+    verifyCreate: async (data) => (await apiClient.post('/api/abdm/abha/create/verify', data)).data,
+    // Bridge & HIP administration
+    getBridgeConfig: async () => (await apiClient.get('/api/abdm/bridge/config')).data,
+    registerBridgeUrl: async (data = {}) => (await apiClient.patch('/api/abdm/bridge/url', data)).data,
+    probeBridge: async () => (await apiClient.get('/api/abdm/bridge/probe')).data,
+    verifyBridgeServices: async () => (await apiClient.get('/api/abdm/bridge/verify')).data,
+    registerHospitalHip: async (hospitalId, data) => (await apiClient.put(`/api/abdm/bridge/hospitals/${hospitalId}/hip`, data)).data,
+    getHospitalStatus: async () => (await apiClient.get('/api/abdm/bridge/hospital')).data,
 };
 
 

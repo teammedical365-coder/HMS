@@ -1,109 +1,40 @@
-/**
- * abha.controller.js — Request Handlers for ABDM ABHA Endpoints
- */
-
+'use strict';
 const abhaService = require('./abha.service');
 
-function getEffectiveHospitalId(req) {
-    // Never trust hospitalId from client body/query for tenant-scoped users
-    if (req.user?.hospitalId) {
-        return String(req.user.hospitalId);
-    }
-    // Central Admins / Superadmins can specify hospitalId in header/query if managing across hospitals
-    if (req.user?.role === 'centraladmin' || req.user?.role === 'superadmin') {
-        return req.headers['x-hospital-id'] || req.body?.hospitalId || req.query?.hospitalId || null;
+// Tenant-scoped users: hospital ALWAYS comes from the verified token.
+// Only platform admins may pass a hospital explicitly.
+function effectiveHospitalId(req) {
+    if (req.user && req.user.hospitalId) return String(req.user.hospitalId);
+    if (req.user && (req.user.role === 'superadmin' || req.user.role === 'centraladmin')) {
+        return req.headers['x-hospital-id'] || (req.body && req.body.hospitalId) || (req.query && req.query.hospitalId) || null;
     }
     return null;
 }
 
-exports.getStatus = async (req, res) => {
+const send = (res, fn) => async (req, res2) => {
     try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { patientId } = req.params;
-
-        const result = await abhaService.getStatus(hospitalId, patientId);
-        return res.json(result);
+        const result = await fn(req);
+        if (result && result.configured === false) return res2.status(503).json(result);
+        return res2.json(result);
     } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to retrieve ABHA status'
-        });
+        return res2.status(err.status || 500).json({ success: false, message: err.message || 'ABHA request failed' });
     }
 };
 
-exports.startLink = async (req, res) => {
-    try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { patientId, abhaIdentifier, authMethod } = req.body;
+exports.getStatus = send(null, (req) => abhaService.getStatus(effectiveHospitalId(req), req.params.patientId));
 
-        const result = await abhaService.startLink(hospitalId, patientId, { abhaIdentifier, authMethod });
-        if (result.configured === false) {
-            return res.status(503).json(result);
-        }
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to start ABHA linking flow'
-        });
-    }
-};
+exports.startLink = send(null, (req) => abhaService.startLink(
+    effectiveHospitalId(req), req.body.patientId, req.user._id,
+    { abhaIdentifier: req.body.abhaIdentifier, authMethod: req.body.authMethod }));
 
-exports.verifyLink = async (req, res) => {
-    try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { patientId, txnId, otp } = req.body;
+exports.verifyLink = send(null, (req) => abhaService.verifyLink(
+    effectiveHospitalId(req), req.body.patientId, req.user._id,
+    { txnId: req.body.txnId, otp: req.body.otp }));
 
-        const result = await abhaService.verifyLink(hospitalId, patientId, { txnId, otp });
-        if (result.configured === false) {
-            return res.status(503).json(result);
-        }
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to verify and link ABHA'
-        });
-    }
-};
+exports.startCreate = send(null, (req) => abhaService.startCreate(
+    effectiveHospitalId(req), req.body.patientId, req.user._id,
+    { aadhaarNumber: req.body.aadhaarNumber }));
 
-exports.startCreate = async (req, res) => {
-    try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { patientId, aadhaarNumber } = req.body;
-
-        const result = await abhaService.startCreate(hospitalId, patientId, { aadhaarNumber });
-        if (result.configured === false) {
-            return res.status(503).json(result);
-        }
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to start ABHA creation flow'
-        });
-    }
-};
-
-exports.verifyCreate = async (req, res) => {
-    try {
-        const hospitalId = getEffectiveHospitalId(req);
-        const { patientId, txnId, otp } = req.body;
-
-        const result = await abhaService.verifyCreate(hospitalId, patientId, { txnId, otp });
-        if (result.configured === false) {
-            return res.status(503).json(result);
-        }
-        return res.json(result);
-    } catch (err) {
-        const status = err.status || 500;
-        return res.status(status).json({
-            success: false,
-            message: err.message || 'Failed to verify and create ABHA'
-        });
-    }
-};
+exports.verifyCreate = send(null, (req) => abhaService.verifyCreate(
+    effectiveHospitalId(req), req.body.patientId, req.user._id,
+    { txnId: req.body.txnId, otp: req.body.otp, mobile: req.body.mobile }));

@@ -1,29 +1,22 @@
+'use strict';
 /**
- * abdm.client.js — Official ABDM (Ayushman Bharat Digital Mission) Sandbox API Client
+ * abdm.client.js - ABDM V3 client (gateway, ABHA, bridge, HIP calls).
  *
- * Implements M1 / Gateway and ABHA API contract for:
- *   1. Gateway Session Authentication (v0.5/sessions)
- *   2. Link Existing ABHA (Auth Init + Confirm with OTP)
- *   3. Create ABHA (Aadhaar OTP Generate + Verify)
- *
- * SECURITY & PRIVACY RULES:
- *   - NEVER logs Aadhaar numbers, OTPs, access tokens, or client secrets.
- *   - All sensitive data is sanitized / redacted in debug traces.
- *   - If credentials are not configured, throws AbdmConfigError with clear user-friendly explanation.
+ * Rules:
+ *  - NEVER log Aadhaar, OTPs, tokens, secrets or request bodies.
+ *  - Aadhaar / mobile / OTP are RSA-encrypted with ABDM's public key before leaving this server.
+ *  - Every call carries REQUEST-ID + TIMESTAMP + X-CM-ID (required by V3).
  */
-
 const axios = require('axios');
+const crypto = require('crypto');
 const dns = require('dns');
+const { v4: uuidv4 } = require('uuid');
+const config = require('./abdm.config');
 
-// Prioritize IPv4 on Windows to prevent IPv6 DNS lag / timeouts to Indian NIC/ABDM gateways
-try {
-    dns.setDefaultResultOrder('ipv4first');
-} catch (e) {}
-
-const DEFAULT_TIMEOUT_MS = 25000;
+try { dns.setDefaultResultOrder('ipv4first'); } catch (_) { /* older Node */ }
 
 class AbdmConfigError extends Error {
-    constructor(message = 'ABDM Sandbox is not configured. Please set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.') {
+    constructor(message = 'ABDM is not configured. Set ABDM_CLIENT_ID and ABDM_CLIENT_SECRET in the server environment.') {
         super(message);
         this.name = 'AbdmConfigError';
         this.status = 503;
@@ -33,431 +26,232 @@ class AbdmConfigError extends Error {
 
 class AbdmClient {
     constructor() {
-        this.env = process.env.ABDM_ENV || 'sandbox';
-        this.baseUrl = (process.env.ABDM_BASE_URL || 'https://dev.abdm.gov.in/gateway').replace(/\/+$/, '');
-        this.clientId = (process.env.ABDM_CLIENT_ID || '').trim();
-        this.clientSecret = (process.env.ABDM_CLIENT_SECRET || '').trim();
-        this.xCmId = (process.env.ABDM_X_CM_ID || 'sbx').trim();
-
-        // In-memory token cache
-        this.cachedToken = null;
-        this.tokenExpiry = null;
+        this.token = null;
+        this.tokenExpiry = 0;
+        this.cert = null;
+        this.certExpiry = 0;
     }
 
-    /**
-     * Check whether required ABDM Sandbox credentials are provided
-     */
-    isConfigured() {
-        return Boolean(this.clientId && this.clientSecret);
+    isConfigured() { return config.isConfigured(); }
+    get clientId() { return config.clientId; }
+
+    assertConfigured() { if (!this.isConfigured()) throw new AbdmConfigError(); }
+
+    clearTokenCache() { this.token = null; this.tokenExpiry = 0; }
+
+    headers(token, extra = {}) {
+        const h = {
+            'Content-Type': 'application/json',
+            'REQUEST-ID': uuidv4(),
+            TIMESTAMP: new Date().toISOString(),
+            'X-CM-ID': config.xCmId,
+            ...extra,
+        };
+        if (token) h.Authorization = `Bearer ${token}`;
+        return h;
     }
 
-    /**
-     * Asserts that sandbox credentials are configured, or throws AbdmConfigError
-     */
-    assertConfigured() {
-        if (!this.isConfigured()) {
-            throw new AbdmConfigError();
-        }
-    }
-
-    /**
-     * Fetch or return cached Gateway session token
-     */
+    /** Gateway session token. Tries V3 first, then the legacy endpoint. */
     async getGatewayToken() {
         this.assertConfigured();
-
         const now = Date.now();
-        if (this.cachedToken && this.tokenExpiry && now < this.tokenExpiry - 60000) {
-            return this.cachedToken;
-        }
+        if (this.token && now < this.tokenExpiry - 60000) return this.token;
 
-        try {
-            const endpoint = `${this.baseUrl}/v0.5/sessions`;
-            const payload = {
-                clientId: this.clientId,
-                clientSecret: this.clientSecret
-            };
+        const attempts = [
+            {
+                url: `${config.gatewayBase}/gateway/v3/sessions`,
+                body: { clientId: config.clientId, clientSecret: config.clientSecret, grantType: 'client_credentials' },
+            },
+            {
+                url: `${config.legacyGatewayBase}/v0.5/sessions`,
+                body: { clientId: config.clientId, clientSecret: config.clientSecret },
+            },
+        ];
 
-            const response = await axios.post(endpoint, payload, {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            const data = response.data || {};
-            const token = data.accessToken || data.token;
-            if (!token) {
-                throw new Error('ABDM Gateway did not return an accessToken');
+        let lastErr = null;
+        for (const a of attempts) {
+            try {
+                const res = await axios.post(a.url, a.body, { headers: this.headers(null), timeout: config.timeoutMs });
+                const data = res.data || {};
+                const token = data.accessToken || data.token;
+                if (!token) throw new Error('Gateway did not return an accessToken');
+                this.token = token;
+                this.tokenExpiry = now + (Number(data.expiresIn) || 1200) * 1000;
+                return token;
+            } catch (err) {
+                lastErr = err;
             }
-
-            const expiresInMs = (Number(data.expiresIn) || 1800) * 1000;
-            this.cachedToken = token;
-            this.tokenExpiry = now + expiresInMs;
-
-            return token;
-        } catch (err) {
-            this.handleAxiosError(err, 'Gateway session authentication failed');
         }
+        this.fail(lastErr, 'ABDM gateway session authentication failed');
     }
 
     /**
-     * Step 1: Initiate Link Existing ABHA Authentication Flow
-     * @param {Object} params
-     * @param {string} params.abhaIdentifier - ABHA Number or ABHA Address
-     * @param {string} [params.authMethod='AADHAAR_OTP'] - 'AADHAAR_OTP' or 'MOBILE_OTP'
+     * Generic authenticated call. Returns { data, status, requestId }.
+     * Retries once on 401 with a fresh token.
      */
-    async initLink({ abhaIdentifier, authMethod = 'AADHAAR_OTP' }) {
+    async call(method, url, { body, extraHeaders = {}, auth = true } = {}) {
         this.assertConfigured();
-        const token = await this.getGatewayToken();
+        const requestId = uuidv4();
+
+        const attempt = async () => {
+            const token = auth ? await this.getGatewayToken() : null;
+            const res = await axios({
+                method,
+                url,
+                data: body,
+                headers: this.headers(token, { 'REQUEST-ID': requestId, ...extraHeaders }),
+                timeout: config.timeoutMs,
+            });
+            return { data: res.data, status: res.status, requestId };
+        };
 
         try {
-            // Official ABDM v0.5 /users/auth/init
-            const endpoint = `${this.baseUrl}/v0.5/users/auth/init`;
-            const payload = {
-                requestId: this.generateRequestId(),
-                timestamp: new Date().toISOString(),
-                query: {
-                    id: abhaIdentifier.trim(),
-                    purpose: 'KYC_AND_LINK',
-                    authMode: authMethod.trim().toUpperCase(),
-                    requester: {
-                        type: 'HIP',
-                        id: this.clientId
-                    }
-                }
-            };
-
-            const response = await axios.post(endpoint, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            const data = response.data || {};
-            const txnId = data.transactionId || data.txnId || data.requestId;
-
-            return {
-                txnId: txnId || this.generateRequestId(),
-                authMode: authMethod,
-                message: 'ABDM OTP initiated successfully'
-            };
+            return await attempt();
         } catch (err) {
-            this.handleAxiosError(err, 'Failed to initiate ABHA linking authentication with ABDM');
+            if (err.response && err.response.status === 401 && auth) {
+                this.clearTokenCache();
+                try { return await attempt(); } catch (err2) { this.fail(err2, `ABDM ${method.toUpperCase()} call failed`); }
+            }
+            this.fail(err, `ABDM ${method.toUpperCase()} call failed`);
         }
     }
 
-    /**
-     * Step 2: Confirm Link Existing ABHA with OTP
-     * @param {Object} params
-     * @param {string} params.txnId - ABDM Transaction ID from initLink
-     * @param {string} params.otp - 6-digit OTP received by patient
-     */
-    async confirmLink({ txnId, otp }) {
-        this.assertConfigured();
-        const token = await this.getGatewayToken();
-
-        try {
-            // Official ABDM v0.5 /users/auth/confirm
-            const endpoint = `${this.baseUrl}/v0.5/users/auth/confirm`;
-            const payload = {
-                requestId: this.generateRequestId(),
-                timestamp: new Date().toISOString(),
-                transactionId: txnId,
-                credential: {
-                    authCode: String(otp).trim()
-                }
-            };
-
-            const response = await axios.post(endpoint, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            const data = response.data || {};
-            const patient = data.patient || data.profile || data;
-
-            return {
-                abhaNumber: patient.id || patient.healthIdNumber || patient.abhaNumber || null,
-                abhaAddress: patient.healthId || patient.abhaAddress || null,
-                name: patient.name || null,
-                gender: patient.gender || null,
-                dateOfBirth: patient.yearOfBirth ? `${patient.yearOfBirth}` : null
-            };
-        } catch (err) {
-            this.handleAxiosError(err, 'Failed to confirm ABHA linking with ABDM');
-        }
+    // ── Encryption (Aadhaar / mobile / OTP) ──────────────────────────────────
+    async getAbhaPublicKeyPem() {
+        const now = Date.now();
+        if (this.cert && now < this.certExpiry) return this.cert;
+        const { data } = await this.call('get', `${config.abhaBase}/v3/profile/public/certificate`);
+        const b64 = String((data && data.publicKey) || '').replace(/\s+/g, '');
+        if (!b64) throw new Error('ABDM did not return a public key');
+        this.cert = `-----BEGIN PUBLIC KEY-----\n${b64.match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----`;
+        this.certExpiry = now + 6 * 60 * 60 * 1000;
+        return this.cert;
     }
 
-    /**
-     * Step 1: Create ABHA — Generate Aadhaar OTP
-     * @param {Object} params
-     * @param {string} params.aadhaarNumber - 12-digit Aadhaar Number
-     */
-    async generateCreateOtp({ aadhaarNumber }) {
-        this.assertConfigured();
-        const token = await this.getGatewayToken();
-
-        try {
-            const endpoint = `${this.baseUrl}/v1/registration/aadhaar/generateOtp`;
-            const payload = {
-                aadhaar: String(aadhaarNumber).trim()
-            };
-
-            const response = await axios.post(endpoint, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            const data = response.data || {};
-            const txnId = data.txnId || data.transactionId;
-
-            return {
-                txnId: txnId || this.generateRequestId(),
-                message: 'Aadhaar OTP generated successfully by ABDM'
-            };
-        } catch (err) {
-            this.handleAxiosError(err, 'Failed to generate Aadhaar OTP with ABDM Sandbox');
-        }
+    /** RSA/ECB/OAEPWithSHA-1AndMGF1Padding, base64 */
+    async rsaEncrypt(plain) {
+        const pem = await this.getAbhaPublicKeyPem();
+        return crypto.publicEncrypt(
+            { key: pem, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha1' },
+            Buffer.from(String(plain), 'utf8')
+        ).toString('base64');
     }
 
-    /**
-     * Step 2: Create ABHA — Verify Aadhaar OTP & Retrieve ABHA
-     * @param {Object} params
-     * @param {string} params.txnId - Transaction ID from generateCreateOtp
-     * @param {string} params.otp - 6-digit Aadhaar OTP
-     */
-    async verifyCreateOtp({ txnId, otp }) {
-        this.assertConfigured();
-        const token = await this.getGatewayToken();
-
-        try {
-            const endpoint = `${this.baseUrl}/v1/registration/aadhaar/verifyOTP`;
-            const payload = {
-                txnId: txnId,
-                otp: String(otp).trim()
-            };
-
-            const response = await axios.post(endpoint, payload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            const data = response.data || {};
-            const profile = data.profile || data;
-
-            return {
-                abhaNumber: profile.healthIdNumber || profile.abhaNumber || null,
-                abhaAddress: profile.healthId || profile.abhaAddress || null,
-                name: profile.name || null,
-                gender: profile.gender || null,
-                dateOfBirth: profile.dayOfBirth && profile.monthOfBirth && profile.yearOfBirth ?
-                    `${profile.yearOfBirth}-${profile.monthOfBirth}-${profile.dayOfBirth}` : null
-            };
-        } catch (err) {
-            this.handleAxiosError(err, 'Failed to verify Aadhaar OTP with ABDM Sandbox');
-        }
+    // ── ABHA V3: create ──────────────────────────────────────────────────────
+    async requestEnrolOtp({ aadhaar }) {
+        const loginId = await this.rsaEncrypt(aadhaar);
+        const { data } = await this.call('post', `${config.abhaBase}/v3/enrollment/request/otp`, {
+            body: { txnId: '', scope: ['abha-enrol'], loginHint: 'aadhaar', loginId, otpSystem: 'aadhaar' },
+        });
+        return { txnId: data && data.txnId, message: data && data.message };
     }
 
-    /**
-     * Official ABDM v1 PATCH /gateway/v1/bridges
-     * Updates the callback URL for the bridge.
-     * @param {string} bridgeUrl - Public HTTPS callback URL
-     */
-    async patchBridgeUrl(bridgeUrl) {
-        this.assertConfigured();
-        if (!bridgeUrl || typeof bridgeUrl !== 'string') {
-            const err = new Error('A valid bridge URL is required');
-            err.status = 400;
-            throw err;
-        }
-
-        const trimmedUrl = bridgeUrl.trim();
-        // Validation: Must be HTTPS, no localhost, no http
-        if (!trimmedUrl.startsWith('https://')) {
-            const err = new Error('Bridge URL must use secure public HTTPS protocol (e.g. https://medical365.in/api/abdm)');
-            err.status = 400;
-            throw err;
-        }
-        if (trimmedUrl.includes('localhost') || trimmedUrl.includes('127.0.0.1')) {
-            const err = new Error('Bridge URL cannot be localhost. A publicly accessible domain is required.');
-            err.status = 400;
-            throw err;
-        }
-
-        const token = await this.getGatewayToken();
-        const endpoint = `${this.baseUrl}/v1/bridges`;
-
-        try {
-            const response = await axios.patch(endpoint, { url: trimmedUrl }, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            return {
-                success: true,
-                status: response.status,
-                bridgeUrl: trimmedUrl,
-                data: response.data || null,
-                message: 'Bridge URL registered successfully with ABDM Gateway'
-            };
-        } catch (err) {
-            this.handleAxiosError(err, 'Failed to update bridge URL on ABDM Gateway');
-        }
+    async enrolByAadhaar({ txnId, otp, mobile }) {
+        const otpBlock = { txnId, otpValue: await this.rsaEncrypt(otp) };
+        if (mobile) otpBlock.mobile = await this.rsaEncrypt(mobile);
+        const { data } = await this.call('post', `${config.abhaBase}/v3/enrollment/enrol/byAadhaar`, {
+            body: {
+                txnId,
+                scope: ['abha-enrol'],
+                authData: { authMethods: ['otp'], otp: otpBlock },
+                consent: { code: 'abha-enrollment', version: '1.4' },
+            },
+        });
+        return { profile: (data && data.ABHAProfile) || null, isNew: Boolean(data && data.isNew) };
     }
 
-    /**
-     * Official ABDM v1 POST /gateway/v1/bridges/addUpdateServices
-     * Registers or updates services under this bridge.
-     * Service type for HMS is strictly 'HIP'.
-     * @param {Array<Object>|Object} servicePayload
-     */
-    async addUpdateServices(servicePayload) {
-        this.assertConfigured();
-        const token = await this.getGatewayToken();
-        const endpoint = `${this.baseUrl}/v1/bridges/addUpdateServices`;
+    // ── ABHA V3: verify / link existing ──────────────────────────────────────
+    async requestLoginOtp({ loginHint, loginId, otpSystem, scope }) {
+        const encrypted = await this.rsaEncrypt(loginId);
+        const { data } = await this.call('post', `${config.abhaBase}/v3/profile/login/request/otp`, {
+            body: { scope, loginHint, loginId: encrypted, otpSystem },
+        });
+        return { txnId: data && data.txnId, message: data && data.message };
+    }
 
-        // Normalize to array as expected by ABDM spec
-        const payload = Array.isArray(servicePayload) ? servicePayload : [servicePayload];
+    async verifyLogin({ txnId, otp, scope }) {
+        const { data } = await this.call('post', `${config.abhaBase}/v3/profile/login/verify`, {
+            body: {
+                txnId,
+                scope,
+                authData: { authMethods: ['otp'], otp: { txnId, otpValue: await this.rsaEncrypt(otp) } },
+            },
+        });
+        return { profile: (data && data.ABHAProfile) || null, authResult: data && data.authResult };
+    }
 
-        // Ensure each item has type 'HIP' by default if not set
-        const sanitizedPayload = payload.map(svc => ({
-            id: String(svc.id || this.clientId).trim(),
-            name: String(svc.name || 'Medical365 HMS').trim(),
-            type: String(svc.type || 'HIP').trim().toUpperCase(),
-            active: typeof svc.active === 'boolean' ? svc.active : true,
-            alias: Array.isArray(svc.alias) ? svc.alias : [String(svc.alias || 'Medical365').trim()]
+    // ── Bridge ───────────────────────────────────────────────────────────────
+    async patchBridgeUrl(url) {
+        const res = await this.call('patch', `${config.gatewayBase}/gateway/v3/bridge/url`, { body: { url } });
+        return { status: res.status, data: res.data || null };
+    }
+
+    async getBridgeServices() {
+        const res = await this.call('get', `${config.gatewayBase}/gateway/v3/bridge-services`);
+        return { status: res.status, data: res.data || null };
+    }
+
+    /** Sandbox facility (HIP) registration. In production, link the facility via HFR instead. */
+    async addUpdateServices(services) {
+        const body = (Array.isArray(services) ? services : [services]).map((s) => ({
+            id: String(s.id).trim(),
+            name: String(s.name).trim(),
+            type: String(s.type || 'HIP').toUpperCase(),
+            active: s.active !== false,
+            alias: Array.isArray(s.alias) ? s.alias : [String(s.alias || s.name)],
         }));
-
         try {
-            // First try POST as per M1 specification
-            const response = await axios.post(endpoint, sanitizedPayload, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            return {
-                success: true,
-                status: response.status,
-                services: sanitizedPayload,
-                data: response.data || null,
-                message: 'ABDM M1 HIP services registered/updated successfully'
-            };
+            const res = await this.call('put', config.servicesUrl, { body });
+            return { status: res.status, services: body };
         } catch (err) {
-            // If POST fails with 405 Method Not Allowed, fallback to PUT as some ABDM versions use PUT
-            if (err.response?.status === 405) {
-                try {
-                    const putResponse = await axios.put(endpoint, sanitizedPayload, {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                            'X-CM-ID': this.xCmId
-                        },
-                        timeout: DEFAULT_TIMEOUT_MS
-                    });
-                    return {
-                        success: true,
-                        status: putResponse.status,
-                        services: sanitizedPayload,
-                        data: putResponse.data || null,
-                        message: 'ABDM M1 HIP services registered/updated successfully'
-                    };
-                } catch (putErr) {
-                    this.handleAxiosError(putErr, 'Failed to register/update services on ABDM Gateway');
-                }
+            if (err.status === 405) {
+                const res = await this.call('post', config.servicesUrl, { body });
+                return { status: res.status, services: body };
             }
-            this.handleAxiosError(err, 'Failed to register/update services on ABDM Gateway');
+            throw err;
         }
     }
 
-    /**
-     * Official ABDM v1 GET /gateway/v1/bridges/getServices
-     * Fetches registered services under this client ID.
-     */
-    async getServices() {
-        this.assertConfigured();
-        const token = await this.getGatewayToken();
-        const endpoint = `${this.baseUrl}/v1/bridges/getServices`;
-
-        try {
-            const response = await axios.get(endpoint, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'X-CM-ID': this.xCmId
-                },
-                timeout: DEFAULT_TIMEOUT_MS
-            });
-
-            return {
-                success: true,
-                status: response.status,
-                services: response.data || [],
-                message: 'Retrieved registered services from ABDM Gateway'
-            };
-        } catch (err) {
-            this.handleAxiosError(err, 'Failed to fetch registered services from ABDM Gateway');
-        }
+    // ── HIP (M2) outbound ────────────────────────────────────────────────────
+    async generateLinkToken({ hipId, abhaNumber, abhaAddress, name, gender, yearOfBirth }) {
+        const res = await this.call('post', `${config.gatewayBase}${config.paths.generateToken}`, {
+            extraHeaders: { 'X-HIP-ID': hipId },
+            body: { abhaNumber, abhaAddress, name, gender, yearOfBirth },
+        });
+        return { requestId: res.requestId, status: res.status };
     }
 
-    /**
-     * Clear cached token (useful for tests and key rotation)
-     */
-    clearTokenCache() {
-        this.cachedToken = null;
-        this.tokenExpiry = null;
+    async linkCareContext({ hipId, linkToken, body }) {
+        const res = await this.call('post', `${config.gatewayBase}${config.paths.linkCareContext}`, {
+            extraHeaders: { 'X-HIP-ID': hipId, 'X-LINK-TOKEN': linkToken },
+            body,
+        });
+        return { requestId: res.requestId, status: res.status };
     }
 
-    /**
-     * Generate unique v4/alphanumeric request ID for ABDM tracing
-     */
-    generateRequestId() {
-        const { v4: uuidv4 } = require('uuid');
-        return uuidv4();
+    /** Send an on-* reply. body.response.requestId MUST equal the callback's REQUEST-ID header. */
+    async reply(path, body, { hipId }) {
+        const res = await this.call('post', `${config.gatewayBase}${path}`, {
+            extraHeaders: { 'X-HIP-ID': hipId },
+            body,
+        });
+        return { requestId: res.requestId, status: res.status };
     }
 
-    /**
-     * Format and sanitize Axios errors without leaking sensitive headers or raw payloads
-     */
-    handleAxiosError(err, defaultMessage) {
-        if (err.isConfigError) throw err;
-
-        const status = err.response?.status || 502;
-        const abdmErrorData = err.response?.data;
-        const abdmErrorMsg = abdmErrorData?.description ||
-                             abdmErrorData?.error?.message || 
-                             abdmErrorData?.message || 
-                             abdmErrorData?.details?.[0]?.message || 
-                             err.message;
-
-        const error = new Error(`${defaultMessage}: ${abdmErrorMsg}`);
-        error.status = status;
-        error.abdmCode = abdmErrorData?.code || abdmErrorData?.error?.code || 'ABDM_API_ERROR';
-        error.abdmDetails = abdmErrorData;
-        throw error;
+    /** Sanitised error: never leaks credentials or request payloads. */
+    fail(err, defaultMessage) {
+        if (err && err.isConfigError) throw err;
+        const status = (err && err.response && err.response.status) || 502;
+        const d = err && err.response && err.response.data;
+        const msg = (d && (d.description || (d.error && d.error.message) || d.message
+            || (d.details && d.details[0] && d.details[0].message))) || (err && err.message) || 'unknown error';
+        const out = new Error(`${defaultMessage}: ${msg}`);
+        out.status = status;
+        out.abdmCode = (d && (d.code || (d.error && d.error.code))) || 'ABDM_API_ERROR';
+        out.abdmDetails = d || null;
+        throw out;
     }
 }
 
 module.exports = new AbdmClient();
 module.exports.AbdmConfigError = AbdmConfigError;
-

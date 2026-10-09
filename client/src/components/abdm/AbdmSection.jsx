@@ -18,7 +18,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
     // Form inputs
     const [abhaIdentifier, setAbhaIdentifier] = useState('');
     const [authMethod, setAuthMethod] = useState('AADHAAR_OTP');
-    const [aadhaarInput, setAadhaarInput] = useState(patient?.aadhaarNumber || '');
+    const [aadhaarInput, setAadhaarInput] = useState('');
     const [txnId, setTxnId] = useState('');
     const [otp, setOtp] = useState('');
 
@@ -38,7 +38,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
         setModalMode('create');
         setStep(1);
         setErrorMessage('');
-        setAadhaarInput(patient?.aadhaarNumber || '');
+        setAadhaarInput('');
         setOtp('');
         setTxnId('');
     };
@@ -299,18 +299,18 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
                             {step === 1 && modalMode === 'link' && (
                                 <form onSubmit={handleStartLink}>
                                     <div className="abdm-form-group">
-                                        <label className="abdm-input-label">ABHA Number or ABHA Address</label>
+                                        <label className="abdm-input-label">ABHA Number</label>
                                         <input
                                             type="text"
                                             className="abdm-input"
-                                            placeholder="e.g. 91-1234-5678-9012 or rahul@abdm"
+                                            placeholder="14-digit ABHA number"
                                             value={abhaIdentifier}
                                             onChange={(e) => setAbhaIdentifier(e.target.value)}
                                             required
                                             autoFocus
                                         />
                                         <p className="abdm-input-hint">
-                                            Enter the 14-digit ABHA Number or personal ABHA Address.
+                                            Enter the 14-digit ABHA number (ABHA-address login is not implemented yet).
                                         </p>
                                     </div>
 
@@ -358,7 +358,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
                                     </div>
 
                                     <div className="abdm-alert-box abdm-alert-info">
-                                        Aadhaar is used strictly for on-demand government identity verification and is not stored in plain text.
+                                        Aadhaar is sent encrypted to ABDM and is not saved by Medical365.
                                     </div>
 
                                     <div className="abdm-modal-footer">

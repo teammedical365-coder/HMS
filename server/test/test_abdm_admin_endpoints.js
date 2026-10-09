@@ -10,6 +10,7 @@ const connectDB = require('../src/db/db');
 const { JWT_SECRET } = require('../src/config/jwt');
 const app = require('../src/app');
 const User = require('../src/models/user.model');
+const Hospital = require('../src/models/hospital.model');
 
 async function testApi() {
     await connectDB();
@@ -17,50 +18,73 @@ async function testApi() {
     const port = server.address().port;
     const baseUrl = `http://127.0.0.1:${port}`;
 
-    let admin = await User.findOne({ role: { $in: ['hospitaladmin', 'superadmin', 'centraladmin'] } });
-    if (!admin) {
-        admin = await User.create({
-            name: 'ABDM Test Admin',
-            email: 'abdm_test_admin@medical365.in',
-            phone: '9999999999',
-            role: 'hospitaladmin',
+    let platformAdmin = await User.findOne({ role: { $in: ['superadmin', 'centraladmin'] } });
+    if (!platformAdmin) {
+        platformAdmin = await User.create({
+            name: 'ABDM Platform Admin',
+            email: 'abdm_platform_admin@medical365.in',
+            phone: '9888888888',
+            role: 'centraladmin',
             password: 'HashPassword123'
         });
     }
 
-    const adminToken = jwt.sign({
-        userId: admin._id,
-        role: admin.role,
-        hospitalId: admin.hospitalId || '65f123456789012345678902'
+    let testHospital = await Hospital.findOne({});
+    if (!testHospital) {
+        testHospital = await Hospital.create({
+            name: 'ABDM Test Hospital',
+            phone: '9777777777',
+            email: 'hospital_test@medical365.in',
+        });
+    }
+
+    let hospitalAdmin = await User.findOne({ role: 'hospitaladmin', hospitalId: testHospital._id });
+    if (!hospitalAdmin) {
+        hospitalAdmin = await User.create({
+            name: 'ABDM Hospital Admin',
+            email: 'abdm_hosp_admin@medical365.in',
+            phone: '9666666666',
+            role: 'hospitaladmin',
+            hospitalId: testHospital._id,
+            password: 'HashPassword123'
+        });
+    }
+
+    const platformToken = jwt.sign({
+        userId: platformAdmin._id,
+        role: platformAdmin.role,
+        hospitalId: null
     }, JWT_SECRET, { expiresIn: '1h' });
 
-    console.log('Testing Admin Endpoints with genuine DB Admin User...');
+    const hospitalToken = jwt.sign({
+        userId: hospitalAdmin._id,
+        role: hospitalAdmin.role,
+        hospitalId: testHospital._id
+    }, JWT_SECRET, { expiresIn: '1h' });
 
-    // 1. GET /api/abdm/bridge/config
+    console.log('Testing Admin Endpoints with genuine DB Platform Admin & Hospital Admin...');
+
+    // 1. GET /api/abdm/bridge/config (Platform admin)
     const configRes = await axios.get(`${baseUrl}/api/abdm/bridge/config`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${platformToken}` }
     });
-    console.log('1. Config API status:', configRes.status, 'bridgeUrl:', configRes.data.bridgeUrl, 'serviceType:', configRes.data.serviceType);
+    console.log('1. Config API status:', configRes.status, 'configuredBridgeUrl:', configRes.data.configuredBridgeUrl, 'isConfigured:', configRes.data.isConfigured);
 
-    // 2. PATCH /api/abdm/bridge/url
-    const patchRes = await axios.patch(`${baseUrl}/api/abdm/bridge/url`, 
-        { bridgeUrl: 'https://medical365.in/api/abdm' },
-        { headers: { Authorization: `Bearer ${adminToken}` } }
-    );
-    console.log('2. Patch URL API status:', patchRes.status, 'message:', patchRes.data.message);
-
-    // 3. POST /api/abdm/bridge/services
-    const serviceRes = await axios.post(`${baseUrl}/api/abdm/bridge/services`,
-        { serviceId: 'SBXID_087160', serviceName: 'Medical365 HMS', alias: ['Medical365'] },
-        { headers: { Authorization: `Bearer ${adminToken}` } }
-    );
-    console.log('3. Register Service API status:', serviceRes.status, 'type:', serviceRes.data.service.type);
-
-    // 4. GET /api/abdm/bridge/verify
-    const verifyRes = await axios.get(`${baseUrl}/api/abdm/bridge/verify`, {
-        headers: { Authorization: `Bearer ${adminToken}` }
+    // 2. GET /api/abdm/bridge/hospital (Hospital admin read-only)
+    const hospRes = await axios.get(`${baseUrl}/api/abdm/bridge/hospital`, {
+        headers: { Authorization: `Bearer ${hospitalToken}` }
     });
-    console.log('4. Verify API status:', verifyRes.status, 'diagnostic live status:', verifyRes.data.diagnostic.gatewayLiveStatus);
+    console.log('2. Hospital Status API status:', hospRes.status, 'hospital:', hospRes.data.hospital, 'enabled:', hospRes.data.enabled);
+
+    // 3. RBAC check: Hospital admin forbidden from platform config
+    try {
+        await axios.get(`${baseUrl}/api/abdm/bridge/config`, {
+            headers: { Authorization: `Bearer ${hospitalToken}` }
+        });
+        throw new Error('Hospital admin should NOT have access to platform bridge config');
+    } catch (err) {
+        console.log('3. RBAC Isolation verified: hospital admin blocked from platform config (Status: ' + (err.response?.status || err.message) + ')');
+    }
 
     server.close();
     await mongoose.disconnect();

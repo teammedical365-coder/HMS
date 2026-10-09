@@ -210,6 +210,11 @@ app.use(mongoSanitize());
 // ── HTTP parameter pollution protection ──────────────────────────────────────
 app.use(hpp());
 
+// ── ABDM Callback Layer (Public bridge endpoints — bypass general rate limiter) ──
+const { ABDM_CALLBACK_PATH, abdmCallbackLimiter, verifyAbdmCallback, abdmCallbackHandler } =
+    require('./modules/abdm/abdm.callbacks');
+app.post(ABDM_CALLBACK_PATH, abdmCallbackLimiter, verifyAbdmCallback, abdmCallbackHandler);
+
 // ── Global rate limit (200 req / 15 min per IP) ───────────────────────────────
 app.use('/api/', generalLimiter);
 
@@ -282,10 +287,8 @@ app.use('/api/migrations', require('./routes/migration.routes'));
 app.use('/api/local-agent', require('./routes/localAgent.routes'));
 app.use('/api/local-sync', require('./routes/localSync.routes'));
 app.use('/api/abdm/abha', require('./modules/abdm/abha.routes'));
-const { bridgeRouter: abdmBridgeRouter, webhookRouter: abdmWebhookRouter } = require('./modules/abdm/abdm.bridge.routes');
-app.use('/api/abdm/bridge', abdmBridgeRouter);
-app.use('/api/abdm/v0.5', abdmWebhookRouter);
-app.use('/v0.5', abdmWebhookRouter);
+const { bridgeRouter } = require('./modules/abdm/abdm.bridge.routes');
+app.use('/api/abdm/bridge', bridgeRouter);
 
 // ── Serve Frontend in Production (if client/dist exists) ──────────────────────
 const clientDistPath = path.join(__dirname, '../../client/dist');
