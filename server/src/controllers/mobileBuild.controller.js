@@ -10,7 +10,7 @@ const triggerMobileBuild = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Hospital not found' });
         }
 
-        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
+        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'Medical 365')
             .replace(/[^a-zA-Z0-9\s]/g, '').trim();
         const safeCode = hospital.hospitalCode || id.substring(0, 8);
         const safeApplicationId = `com.medical365.${safeCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;

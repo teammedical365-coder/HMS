@@ -664,7 +664,7 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
 
     try {
         // Preserve visible app name (e.g. "Krishna IVF & Fertility")
-        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital').trim();
+        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'Medical 365').trim();
         
         // Deterministic, valid Android applicationId complying with com.medical365.<lowercase-segment>
         let safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString() });
@@ -1147,7 +1147,7 @@ router.post(
                 activeDbStatus: activeStatus || 'NONE'
             });
 
-            const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+            const safeName = (hospital.name || hospital.branding?.appName || 'hospital').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'hospital';
 
             const apkDir = path.join(__dirname, '../../public/downloads/apks');
             const aabDir = path.join(__dirname, '../../public/downloads/aabs');
