@@ -2915,7 +2915,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 <div className="reg-field">
                                                     <label>Select Specialist <em>*</em> {followupStatus?.active && '(Read Only)'}</label>
                                                     <CustomSelect
-                                                        className="reg-select"
+                                                        className={`reg-select ${intakeForm.department && (!intakeForm.doctor || String(intakeForm.doctor).trim() === '') ? 'reg-field-invalid' : ''}`}
                                                         name="doctor"
                                                         value={intakeForm.doctor}
                                                         onChange={handleInputChange}
@@ -2934,6 +2934,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                             </>
                                                         )}
                                                     </CustomSelect>
+                                                    {intakeForm.department && (!intakeForm.doctor || String(intakeForm.doctor).trim() === '') && (
+                                                        <span className="reg-field-error-msg" style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 600, marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span>⚠️</span> Please select a doctor/specialist.
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 <div className="reg-field">
@@ -3000,7 +3005,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
 
                                         <div className="reg-card-body">
-                                            {!intakeForm.department ? (
+                                            {(!intakeForm.department || !intakeForm.doctor) ? (
                                                 <div style={{
                                                     padding: '28px 20px',
                                                     textAlign: 'center',
@@ -3011,10 +3016,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 }}>
                                                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚕️</div>
                                                     <div style={{ fontWeight: 700, color: '#334155', fontSize: '15px' }}>
-                                                        Please Select Department & Specialist First
+                                                        {!intakeForm.department ? 'Please Select Department First' : 'Please Select a Doctor / Specialist'}
                                                     </div>
                                                     <div style={{ color: '#64748b', fontSize: '13px', marginTop: '6px', maxWidth: '420px', margin: '6px auto 0' }}>
-                                                        Choose a department and specialist in Step 04 above. The registration & consultation fee will automatically display and calculate here.
+                                                        {!intakeForm.department 
+                                                            ? 'Choose a department and specialist in Step 04 above. The registration & consultation fee will automatically display and calculate here.'
+                                                            : 'Please select a doctor/specialist in Step 04 above. The registration & consultation fee will automatically calculate and display here.'}
                                                     </div>
                                                 </div>
                                             ) : (
@@ -3163,6 +3170,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     isOpen={showPolicyModal}
                     onClose={() => setShowPolicyModal(false)}
                     onAgree={() => {
+                        setIntakePolicyAgreed(true);
+                        setShowPolicyModal(false);
+                    }}
+                    onAccept={() => {
                         setIntakePolicyAgreed(true);
                         setShowPolicyModal(false);
                     }}

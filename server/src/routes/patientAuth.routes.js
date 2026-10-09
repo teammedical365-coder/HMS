@@ -13,25 +13,18 @@ async function generateUniversalMRN(hospitalId, hospital, User) {
         return `${prefix}-${String(count + 1).padStart(3, '0')}`;
     }
     const hospitalCode = await Hospital.ensureHospitalCode(hospital);
-    const count = await User.countDocuments({ hospitalId, role: 'patient' });
-    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`^${escapedCode}-M365-(\\d+)$`, 'i');
-    const existingPatients = await User.find({ hospitalId, mrn: regex }).select('mrn').lean();
-    let maxSeq = count;
-    for (const p of existingPatients) {
-        if (p.mrn) {
-            const match = p.mrn.match(regex);
-            if (match && match[1]) {
-                const num = parseInt(match[1], 10);
-                if (!isNaN(num) && num > maxSeq) maxSeq = num;
-            }
-        }
-    }
-    let nextNum = maxSeq + 1;
+    let nextNum = 1;
     while (true) {
         const runningStr = String(nextNum).padStart(3, '0');
         const candidate = `${hospitalCode}-M365-${runningStr}`;
-        const exists = await User.findOne({ $or: [{ mrn: candidate }, { patientId: candidate }] });
+        const exists = await User.findOne({
+            $or: [
+                { hospitalId, mrn: candidate },
+                { hospitalId, patientId: candidate },
+                { mrn: candidate },
+                { patientId: candidate }
+            ]
+        });
         if (!exists) return candidate;
         nextNum++;
     }

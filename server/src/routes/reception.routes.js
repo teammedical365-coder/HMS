@@ -53,32 +53,19 @@ async function generateSmartMRN(hospitalId, hospital, User) {
     const Hospital = require('../models/hospital.model');
     const hospitalCode = await Hospital.ensureHospitalCode(hospital);
 
-    // Count existing patients for this specific hospital starting sequence at 1
-    const count = await User.countDocuments({ hospitalId, role: 'patient' });
-
-    // Also scan any existing MRNs formatted as <HospitalCode>-M365-<Digits> to avoid sequence collisions/gaps
-    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`^${escapedCode}-M365-(\\d+)$`, 'i');
-    const existingPatients = await User.find({ hospitalId, mrn: regex }).select('mrn').lean();
-
-    let maxSeq = count;
-    for (const p of existingPatients) {
-        if (p.mrn) {
-            const match = p.mrn.match(regex);
-            if (match && match[1]) {
-                const num = parseInt(match[1], 10);
-                if (!isNaN(num) && num > maxSeq) {
-                    maxSeq = num;
-                }
-            }
-        }
-    }
-
-    let nextNum = maxSeq + 1;
+    // Sequence begins strictly from 1 (001 -> 002 -> 003...) without skipping the initial sequence
+    let nextNum = 1;
     while (true) {
         const runningStr = String(nextNum).padStart(3, '0');
         const candidate = `${hospitalCode}-M365-${runningStr}`;
-        const exists = await User.findOne({ $or: [{ mrn: candidate }, { patientId: candidate }] });
+        const exists = await User.findOne({
+            $or: [
+                { hospitalId, mrn: candidate },
+                { hospitalId, patientId: candidate },
+                { mrn: candidate },
+                { patientId: candidate }
+            ]
+        });
         if (!exists) {
             return candidate;
         }

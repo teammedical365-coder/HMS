@@ -23,13 +23,19 @@ const verifyAccountantAccess = (req, res, next) => {
     const roleName = String(roleData?.name || '').toLowerCase().replace(/[\s_-]/g, '');
     const perms = roleData?.permissions || [];
 
-    const isAuthorized = ['accountant', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin'].includes(roleIdStr) ||
-                         ['accountant', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin'].includes(roleName) ||
+    const isAuthorized = ['accountant', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin', 'receptionist', 'reception', 'billing', 'cashier'].includes(roleIdStr) ||
+                         ['accountant', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin', 'receptionist', 'reception', 'billing', 'cashier'].includes(roleName) ||
                          roleIdStr.includes('admin') ||
                          roleName.includes('admin') ||
                          roleIdStr.includes('accountant') ||
                          roleName.includes('accountant') ||
+                         roleIdStr.includes('reception') ||
+                         roleName.includes('reception') ||
+                         roleIdStr.includes('billing') ||
+                         roleName.includes('billing') ||
                          perms.includes('finance_view') ||
+                         perms.includes('billing_manage') ||
+                         perms.includes('appointment_manage') ||
                          perms.includes('admin_manage_roles') ||
                          perms.includes('*');
 

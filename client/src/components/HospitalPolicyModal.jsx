@@ -8,6 +8,7 @@ const HospitalPolicyModal = ({
     isOpen,
     onClose,
     onAccept,
+    onAgree,
     hospitalId: propHospitalId,
     applicableTo = 'ALL',
     alreadyAccepted = false
@@ -20,7 +21,7 @@ const HospitalPolicyModal = ({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('ALL');
-    const [expandedPolicyId, setExpandedPolicyId] = useState(null);
+    const [expandedPolicyIds, setExpandedPolicyIds] = useState(new Set());
     const [isAgreedChecked, setIsAgreedChecked] = useState(alreadyAccepted);
 
     useEffect(() => {
@@ -42,11 +43,11 @@ const HospitalPolicyModal = ({
                 const res = await policyAPI.getActivePolicies(params);
                 if (isMounted) {
                     if (res && res.success) {
-                        setPolicies(res.policies || []);
+                        const fetched = res.policies || [];
+                        setPolicies(fetched);
                         setHospitalInfo(res.hospital || null);
-                        if (res.policies?.length > 0) {
-                            setExpandedPolicyId(res.policies[0]._id); // Expand first policy by default
-                        }
+                        // Expand all policies by default so full content is immediately visible
+                        setExpandedPolicyIds(new Set(fetched.map(p => p._id)));
                     } else {
                         setError(res?.message || 'Failed to load policies.');
                     }
@@ -81,12 +82,30 @@ const HospitalPolicyModal = ({
     const categories = ['ALL', ...new Set(policies.map(p => p.category).filter(Boolean))];
 
     const togglePolicy = (id) => {
-        setExpandedPolicyId(prev => prev === id ? null : id);
+        setExpandedPolicyIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const areAllExpanded = filteredPolicies.length > 0 && filteredPolicies.every(p => expandedPolicyIds.has(p._id));
+
+    const toggleExpandAll = () => {
+        if (areAllExpanded) {
+            setExpandedPolicyIds(new Set());
+        } else {
+            setExpandedPolicyIds(new Set(filteredPolicies.map(p => p._id)));
+        }
     };
 
     const handleAcceptAndClose = () => {
         if (onAccept) {
             onAccept(policies);
+        }
+        if (onAgree) {
+            onAgree(policies);
         }
         onClose();
     };
@@ -110,9 +129,32 @@ const HospitalPolicyModal = ({
                             </p>
                         </div>
                     </div>
-                    <button className="hpm-close-btn" onClick={onClose} aria-label="Close modal">
-                        <FiX size={20} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {filteredPolicies.length > 0 && (
+                            <button
+                                type="button"
+                                className="hpm-expand-all-btn"
+                                onClick={toggleExpandAll}
+                                title={areAllExpanded ? 'Collapse All Policies' : 'Expand All Policies'}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.12)',
+                                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                                    color: '#ffffff',
+                                    borderRadius: '8px',
+                                    padding: '5px 12px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {areAllExpanded ? '⊟ Collapse All' : '⊞ Expand All'}
+                            </button>
+                        )}
+                        <button className="hpm-close-btn" onClick={onClose} aria-label="Close modal">
+                            <FiX size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Category filter bar (if multiple categories present) */}
@@ -149,7 +191,7 @@ const HospitalPolicyModal = ({
                         </div>
                     ) : (
                         filteredPolicies.map((policy, idx) => {
-                            const isExpanded = expandedPolicyId === policy._id;
+                            const isExpanded = expandedPolicyIds.has(policy._id);
                             return (
                                 <div key={policy._id || idx} className="hpm-policy-card">
                                     <div

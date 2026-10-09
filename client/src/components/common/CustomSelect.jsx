@@ -153,9 +153,25 @@ const CustomSelect = ({
         };
     }, [isOpen]);
 
-    // Find currently selected item
-    const selectedItem = items.find(item => String(item.value) === String(value));
-    const displayText = selectedItem ? selectedItem.label : (placeholder || (items[0]?.label) || 'Select...');
+    // Find currently selected item (match by non-empty value first)
+    const selectedItem = items.find(item => item.value !== '' && item.value !== undefined && String(item.value) === String(value));
+    const placeholderItem = items.find(item => item.value === '' || item.value === undefined);
+    const displayText = selectedItem 
+        ? selectedItem.label 
+        : (placeholderItem?.label || placeholder || (items[0]?.label) || 'Select...');
+
+    // Dropdown options to render inside the menu:
+    // Exclude empty placeholder prompts (e.g. "-- Select Source / Referral --") so options directly start with actual choices
+    const dropdownOptions = useMemo(() => {
+        const nonPlaceholder = items.filter(item => {
+            const hasValidValue = item.value !== '' && item.value !== undefined && item.value !== null;
+            if (hasValidValue) return true;
+            const lbl = String(item.label || '').trim().toLowerCase();
+            const isPrompt = lbl.startsWith('--') || lbl.startsWith('select ') || lbl.startsWith('choose ') || lbl === 'select' || lbl === 'none';
+            return !isPrompt;
+        });
+        return nonPlaceholder.length > 0 ? nonPlaceholder : items;
+    }, [items]);
 
     const handleSelect = (item) => {
         if (item.disabled || disabled) return;
@@ -202,7 +218,7 @@ const CustomSelect = ({
                         maxHeight: `${(maxVisibleItems * 38) + 2}px`
                     }}
                 >
-                    {items.map((item, idx) => {
+                    {dropdownOptions.map((item, idx) => {
                         const isSelected = String(item.value) === String(value);
                         return (
                             <div

@@ -810,6 +810,7 @@ const PatientBillingProfile = () => {
         setCustomStartDate('');
         setCustomEndDate('');
         setHistorySort('newest');
+        setShowCustomRangePicker(false);
         fetchHospitalHistory('', 'ALL', 'all', '', '');
         toast.success('Filters reset');
     };
@@ -889,8 +890,26 @@ const PatientBillingProfile = () => {
     const [patientRefundData, setPatientRefundData] = useState(null);
     const [loadingRefundData, setLoadingRefundData] = useState(false);
 
+    // Calculate eligible refundable balance for the active patient from recorded payments & prior refunds
+    const clientRefundableBalance = useMemo(() => {
+        if (!billing) return 0;
+        const totalPaid = (billing.paymentTransactions || [])
+            .filter(t => ['Paid', 'paid', 'PAID'].includes(t.paymentStatus))
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        const priorRefunds = (billing.refundRequests || [])
+            .filter(r => ['REFUNDED', 'APPROVED', 'PENDING_APPROVAL', 'PROCESSING'].includes(r.status))
+            .reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0);
+        return Math.max(0, totalPaid - priorRefunds);
+    }, [billing]);
+
+    const isRefundEligible = clientRefundableBalance > 0 || (patientRefundData && patientRefundData.refundableAmount > 0);
+
     const openCreateRefundModal = async () => {
         if (!patient?._id) return toast.error('No patient selected');
+        if (clientRefundableBalance <= 0 && (!patientRefundData || patientRefundData.refundableAmount <= 0)) {
+            toast.error('Refund unavailable: No eligible refundable balance for this patient');
+            return;
+        }
         setShowPatientRefundModal(true);
         setLoadingRefundData(true);
         try {
@@ -918,7 +937,28 @@ const PatientBillingProfile = () => {
             }
         } catch (e) {
             console.error('Failed to load patient refund data:', e);
-            toast.error('Failed to calculate patient refundable balance');
+            // Fallback gracefully to client-computed refundable balance from billing records
+            const fallbackRefundable = clientRefundableBalance;
+            const validPayments = (billing?.paymentTransactions || []).filter(t => ['Paid', 'paid', 'PAID'].includes(t.paymentStatus));
+            const totalPaid = validPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+            setPatientRefundData({
+                patient,
+                totalPaid,
+                alreadyRefunded: 0,
+                pendingRefundAmount: 0,
+                refundableAmount: fallbackRefundable,
+                payments: validPayments
+            });
+            if (fallbackRefundable <= 0) {
+                toast.error('No eligible refundable balance available for this patient');
+            } else {
+                setNewRefundForm({
+                    originalPaymentId: validPayments[0]?._id || '',
+                    refundAmount: String(Math.min(validPayments[0]?.amount || fallbackRefundable, fallbackRefundable)),
+                    refundMode: 'CASH',
+                    reason: ''
+                });
+            }
         } finally {
             setLoadingRefundData(false);
         }
@@ -1063,6 +1103,11 @@ const PatientBillingProfile = () => {
 
     const handlePresetChange = (preset) => {
         setDatePreset(preset);
+        if (preset === 'custom') {
+            setShowCustomRangePicker(true);
+        } else {
+            setShowCustomRangePicker(false);
+        }
     };
 
     const handleCustomDateChange = (start, end) => {
@@ -2897,19 +2942,22 @@ const PatientBillingProfile = () => {
                                 <button
                                     type="button"
                                     onClick={openCreateRefundModal}
+                                    disabled={!isRefundEligible}
+                                    title={!isRefundEligible ? 'Refund disabled: No eligible refundable balance for this patient' : 'Request Refund'}
                                     style={{
-                                        background: '#dc2626',
+                                        background: !isRefundEligible ? '#94a3b8' : '#dc2626',
                                         color: '#fff',
                                         border: 'none',
                                         padding: '7px 14px',
                                         borderRadius: '8px',
                                         fontSize: '0.85rem',
                                         fontWeight: 700,
-                                        cursor: 'pointer',
+                                        cursor: !isRefundEligible ? 'not-allowed' : 'pointer',
+                                        opacity: !isRefundEligible ? 0.65 : 1,
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '6px',
-                                        boxShadow: '0 2px 4px rgba(220, 38, 38, 0.25)'
+                                        boxShadow: !isRefundEligible ? 'none' : '0 2px 4px rgba(220, 38, 38, 0.25)'
                                     }}
                                 >
                                     <FaPlus size={12} /> + Request Refund
@@ -2923,19 +2971,27 @@ const PatientBillingProfile = () => {
                                 <button
                                     type="button"
                                     onClick={openCreateRefundModal}
+                                    disabled={!isRefundEligible}
+                                    title={!isRefundEligible ? 'Refund disabled: No eligible refundable balance for this patient' : 'Initiate Refund For This Patient'}
                                     style={{
-                                        background: '#059669',
+                                        background: !isRefundEligible ? '#94a3b8' : '#059669',
                                         color: '#fff',
                                         border: 'none',
                                         padding: '6px 14px',
                                         borderRadius: '6px',
                                         fontSize: '0.85rem',
                                         fontWeight: 600,
-                                        cursor: 'pointer'
+                                        cursor: !isRefundEligible ? 'not-allowed' : 'pointer',
+                                        opacity: !isRefundEligible ? 0.65 : 1
                                     }}
                                 >
                                     Initiate Refund For This Patient
                                 </button>
+                                {!isRefundEligible && (
+                                    <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#b91c1c', fontWeight: 600 }}>
+                                        ⚠️ Refund unavailable: No eligible payments or excess balance available to refund.
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="billing-table-responsive" style={{ marginTop: '12px' }}>
@@ -3381,6 +3437,11 @@ const PatientBillingProfile = () => {
                                 const val = e.target.value;
                                 handlePresetChange(val);
                             }}
+                            onClick={() => {
+                                if (datePreset === 'custom' && !showCustomRangePicker) {
+                                    setShowCustomRangePicker(true);
+                                }
+                            }}
                             className="ha-drop-select"
                         >
                             <option value="all">All Dates</option>
@@ -3394,6 +3455,27 @@ const PatientBillingProfile = () => {
                                     : 'Custom Range'}
                             </option>
                         </select>
+                        {datePreset === 'custom' && (
+                            <button
+                                type="button"
+                                onClick={() => setShowCustomRangePicker(prev => !prev)}
+                                title="Click to choose custom dates"
+                                style={{
+                                    marginLeft: '6px',
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    color: '#1d4ed8',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    padding: '4px 8px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                📅 {customStartDate && customEndDate ? `${customStartDate} → ${customEndDate}` : 'Select Dates'}
+                            </button>
+                        )}
                         {showCustomRangePicker && (
                             <div className="ha-custom-date-popover" style={{ top: 'calc(100% + 8px)', right: 0, zIndex: 1100 }}>
                                 <div className="ha-cd-header">
@@ -3409,22 +3491,29 @@ const PatientBillingProfile = () => {
                                 </div>
                                 <div className="ha-cd-row">
                                     <label>
-                                        <span>From Date:</span>
+                                        <span>Start Date:</span>
                                         <input
                                             type="date"
                                             value={customStartDate}
                                             onChange={e => setCustomStartDate(e.target.value)}
+                                            max={getTodayDateStr()}
                                         />
                                     </label>
                                     <label>
-                                        <span>To Date:</span>
+                                        <span>End Date:</span>
                                         <input
                                             type="date"
                                             value={customEndDate}
                                             onChange={e => setCustomEndDate(e.target.value)}
+                                            max={getTodayDateStr()}
                                         />
                                     </label>
                                 </div>
+                                {customStartDate && customEndDate && customStartDate > customEndDate && (
+                                    <div style={{ color: '#ef4444', fontSize: '0.74rem', fontWeight: 600, padding: '2px 4px' }}>
+                                        ⚠️ End Date cannot be earlier than Start Date
+                                    </div>
+                                )}
                                 <div className="ha-cd-actions">
                                     <button
                                         type="button"
@@ -3444,13 +3533,12 @@ const PatientBillingProfile = () => {
                                         className="ha-cd-apply"
                                         onClick={() => {
                                             if (!customStartDate && !customEndDate) {
-                                                toast.error('Please select From Date or To Date');
+                                                toast.error('Please select Start Date or End Date');
                                                 return;
                                             }
                                             if (customStartDate && customEndDate && customStartDate > customEndDate) {
-                                                const temp = customStartDate;
-                                                setCustomStartDate(customEndDate);
-                                                setCustomEndDate(temp);
+                                                toast.error('End Date cannot be earlier than Start Date. Please select a valid date range.');
+                                                return;
                                             }
                                             setDatePreset('custom');
                                             setShowCustomRangePicker(false);
@@ -3637,21 +3725,23 @@ const PatientBillingProfile = () => {
                                 {datePreset === 'custom' && (
                                     <div className="ha-mfs-custom-range">
                                         <div className="ha-mfs-input-col">
-                                            <span className="ha-mfs-sublabel">From Date</span>
+                                            <span className="ha-mfs-sublabel">Start Date</span>
                                             <input
                                                 type="date"
                                                 className="ha-mfs-date-input"
                                                 value={customStartDate}
                                                 onChange={e => setCustomStartDate(e.target.value)}
+                                                max={getTodayDateStr()}
                                             />
                                         </div>
                                         <div className="ha-mfs-input-col">
-                                            <span className="ha-mfs-sublabel">To Date</span>
+                                            <span className="ha-mfs-sublabel">End Date</span>
                                             <input
                                                 type="date"
                                                 className="ha-mfs-date-input"
                                                 value={customEndDate}
                                                 onChange={e => setCustomEndDate(e.target.value)}
+                                                max={getTodayDateStr()}
                                             />
                                         </div>
                                     </div>
@@ -3673,7 +3763,19 @@ const PatientBillingProfile = () => {
                             <button
                                 type="button"
                                 className="ha-mfs-btn-apply"
-                                onClick={() => setShowMobileFiltersModal(false)}
+                                onClick={() => {
+                                    if (datePreset === 'custom') {
+                                        if (!customStartDate && !customEndDate) {
+                                            toast.error('Please select Start Date or End Date');
+                                            return;
+                                        }
+                                        if (customStartDate && customEndDate && customStartDate > customEndDate) {
+                                            toast.error('End Date cannot be earlier than Start Date. Please select a valid date range.');
+                                            return;
+                                        }
+                                    }
+                                    setShowMobileFiltersModal(false);
+                                }}
                             >
                                 Apply ({displayedTransactions.length} Records)
                             </button>

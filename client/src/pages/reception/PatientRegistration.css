@@ -502,14 +502,30 @@
 .reg-form-card:has(.custom-select-trigger.open),
 .reg-form-card:has(.custom-select-dropdown),
 .reg-form-card.has-open-select {
-    z-index: 50 !important;
+    z-index: 9999 !important;
+    position: relative;
 }
 
 .reg-field:has(.custom-select-trigger.open),
 .reg-field:has(.custom-select-dropdown),
 .reg-field.has-open-select {
     position: relative;
-    z-index: 60 !important;
+    z-index: 10000 !important;
+}
+
+.reg-select.reg-field-invalid .custom-select-trigger {
+    border-color: #ef4444 !important;
+    background-color: #fff5f5;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15) !important;
+}
+
+.reg-field-error-msg {
+    animation: regErrorFadeIn 0.2s ease-out;
+}
+
+@keyframes regErrorFadeIn {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .reg-form-card:hover {
