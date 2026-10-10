@@ -28,6 +28,11 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    background: #eef2f6;
+}
+
+.reg-page-root.dashboard-embedded {
+    background: #eef2f6;
 }
 
 .reg-page-root.standalone-portal {
@@ -487,11 +492,10 @@
 
 .reg-form-card {
     scroll-margin-top: 12px;
-    background: rgba(255, 255, 255, .94);
-    backdrop-filter: blur(18px);
-    border: 1px solid #dce6ef;
-    border-radius: 22px;
-    box-shadow: 0 14px 35px rgba(46, 70, 100, .07);
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
     overflow: visible; /* Crucial: Allows CustomSelect dropdowns to extend without being cut off */
     position: relative;
     z-index: 1;
@@ -529,20 +533,20 @@
 }
 
 .reg-form-card:hover {
-    border-color: #bfdbfe;
-    box-shadow: 0 20px 45px rgba(46, 70, 100, .11);
+    border-color: #94a3b8;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.09);
     transform: translateY(-2px);
 }
 
 .reg-card-head {
-    padding: 18px 24px;
+    padding: 16px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #e7edf3;
-    background: #fafcff;
-    border-top-left-radius: 22px;
-    border-top-right-radius: 22px;
+    border-bottom: 1.5px solid #e2e8f0;
+    background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+    border-top-left-radius: 19px;
+    border-top-right-radius: 19px;
 }
 
 .reg-card-title {
@@ -552,49 +556,52 @@
 }
 
 .reg-card-icon {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 12px;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, #eff6ff, #dbeafe);
-    color: #3b82f6;
+    background: linear-gradient(135deg, #0284c7, #2563eb);
+    color: #ffffff;
     font-size: 16px;
-    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+    font-weight: 700;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.22);
 }
 
 .reg-card-title h2 {
     font-size: 16px;
     font-weight: 800;
     color: #0f172a;
+    letter-spacing: -0.01em;
     margin: 0;
 }
 
 .reg-card-title h2 em,
 .reg-top-step-text strong em,
 .reg-req-star {
-    color: #ef4444;
+    color: #dc2626;
     font-style: normal;
     font-weight: 800;
     margin-left: 3px;
 }
 
 .reg-card-title p {
-    color: #94a3b8;
-    font-size: 12px;
+    color: #64748b;
+    font-size: 12.5px;
+    font-weight: 500;
     margin-top: 2px;
 }
 
 .reg-ai-tag {
     font-size: 10px;
     font-weight: 800;
-    color: #08a88c;
+    color: #0284c7;
     padding: 6px 12px;
     border-radius: 20px;
-    background: #ebfff9;
-    border: 1px solid #c5f0e3;
+    background: #e0f2fe;
+    border: 1px solid #bae6fd;
     letter-spacing: 0.04em;
-    box-shadow: 0 2px 6px rgba(8, 168, 140, 0.12);
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.12);
 }
 
 .reg-card-body {
@@ -613,24 +620,24 @@
 }
 
 .reg-photo-box {
-    border: 1.5px dashed #b8cce0;
-    border-radius: 20px;
-    background: linear-gradient(145deg, #f8fafc, #eff6ff);
+    border: 1.5px dashed #94a3b8;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #edf2f7 0%, #e2e8f0 100%);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 16px 14px;
-    gap: 12px;
-    box-shadow: 0 4px 16px rgba(45, 72, 105, 0.04);
+    padding: 18px 14px;
+    gap: 14px;
+    box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.04);
 }
 
 .reg-photo-frame {
     width: 105px;
     height: 105px;
     border-radius: 50%;
-    border: 3px solid #0ea5e9;
-    box-shadow: 0 6px 20px rgba(14, 165, 233, 0.25);
+    border: 3.5px solid #0284c7;
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.22);
     background: #ffffff;
     overflow: hidden;
     display: flex;
@@ -649,18 +656,18 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #94a3b8;
+    color: #475569;
 }
 
 .reg-photo-avatar-icon {
-    font-size: 38px;
+    font-size: 40px;
     line-height: 1;
 }
 
 .reg-photo-prompt {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
-    color: #64748b;
+    color: #475569;
     margin-top: 4px;
 }
 
@@ -679,20 +686,21 @@
     gap: 6px;
     font-size: 12px;
     font-weight: 700;
-    color: #1e40af;
-    background: #dbeafe;
-    border: 1px solid #bfdbfe;
+    color: #ffffff;
+    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    border: none;
     border-radius: 10px;
-    padding: 8px 10px;
+    padding: 9px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 .reg-capture-btn-main:hover {
-    background: #bfdbfe;
-    color: #1d4ed8;
+    background: linear-gradient(135deg, #0369a1 0%, #1d4ed8 100%);
     transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
 }
 
 .reg-upload-icon-btn {
@@ -701,17 +709,18 @@
     display: grid;
     place-items: center;
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1.5px solid #cbd5e1;
     border-radius: 10px;
     font-size: 15px;
     cursor: pointer;
     transition: all 0.2s ease;
     flex-shrink: 0;
+    color: #334155;
 }
 
 .reg-upload-icon-btn:hover {
-    background: #f1f5f9;
-    border-color: #94a3b8;
+    background: #f8fafc;
+    border-color: #64748b;
     transform: translateY(-1px);
 }
 
@@ -736,16 +745,21 @@
 }
 
 .reg-field label {
-    font-size: 11px;
-    font-weight: 800;
-    color: #475569;
+    font-size: 11.5px;
+    font-weight: 750;
+    color: #334155;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .reg-field label em {
-    color: #ef4444;
+    color: #dc2626;
     font-style: normal;
+    font-weight: 800;
+    font-size: 12px;
 }
 
 .reg-input,
@@ -755,26 +769,45 @@
     box-sizing: border-box;
     padding: 12px 14px;
     border-radius: 12px;
-    border: 1.5px solid #dce7f2;
-    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    background: #edf2f7;
     font-size: 13.5px;
     color: #0f172a;
-    font-weight: 500;
+    font-weight: 550;
     outline: none;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.reg-input:hover,
+.reg-select:hover,
+.reg-textarea:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
 }
 
 .reg-input:focus,
 .reg-select:focus,
 .reg-textarea:focus {
-    border-color: #6366f1;
+    border-color: #2563eb;
     background: #ffffff;
-    box-shadow: 0 0 0 3.5px rgba(99, 102, 241, 0.18), 0 2px 8px rgba(99, 102, 241, 0.08);
+    box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.16), 0 2px 8px rgba(37, 99, 235, 0.08);
+    color: #0f172a;
 }
 
 .reg-input::placeholder,
 .reg-textarea::placeholder {
-    color: #94a3b8;
+    color: #64748b;
+    font-weight: 450;
+}
+
+.reg-input:disabled,
+.reg-select:disabled,
+.reg-textarea:disabled {
+    background: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+    color: #64748b !important;
+    cursor: not-allowed;
 }
 
 /* Address Grid */
@@ -813,25 +846,25 @@
     gap: 8px;
     padding: 12px;
     border-radius: 12px;
-    border: 1.5px solid #dce7f2;
-    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    background: #edf2f7;
     font-size: 13px;
     font-weight: 700;
-    color: #475569;
+    color: #334155;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reg-pay-chip:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
+    background: #e2e8f0;
+    border-color: #94a3b8;
 }
 
 .reg-pay-chip.active {
-    background: linear-gradient(135deg, #eff6ff, #f5f3ff);
-    border-color: #6366f1;
-    color: #4f46e5;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border-color: #2563eb;
+    color: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
 }
 
 .reg-pay-meta-grid {
@@ -931,12 +964,18 @@
 .reg-policy-agreement-wrap {
     margin: 16px 20px 0 20px;
     padding: 12px 16px;
-    background: #f8fafc;
+    background: #edf2f7;
     border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    border: 1.5px solid #cbd5e1;
     display: flex;
     align-items: flex-start;
     gap: 12px;
+}
+
+.reg-payment-section-box {
+    background: #f8fafc !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 12px;
 }
 
 /* Form Footer & Enterprise Validation Feedback */

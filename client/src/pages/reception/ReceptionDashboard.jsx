@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI, policyAPI } from '../../utils/api';
-import HospitalPolicyModal from '../../components/HospitalPolicyModal';
 import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
@@ -131,7 +130,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [intakePolicyAgreed, setIntakePolicyAgreed] = useState(false);
-    const [showPolicyModal, setShowPolicyModal] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
@@ -2385,15 +2383,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     onChange={(e) => setIntakePolicyAgreed(e.target.checked)}
                                     style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#2563eb', width: '16px', height: '16px' }}
                                 />
-                                <label htmlFor="rebookPolicyAgreement" style={{ fontSize: '0.86rem', color: '#475569', cursor: 'pointer', lineHeight: 1.4 }}>
+                                <label htmlFor="rebookPolicyAgreement" style={{ fontSize: '0.86rem', color: '#475569', cursor: 'pointer', lineHeight: 1.4, userSelect: 'none' }}>
                                     I confirm that the patient acknowledges and agrees to the{' '}
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPolicyModal(true)}
-                                        style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}
-                                    >
+                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>
                                         Hospital Terms & Policies
-                                    </button>{' '}
+                                    </span>{' '}
                                     and data consent provisions.
                                 </label>
                             </div>
@@ -2428,16 +2422,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
                         </form>
                     </div>
-                    <HospitalPolicyModal
-                        isOpen={showPolicyModal}
-                        onClose={() => setShowPolicyModal(false)}
-                        onAgree={() => {
-                            setIntakePolicyAgreed(true);
-                            setShowPolicyModal(false);
-                        }}
-                        hospitalId={hospitalContext?._id || currentUser?.hospitalId}
-                        hospitalName={hospitalContext?.name || hospitalName || 'Hospital'}
-                    />
                 </div>
             );
         }
@@ -3106,15 +3090,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             onChange={(e) => setIntakePolicyAgreed(e.target.checked)}
                                             style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#2563eb', width: '18px', height: '18px' }}
                                         />
-                                        <label htmlFor="intakePolicyAgreement" style={{ fontSize: '0.88rem', color: '#334155', cursor: 'pointer', lineHeight: 1.5 }}>
+                                        <label htmlFor="intakePolicyAgreement" style={{ fontSize: '0.88rem', color: '#334155', cursor: 'pointer', lineHeight: 1.5, userSelect: 'none' }}>
                                             I have read, understood, and agree to the{' '}
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPolicyModal(true)}
-                                                style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}
-                                            >
+                                            <span style={{ fontWeight: 600, color: '#1e293b' }}>
                                                 Hospital Policies, Terms of Service & Privacy Practices
-                                            </button>{' '}
+                                            </span>{' '}
                                             for medical care and treatment. <span style={{ color: '#ef4444' }}>*</span>
                                         </label>
                                     </div>
@@ -3166,20 +3146,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     </div>
                 </main>
                 {renderCameraModal()}
-                <HospitalPolicyModal
-                    isOpen={showPolicyModal}
-                    onClose={() => setShowPolicyModal(false)}
-                    onAgree={() => {
-                        setIntakePolicyAgreed(true);
-                        setShowPolicyModal(false);
-                    }}
-                    onAccept={() => {
-                        setIntakePolicyAgreed(true);
-                        setShowPolicyModal(false);
-                    }}
-                    hospitalId={hospitalContext?._id || currentUser?.hospitalId}
-                    hospitalName={hospitalContext?.name || hospitalName || 'Hospital'}
-                />
             </div>
         );
     }

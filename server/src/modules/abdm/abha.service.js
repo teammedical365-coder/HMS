@@ -100,8 +100,11 @@ class AbhaService {
         const patient = await this.getPatientForTenant(hospitalId, patientId);
         await this.takeTxn({ txnId, flow: 'ENROL', hospitalId: patient.hospitalId, patientId: patient._id, userId });
 
-        const mob = String(mobile || patient.phone || '').replace(/\D/g, '').slice(-10);
-        const { profile } = await client.enrolByAadhaar({ txnId, otp: String(otp).trim(), mobile: mob || undefined });
+        const mob = String(mobile || patient.phone || patient.mobile || '').replace(/\D/g, '').slice(-10);
+        if (!mob || mob.length !== 10) {
+            throw httpError(400, 'A valid 10-digit mobile number is required to link the ABHA profile.');
+        }
+        const { profile } = await client.enrolByAadhaar({ txnId, otp: String(otp).trim(), mobile: mob });
         if (!profile) throw httpError(502, 'ABDM did not return the created ABHA');
 
         const abha = await this.persist(patient, profile);
@@ -149,8 +152,13 @@ class AbhaService {
 
     // ── shared ───────────────────────────────────────────────────────────────
     async persist(patient, profile) {
-        const abhaNumber = profile.ABHANumber || null;
-        const abhaAddress = String((profile.phrAddress && profile.phrAddress[0]) || profile.preferredAbhaAddress || '').toLowerCase() || null;
+        const abhaNumber = profile.ABHANumber || profile.healthIdNumber || null;
+        const abhaAddress = String(
+            (profile.phrAddress && profile.phrAddress[0]) ||
+            profile.preferredAbhaAddress ||
+            profile.preferredAddress ||
+            ''
+        ).toLowerCase() || null;
         if (!abhaNumber && !abhaAddress) throw httpError(502, 'ABDM did not return ABHA credentials');
 
         const name = profile.name || [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ') || null;

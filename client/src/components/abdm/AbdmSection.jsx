@@ -21,6 +21,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
     const [aadhaarInput, setAadhaarInput] = useState('');
     const [txnId, setTxnId] = useState('');
     const [otp, setOtp] = useState('');
+    const [mobileInput, setMobileInput] = useState(patient?.phone || patient?.mobile || '');
 
     // Skip state
     const [skipped, setSkipped] = useState(false);
@@ -41,6 +42,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
         setAadhaarInput('');
         setOtp('');
         setTxnId('');
+        setMobileInput(patient?.phone || patient?.mobile || '');
     };
 
     const closeModal = () => {
@@ -130,6 +132,12 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
             return;
         }
 
+        const cleanMobile = String(mobileInput || patient?.phone || patient?.mobile || '').replace(/\D/g, '').slice(-10);
+        if (!cleanMobile || cleanMobile.length !== 10) {
+            setErrorMessage('Please enter a valid 10-digit mobile number for ABHA registration');
+            return;
+        }
+
         setLoading(true);
         setErrorMessage('');
         try {
@@ -161,13 +169,20 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
             return;
         }
 
+        const cleanMobile = String(mobileInput || patient?.phone || patient?.mobile || '').replace(/\D/g, '').slice(-10);
+        if (!cleanMobile || cleanMobile.length !== 10) {
+            setErrorMessage('Please enter a valid 10-digit mobile number for ABHA profile creation');
+            return;
+        }
+
         setLoading(true);
         setErrorMessage('');
         try {
             const res = await abdmAPI.verifyCreate({
                 patientId,
                 txnId,
-                otp: otp.trim()
+                otp: otp.trim(),
+                mobile: cleanMobile
             });
 
             if (res.success) {
@@ -357,6 +372,22 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
                                         </p>
                                     </div>
 
+                                    <div className="abdm-form-group">
+                                        <label className="abdm-input-label">Mobile Number for ABHA (10 Digits)</label>
+                                        <input
+                                            type="tel"
+                                            className="abdm-input"
+                                            maxLength="10"
+                                            placeholder="10-digit Mobile Number"
+                                            value={mobileInput}
+                                            onChange={(e) => setMobileInput(e.target.value.replace(/\D/g, ''))}
+                                            required
+                                        />
+                                        <p className="abdm-input-hint">
+                                            The mobile number to associate with the patient's new ABHA profile.
+                                        </p>
+                                    </div>
+
                                     <div className="abdm-alert-box abdm-alert-info">
                                         Aadhaar is sent encrypted to ABDM and is not saved by Medical365.
                                     </div>
@@ -392,6 +423,21 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
                                             Enter the verification OTP received on the registered mobile number.
                                         </p>
                                     </div>
+
+                                    {modalMode === 'create' && (
+                                        <div className="abdm-form-group" style={{ marginTop: '10px' }}>
+                                            <label className="abdm-input-label">Linked Mobile Number</label>
+                                            <input
+                                                type="tel"
+                                                className="abdm-input"
+                                                maxLength="10"
+                                                placeholder="10-digit Mobile Number"
+                                                value={mobileInput}
+                                                onChange={(e) => setMobileInput(e.target.value.replace(/\D/g, ''))}
+                                                required
+                                            />
+                                        </div>
+                                    )}
 
                                     <div className="abdm-modal-footer">
                                         <button type="button" className="abdm-btn abdm-btn-outline" onClick={() => setStep(1)} disabled={loading}>

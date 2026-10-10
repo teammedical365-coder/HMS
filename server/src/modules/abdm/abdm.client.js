@@ -148,7 +148,7 @@ class AbdmClient {
 
     async enrolByAadhaar({ txnId, otp, mobile }) {
         const otpBlock = { txnId, otpValue: await this.rsaEncrypt(otp) };
-        if (mobile) otpBlock.mobile = await this.rsaEncrypt(mobile);
+        if (mobile) otpBlock.mobile = String(mobile).replace(/\D/g, '').slice(-10);
         const { data } = await this.call('post', `${config.abhaBase}/v3/enrollment/enrol/byAadhaar`, {
             body: {
                 txnId,
@@ -157,8 +157,10 @@ class AbdmClient {
                 consent: { code: 'abha-enrollment', version: '1.4' },
             },
         });
-        return { profile: (data && data.ABHAProfile) || null, isNew: Boolean(data && data.isNew) };
+        const profile = (data && (data.ABHAProfile || data.profile || data)) || null;
+        return { profile, isNew: Boolean(data && data.isNew) };
     }
+
 
     // ── ABHA V3: verify / link existing ──────────────────────────────────────
     async requestLoginOtp({ loginHint, loginId, otpSystem, scope }) {
@@ -243,8 +245,18 @@ class AbdmClient {
         if (err && err.isConfigError) throw err;
         const status = (err && err.response && err.response.status) || 502;
         const d = err && err.response && err.response.data;
-        const msg = (d && (d.description || (d.error && d.error.message) || d.message
-            || (d.details && d.details[0] && d.details[0].message))) || (err && err.message) || 'unknown error';
+        let msg = null;
+        if (d && typeof d === 'object') {
+            msg = d.description || (d.error && (typeof d.error === 'string' ? d.error : d.error.message)) || d.message
+                || (d.details && d.details[0] && (d.details[0].message || d.details[0].description));
+            if (!msg && !Array.isArray(d)) {
+                const entries = Object.entries(d).filter(([k]) => k !== 'timestamp');
+                if (entries.length > 0) {
+                    msg = entries.map(([k, v]) => (typeof v === 'string' ? v : `${k}: ${JSON.stringify(v)}`)).join('; ');
+                }
+            }
+        }
+        if (!msg) msg = (err && err.message) || 'unknown error';
         const out = new Error(`${defaultMessage}: ${msg}`);
         out.status = status;
         out.abdmCode = (d && (d.code || (d.error && d.error.code))) || 'ABDM_API_ERROR';

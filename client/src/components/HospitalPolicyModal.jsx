@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FiX, FiChevronDown, FiChevronUp, FiShield, FiCheckCircle } from 'react-icons/fi';
+import React, { useState, useEffect, useRef } from 'react';
+import { FiX, FiChevronDown, FiChevronUp, FiShield, FiCheckCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { policyAPI } from '../utils/api';
 import { useBranding } from '../context/BrandingContext';
 import './HospitalPolicyModal.css';
@@ -24,6 +24,10 @@ const HospitalPolicyModal = ({
     const [expandedPolicyIds, setExpandedPolicyIds] = useState(new Set());
     const [isAgreedChecked, setIsAgreedChecked] = useState(alreadyAccepted);
 
+    const categoryBarRef = useRef(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
     useEffect(() => {
         setIsAgreedChecked(alreadyAccepted);
     }, [alreadyAccepted]);
@@ -47,7 +51,7 @@ const HospitalPolicyModal = ({
                         setPolicies(fetched);
                         setHospitalInfo(res.hospital || null);
                         // Expand all policies by default so full content is immediately visible
-                        setExpandedPolicyIds(new Set(fetched.map(p => p._id)));
+                        setExpandedPolicyIds(new Set(fetched.map((p, idx) => String(p?._id || p?.id || p?.slug || idx))));
                     } else {
                         setError(res?.message || 'Failed to load policies.');
                     }
@@ -69,10 +73,10 @@ const HospitalPolicyModal = ({
         };
     }, [isOpen, activeHospitalId, applicableTo]);
 
-    if (!isOpen) return null;
-
     const hospitalDisplayName = hospitalInfo?.name || contextHospitalName || 'Hospital';
     const hospitalLogo = hospitalInfo?.logo || branding?.logoUrl || branding?.logo;
+
+    const getPolicyKey = (p, idx) => String(p?._id || p?.id || p?.slug || idx);
 
     // Filter by selected category chip
     const filteredPolicies = selectedCategory === 'ALL'
@@ -90,13 +94,54 @@ const HospitalPolicyModal = ({
         });
     };
 
-    const areAllExpanded = filteredPolicies.length > 0 && filteredPolicies.every(p => expandedPolicyIds.has(p._id));
+    const areAllExpanded = filteredPolicies.length > 0 && filteredPolicies.every((p, idx) => expandedPolicyIds.has(getPolicyKey(p, idx)));
 
     const toggleExpandAll = () => {
         if (areAllExpanded) {
             setExpandedPolicyIds(new Set());
         } else {
-            setExpandedPolicyIds(new Set(filteredPolicies.map(p => p._id)));
+            setExpandedPolicyIds(new Set(filteredPolicies.map((p, idx) => getPolicyKey(p, idx))));
+        }
+    };
+
+    const checkCategoryScroll = () => {
+        if (categoryBarRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = categoryBarRef.current;
+            setCanScrollLeft(scrollLeft > 6);
+            setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 6);
+        }
+    };
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const timer = setTimeout(checkCategoryScroll, 120);
+        const el = categoryBarRef.current;
+        if (el) {
+            el.addEventListener('scroll', checkCategoryScroll, { passive: true });
+            window.addEventListener('resize', checkCategoryScroll);
+            return () => {
+                clearTimeout(timer);
+                el.removeEventListener('scroll', checkCategoryScroll);
+                window.removeEventListener('resize', checkCategoryScroll);
+            };
+        }
+        return () => clearTimeout(timer);
+    }, [isOpen, categories, selectedCategory]);
+
+    const scrollCategories = (direction) => {
+        if (categoryBarRef.current) {
+            const scrollAmount = direction === 'left' ? -220 : 220;
+            categoryBarRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+    };
+
+    const handleCategoryWheel = (e) => {
+        if (categoryBarRef.current) {
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault();
+                categoryBarRef.current.scrollLeft += e.deltaY;
+                checkCategoryScroll();
+            }
         }
     };
 
@@ -110,9 +155,11 @@ const HospitalPolicyModal = ({
         onClose();
     };
 
+    if (!isOpen) return null;
+
     return (
-        <div className="hpm-overlay" onClick={onClose} role="dialog" aria-modal="true">
-            <div className="hpm-container" onClick={(e) => e.stopPropagation()}>
+        <div className="hpm-overlay" onClick={onClose} role="dialog" aria-modal="true" data-lenis-prevent="true">
+            <div className="hpm-container" onClick={(e) => e.stopPropagation()} data-lenis-prevent="true">
                 {/* Header */}
                 <div className="hpm-header">
                     <div className="hpm-header-left">
@@ -159,22 +206,51 @@ const HospitalPolicyModal = ({
 
                 {/* Category filter bar (if multiple categories present) */}
                 {categories.length > 2 && (
-                    <div className="hpm-category-bar">
-                        {categories.map(cat => (
+                    <div className="hpm-category-nav-wrapper" data-lenis-prevent="true">
+                        {canScrollLeft && (
                             <button
-                                key={cat}
                                 type="button"
-                                className={`hpm-cat-chip ${selectedCategory === cat ? 'active' : ''}`}
-                                onClick={() => setSelectedCategory(cat)}
+                                className="hpm-cat-arrow-btn left"
+                                onClick={() => scrollCategories('left')}
+                                title="Scroll categories left"
+                                aria-label="Scroll categories left"
                             >
-                                {cat === 'ALL' ? 'All Policies' : cat}
+                                <FiChevronLeft size={16} />
                             </button>
-                        ))}
+                        )}
+                        <div
+                            ref={categoryBarRef}
+                            className="hpm-category-bar"
+                            onWheel={handleCategoryWheel}
+                            data-lenis-prevent="true"
+                        >
+                            {categories.map(cat => (
+                                <button
+                                    key={cat}
+                                    type="button"
+                                    className={`hpm-cat-chip ${selectedCategory === cat ? 'active' : ''}`}
+                                    onClick={() => setSelectedCategory(cat)}
+                                >
+                                    {cat === 'ALL' ? 'All Policies' : cat}
+                                </button>
+                            ))}
+                        </div>
+                        {canScrollRight && (
+                            <button
+                                type="button"
+                                className="hpm-cat-arrow-btn right"
+                                onClick={() => scrollCategories('right')}
+                                title="Scroll categories right"
+                                aria-label="Scroll categories right"
+                            >
+                                <FiChevronRight size={16} />
+                            </button>
+                        )}
                     </div>
                 )}
 
                 {/* Body / Policy Items */}
-                <div className="hpm-body">
+                <div className="hpm-body" data-lenis-prevent="true">
                     {loading ? (
                         <div className="hpm-empty-state">
                             <div className="ha-ai-spinner" style={{ margin: '0 auto 12px' }} />
@@ -191,12 +267,13 @@ const HospitalPolicyModal = ({
                         </div>
                     ) : (
                         filteredPolicies.map((policy, idx) => {
-                            const isExpanded = expandedPolicyIds.has(policy._id);
+                            const policyKey = getPolicyKey(policy, idx);
+                            const isExpanded = expandedPolicyIds.has(policyKey);
                             return (
-                                <div key={policy._id || idx} className="hpm-policy-card">
+                                <div key={policyKey} className={`hpm-policy-card ${isExpanded ? 'is-expanded' : ''}`}>
                                     <div
                                         className="hpm-policy-card-header"
-                                        onClick={() => togglePolicy(policy._id)}
+                                        onClick={() => togglePolicy(policyKey)}
                                     >
                                         <div className="hpm-policy-card-title">
                                             <span className="hpm-policy-index">{idx + 1}</span>

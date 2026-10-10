@@ -24,8 +24,9 @@
 .hpm-container {
     background: #ffffff;
     width: 100%;
-    max-width: 780px;
-    max-height: 88vh;
+    max-width: 800px;
+    height: 86vh;
+    max-height: 86vh;
     border-radius: 16px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(226, 232, 240, 0.8);
     display: flex;
@@ -130,17 +131,81 @@
     color: #ffffff;
 }
 
-/* Category Filter Chips */
+/* Category Filter Chips & Horizontal Scroll Navigation */
+.hpm-category-nav-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border-bottom: 1.5px solid #e2e8f0;
+    width: 100%;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
 .hpm-category-bar {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 24px;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 44px 10px 18px;
+    background: transparent;
     overflow-x: auto;
     white-space: nowrap;
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.hpm-category-bar::-webkit-scrollbar {
+    height: 4px;
+}
+
+.hpm-category-bar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.hpm-category-bar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 99px;
+}
+
+.hpm-category-bar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.hpm-cat-arrow-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.15s ease;
+}
+
+.hpm-cat-arrow-btn:hover {
+    background: #f1f5f9;
+    color: #0284c7;
+    transform: translateY(-50%) scale(1.08);
+}
+
+.hpm-cat-arrow-btn.left {
+    left: 8px;
+}
+
+.hpm-cat-arrow-btn.right {
+    right: 8px;
 }
 
 .hpm-cat-chip {
@@ -153,6 +218,7 @@
     color: #475569;
     cursor: pointer;
     transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
 .hpm-cat-chip:hover {
@@ -168,7 +234,7 @@
 
 /* Body / Policies Scroll Area */
 .hpm-body {
-    padding: 20px 24px;
+    padding: 18px 24px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
@@ -176,63 +242,114 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
+    overscroll-behavior: contain;
+}
+
+.hpm-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.hpm-body::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 6px;
+}
+
+.hpm-body::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 6px;
+    border: 2px solid #f1f5f9;
+}
+
+.hpm-body::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
 }
 
 /* Individual Policy Card */
 .hpm-policy-card {
-    border: 1px solid #e2e8f0;
+    border: 1.5px solid #e2e8f0;
     border-radius: 12px;
     background: #ffffff;
     overflow: hidden;
+    flex-shrink: 0; /* CRITICAL FIX: prevents cards from compressing into thin slivers */
+    min-height: fit-content;
+    width: 100%;
+    box-sizing: border-box;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .hpm-policy-card:hover {
     border-color: #cbd5e1;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+}
+
+.hpm-policy-card.is-expanded {
+    border-color: #93c5fd;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
 }
 
 .hpm-policy-card-header {
     padding: 14px 18px;
+    min-height: 54px; /* CRITICAL FIX: header is always spacious and visible */
+    box-sizing: border-box;
     background: #f8fafc;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 14px;
     cursor: pointer;
     user-select: none;
+    transition: background 0.15s ease;
+}
+
+.hpm-policy-card-header:hover {
+    background: #f1f5f9;
+}
+
+.hpm-policy-card.is-expanded .hpm-policy-card-header {
+    background: #f0f7ff;
+    border-bottom: 1px solid #dbeafe;
 }
 
 .hpm-policy-card-title {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .hpm-policy-index {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     border-radius: 50%;
     background: #e2e8f0;
-    color: #334155;
+    color: #1e293b;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
+    flex-shrink: 0;
 }
 
 .hpm-policy-name {
     margin: 0;
     font-size: 0.95rem;
     font-weight: 700;
-    color: #1e293b;
+    color: #0f172a;
+    line-height: 1.35;
+    word-break: break-word;
 }
 
 .hpm-policy-tags {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .hpm-tag-category {
@@ -240,8 +357,9 @@
     color: #0369a1;
     font-size: 0.72rem;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 3px 9px;
     border-radius: 6px;
+    white-space: nowrap;
 }
 
 .hpm-tag-mandatory {
@@ -249,8 +367,9 @@
     color: #b91c1c;
     font-size: 0.72rem;
     font-weight: 700;
-    padding: 2px 8px;
+    padding: 3px 9px;
     border-radius: 6px;
+    white-space: nowrap;
 }
 
 .hpm-tag-version {
@@ -258,9 +377,10 @@
     color: #64748b;
     font-size: 0.72rem;
     font-weight: 600;
-    padding: 2px 8px;
+    padding: 3px 9px;
     border-radius: 6px;
     border: 1px solid #e2e8f0;
+    white-space: nowrap;
 }
 
 .hpm-policy-content {
