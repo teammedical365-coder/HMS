@@ -676,8 +676,22 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
             safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString(), disambiguate: true });
         }
         
-        const logoUrl = hospital.branding?.logoUrl || 'default';
-        const themeColor = hospital.branding?.primaryColor || '#14b8a6';
+        const logoCandidate = (
+            hospital.brandingSchema?.logoUrl ||
+            hospital.branding?.logoUrl ||
+            hospital.logo ||
+            ''
+        ).trim();
+        const logoUrl = logoCandidate || 'default';
+
+        const themeColorCandidate = (
+            hospital.brandingSchema?.themeColors?.primary ||
+            hospital.branding?.themeColors?.primary ||
+            hospital.brandingSchema?.primaryColor ||
+            hospital.branding?.primaryColor ||
+            ''
+        ).trim();
+        const themeColor = /^#[0-9a-fA-F]{6}$/.test(themeColorCandidate) ? themeColorCandidate : '#14b8a6';
 
         const owner = process.env.GITHUB_RN_OWNER || process.env.GITHUB_OWNER || 'teammedical365-coder';
         const repo = process.env.GITHUB_RN_REPO;
