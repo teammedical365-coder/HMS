@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const Doctor = require('../models/doctor.model');
 const Inventory = require('../models/inventory.model');
 const LabTest = require('../models/labTest.model');
 const PDFDocument = require('pdfkit');
@@ -398,6 +399,9 @@ router.get('/:id/next-token', verifyToken, async (req, res) => {
 router.delete('/:id', verifyCentralAdmin, async (req, res) => {
     try {
         const hospitalId = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(hospitalId)) {
+            return res.status(400).json({ success: false, message: 'Invalid hospital ID' });
+        }
         const hospital = await Hospital.findOne({ _id: hospitalId, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 

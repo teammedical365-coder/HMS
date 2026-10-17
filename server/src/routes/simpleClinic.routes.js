@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
@@ -196,6 +197,9 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.delete('/:id', verifyCentralAdmin, async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid clinic ID' });
+        }
         const clinic = await Hospital.findOneAndDelete({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
@@ -298,8 +302,6 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
-
-const mongoose = require('mongoose');
 
 // ==========================================
 // CREATE clinic manager (hospitaladmin)
