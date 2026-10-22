@@ -254,6 +254,7 @@ app.use('/api/test-packages', testPackageRoutes);
 app.use('/api/hospitals', hospitalRoutes);
 app.use('/api/hospital-policies', hospitalPolicyRoutes);
 app.use('/api/superadmin/hospitals', require('./routes/superadmin.build.routes')); // Added superadmin build routes
+app.use('/api/superadmin/releases', require('./routes/release.routes')); // Added superadmin OTA release routes
 app.use('/api/finance', financeRoutes);
 
 // ── Static Downloads for Generated Apps ─────────────────────────────────────────

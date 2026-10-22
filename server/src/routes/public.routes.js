@@ -213,18 +213,29 @@ router.get('/manifest.json', async (req, res) => {
     }
 });
 
-// Endpoint 1: Fetch branding details based on requested domain/slug/tenantId
+// Endpoint 1: Fetch branding details based on requested domain/slug/tenantId/packageId
 router.get('/branding', async (req, res) => {
     try {
-        const { domain, slug, tenantId } = req.query;
-        if (!domain && !slug && !tenantId) {
-            return res.status(400).json({ error: 'Please provide a domain, slug, or tenantId' });
+        const { domain, slug, tenantId, packageId } = req.query;
+        if (!domain && !slug && !tenantId && !packageId) {
+            return res.status(400).json({ error: 'Please provide a domain, slug, tenantId, or packageId' });
         }
 
         const Hospital = require('../models/hospital.model');
         let query = {};
         
-        if (tenantId) {
+        if (packageId) {
+            const cleanPackageId = typeof packageId === 'string' ? packageId.trim() : '';
+            // Strictly validate Android package format: com.medical365.<lowercase-segment>
+            if (!/^com\.medical365\.[a-z][a-z0-9_]*$/.test(cleanPackageId)) {
+                return res.status(400).json({ success: false, error: 'Invalid packageId format. Expected com.medical365.<lowercase-segment>' });
+            }
+            // Generic platform package is not tied to a single hospital tenant
+            if (cleanPackageId === 'com.medical365.app') {
+                return res.status(404).json({ success: false, error: 'Branding not found for generic package' });
+            }
+            query = { 'appConfig.androidPackageId': cleanPackageId, isActive: true };
+        } else if (tenantId) {
             query._id = tenantId;
         } else {
             let searchSlug = slug ? slug.toLowerCase().trim() : null;
@@ -264,6 +275,9 @@ router.get('/branding', async (req, res) => {
         if (!hospital) {
             return res.status(404).json({ error: 'Branding not found' });
         }
+
+        // Add lightweight cache header for branding config
+        res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
 
         // Prioritize actual saved hospital.branding over empty default brandingSchema
         const rawB = hospital.branding?.toObject ? hospital.branding.toObject() : (hospital.branding || {});
