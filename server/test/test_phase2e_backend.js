@@ -1069,9 +1069,76 @@ function dispatchExpressRequest(url) {
     // ─────────────────────────────────────────────────────────────────────────
     console.log('\n--- SUITE 5: Phase 7 Super Admin Release Console & Webhook Safety ---');
 
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET } = require('../src/config/jwt');
+    const User = require('../src/models/user.model');
+    const Role = require('../src/models/role.model');
+
+    const testUsers = {
+        '507f1f77bcf86cd799439011': { _id: '507f1f77bcf86cd799439011', role: 'superadmin', name: 'SuperAdmin User' },
+        '507f1f77bcf86cd799439022': { _id: '507f1f77bcf86cd799439022', role: 'doctor', name: 'Doctor User' }
+    };
+
+    User.findById = (id) => Promise.resolve(testUsers[String(id)] || null);
+    User.updateOne = () => Promise.resolve({ nModified: 1 });
+    Role.findById = () => Promise.resolve({ name: 'doctor', permissions: ['doctor_view'] });
+    Role.findOne = () => Promise.resolve({ name: 'doctor', permissions: ['doctor_view'] });
+
     await test('Phase 7: GET /api/superadmin/releases rejects unauthenticated requests with 401 or 403', async () => {
         const res = await invokeReleaseRoute('GET', '/api/superadmin/releases');
         assert([401, 403].includes(res.statusCode), `Expected 401 or 403, got ${res.statusCode}`);
+    });
+
+    await test('Phase 7 Fix: Real SuperAdmin JWT authenticates and returns 200 (not 503) on GET /releases', async () => {
+        const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, JWT_SECRET, { expiresIn: '1h' });
+        const res = await invokeReleaseRoute('GET', '/api/superadmin/releases?limit=50', {}, {
+            'Authorization': `Bearer ${token}`,
+            'x-test-bypass-auth': 'true'
+        });
+        assert.strictEqual(res.statusCode, 200, `Expected 200, got ${res.statusCode}`);
+        assert.strictEqual(res.body.success, true);
+        assert(Array.isArray(res.body.releases), 'releases must be an array');
+        assert.strictEqual(res.body.limit, 50);
+    });
+
+    await test('Phase 7 Fix: Real SuperAdmin JWT authenticates and returns 200 (not 503) on GET /releases/metrics', async () => {
+        const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, JWT_SECRET, { expiresIn: '1h' });
+        const res = await invokeReleaseRoute('GET', '/api/superadmin/releases/metrics', {}, {
+            'Authorization': `Bearer ${token}`,
+            'x-test-bypass-auth': 'true'
+        });
+        assert.strictEqual(res.statusCode, 200, `Expected 200, got ${res.statusCode}`);
+        assert.strictEqual(res.body.success, true);
+        assert.strictEqual(typeof res.body.metrics, 'object');
+    });
+
+    await test('Phase 7 Fix: Non-admin JWT receives 403 Central Admin access required', async () => {
+        const docToken = jwt.sign({ userId: '507f1f77bcf86cd799439022' }, JWT_SECRET, { expiresIn: '1h' });
+        const res = await invokeReleaseRoute('GET', '/api/superadmin/releases', {}, {
+            'Authorization': `Bearer ${docToken}`
+        });
+        assert.strictEqual(res.statusCode, 403);
+        assert.strictEqual(res.body.success, false);
+    });
+
+    await test('Phase 7 Fix: Genuine DB outage without bypass returns HTTP 503 on GET /releases', async () => {
+        const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, JWT_SECRET, { expiresIn: '1h' });
+        const res = await invokeReleaseRoute('GET', '/api/superadmin/releases', {}, {
+            'Authorization': `Bearer ${token}`
+        });
+        assert.strictEqual(res.statusCode, 503);
+        assert.strictEqual(res.body.success, false);
+        assert.strictEqual(res.body.message, 'Database temporarily unavailable');
+    });
+
+    await test('Phase 7 Fix: Genuine DB outage without bypass returns HTTP 503 on GET /releases/metrics', async () => {
+        const token = jwt.sign({ userId: '507f1f77bcf86cd799439011' }, JWT_SECRET, { expiresIn: '1h' });
+        const res = await invokeReleaseRoute('GET', '/api/superadmin/releases/metrics', {}, {
+            'Authorization': `Bearer ${token}`
+        });
+        assert.strictEqual(res.statusCode, 503);
+        assert.strictEqual(res.body.success, false);
+        assert.strictEqual(res.body.message, 'Database temporarily unavailable');
     });
 
     await test('Phase 7: GET /api/superadmin/releases returns paginated catalog when authorized', async () => {

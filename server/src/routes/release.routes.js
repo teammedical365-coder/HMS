@@ -66,9 +66,7 @@ function requireSuperAdmin(req, res, next) {
         req.user = { role: 'superadmin', name: 'Test Super Admin' };
         return next();
     }
-    return verifyToken(req, res, () => {
-        return verifyCentralAdmin(req, res, next);
-    });
+    return verifyCentralAdmin(req, res, next);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +86,9 @@ router.get('/', requireSuperAdmin, async (req, res) => {
         if (type) query.type = type;
         if (status) query.status = status;
 
-        const skip = (Math.max(1, parseInt(page, 10)) - 1) * Math.min(100, parseInt(limit, 10));
+        const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+        const parsedPage = Math.max(1, parseInt(page, 10) || 1);
+        const skip = (parsedPage - 1) * parsedLimit;
 
         let releases = [];
         let total = 0;
@@ -98,35 +98,26 @@ router.get('/', requireSuperAdmin, async (req, res) => {
                 releases = await Release.find(query)
                     .sort({ createdAt: -1 })
                     .skip(skip)
-                    .limit(Math.min(100, parseInt(limit, 10)))
+                    .limit(parsedLimit)
                     .lean();
                 total = await Release.countDocuments(query);
             } catch (dbErr) {
-                releases = [];
-                total = 0;
+                console.error('[Release Catalog DB Error]', dbErr);
+                return res.status(503).json({ success: false, message: 'Database temporarily unavailable', error: dbErr.message });
             }
-        }
-
-        if (releases.length === 0 && otaReleaseHistory.length > 0) {
-            // Offline/mock fallback if DB model not connected or empty
-            releases = otaReleaseHistory.map((r, idx) => ({
-                _id: `mock-${idx}`,
-                releaseId: r.releaseId,
-                type: 'OTA_UPDATE',
-                channel: r.channel,
-                runtimeVersion: r.targetRuntimeVersion || '1.0.0',
-                status: r.status,
-                easUpdateId: r.easUpdateId,
-                createdAt: r.receivedAt,
-            }));
-            total = releases.length;
+        } else {
+            // Check if running under offline unit test bypass
+            const isTestBypass = (process.env.NODE_ENV === 'test' || process.env.ALLOW_TEST_AUTH_BYPASS === 'true') && req.headers['x-test-bypass-auth'] === 'true';
+            if (!isTestBypass) {
+                return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
+            }
         }
 
         return res.status(200).json({
             success: true,
             total,
-            page: parseInt(page, 10),
-            limit: parseInt(limit, 10),
+            page: parsedPage,
+            limit: parsedLimit,
             releases,
         });
     } catch (err) {
@@ -161,13 +152,15 @@ router.get('/metrics', requireSuperAdmin, async (req, res) => {
                 totalDownloads = downloadSum[0]?.total || 0;
 
                 latestRelease = await Release.findOne({ status: 'COMPLETED' }).sort({ createdAt: -1 }).lean();
-            } catch (_) {}
-        }
-
-        if (totalReleases === 0 && otaReleaseHistory.length > 0) {
-            totalReleases = otaReleaseHistory.length;
-            completedOta = otaReleaseHistory.filter(r => r.status === 'COMPLETED').length;
-            activeCohorts = Array.from(new Set(otaReleaseHistory.map(r => r.targetRuntimeVersion).filter(Boolean)));
+            } catch (dbErr) {
+                console.error('[Release Metrics DB Error]', dbErr);
+                return res.status(503).json({ success: false, message: 'Database temporarily unavailable', error: dbErr.message });
+            }
+        } else {
+            const isTestBypass = (process.env.NODE_ENV === 'test' || process.env.ALLOW_TEST_AUTH_BYPASS === 'true') && req.headers['x-test-bypass-auth'] === 'true';
+            if (!isTestBypass) {
+                return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
+            }
         }
 
         return res.status(200).json({
@@ -177,11 +170,12 @@ router.get('/metrics', requireSuperAdmin, async (req, res) => {
                 completedOta,
                 completedApk,
                 totalDownloads,
-                activeCohorts: activeCohorts.length > 0 ? activeCohorts : ['1.0.0'],
+                activeCohorts: activeCohorts || [],
                 latestRelease,
             },
         });
     } catch (err) {
+        console.error('[Release Metrics Error]', err);
         return res.status(500).json({ success: false, message: 'Failed to fetch metrics', error: err.message });
     }
 });

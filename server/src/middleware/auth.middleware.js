@@ -73,7 +73,11 @@ exports.verifyToken = async (req, res, next) => {
         }
 
         let user;
+        const mongoose = require('mongoose');
         if (decoded.patientId) {
+            if (!mongoose.Types.ObjectId.isValid(decoded.patientId)) {
+                return res.status(401).json({ success: false, message: 'Invalid token payload' });
+            }
             const PatientAuth = require('../models/patientAuth.model');
             const patient = await PatientAuth.findById(decoded.patientId);
             if (!patient) return res.status(401).json({ success: false, message: 'Patient not found' });
@@ -86,6 +90,9 @@ exports.verifyToken = async (req, res, next) => {
                 hospitalId: patient.hospitalId
             };
         } else {
+            if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
+                return res.status(401).json({ success: false, message: 'Invalid token payload' });
+            }
             user = await User.findById(decoded.userId);
             if (!user) return res.status(401).json({ success: false, message: 'User not found' });
         }
@@ -93,7 +100,7 @@ exports.verifyToken = async (req, res, next) => {
         // hospitalId: prefer JWT payload (authoritative for hospital admins), fallback to DB
         if (decoded.hospitalId) {
             try {
-                user.hospitalId = new (require('mongoose').Types.ObjectId)(decoded.hospitalId);
+                user.hospitalId = new mongoose.Types.ObjectId(decoded.hospitalId);
             } catch (e) {
                 user.hospitalId = decoded.hospitalId; // Fallback if somehow not castable
             }
@@ -120,7 +127,6 @@ exports.verifyToken = async (req, res, next) => {
                 isSystemRole: true
             };
         } else if (user.role) {
-            const mongoose = require('mongoose');
             if (mongoose.Types.ObjectId.isValid(user.role)) {
                 roleData = await Role.findById(user.role);
             }
@@ -173,12 +179,15 @@ exports.verifyToken = async (req, res, next) => {
                 req.user.isDemoUser = true;
             }
         }
-
-        next();
     } catch (dbErr) {
+        if (dbErr.name === 'CastError') {
+            return res.status(401).json({ success: false, message: 'Invalid token payload' });
+        }
         console.error('[verifyToken] Database connection error:', dbErr.message);
         return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
     }
+
+    return next();
 };
 
 /**
@@ -224,23 +233,30 @@ exports.requirePermission = (...requiredPermissions) => {
 };
 
 /**
- * Verify user is an superadmin (bootstrap super-admin).
- * Use this only for system-level operations like first-time setup.
+ * Verify user is an superadmin (bootstrap super-admin) or centraladmin.
+ * Use this only for system-level operations like first-time setup or release management.
  */
 exports.verifySuperAdmin = async (req, res, next) => {
     try {
-        await exports.verifyToken(req, res, () => {
-            const role = req.user.role;
+        const checkRoleAndProceed = () => {
+            const role = req.user?.role;
             if (role === 'superadmin' || role === 'centraladmin') {
-                next();
-            } else {
-                return res.status(403).json({ success: false, message: 'Central Admin access required' });
+                return next();
             }
-        });
+            return res.status(403).json({ success: false, message: 'Central Admin access required' });
+        };
+
+        if (req.user) {
+            return checkRoleAndProceed();
+        }
+
+        await exports.verifyToken(req, res, checkRoleAndProceed);
     } catch (error) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
+
+exports.verifyCentralAdmin = exports.verifySuperAdmin;
 
 /**
  * BACKWARDS COMPATIBILITY — verifyAdmin and verifyAdminOrSuperAdmin
@@ -304,9 +320,10 @@ exports.verifyPatientToken = async (req, res, next) => {
         }
 
         req.patient = patient;
-        next();
     } catch (dbErr) {
         console.error('[verifyPatientToken] Database connection error:', dbErr.message);
         return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
     }
+
+    return next();
 };
