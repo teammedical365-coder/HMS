@@ -260,6 +260,7 @@ app.use('/api/finance', financeRoutes);
 // ── Static Downloads for Generated Apps ─────────────────────────────────────────
 app.use('/downloads/apks', express.static(path.join(__dirname, '../public/downloads/apks')));
 app.use('/downloads/aabs', express.static(path.join(__dirname, '../public/downloads/aabs')));
+app.use('/downloads/releases', express.static(path.join(__dirname, '../public/downloads/releases')));
 app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);

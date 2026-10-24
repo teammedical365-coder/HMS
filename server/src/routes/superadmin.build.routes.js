@@ -11,6 +11,14 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const { triggerMobileBuild } = require('../controllers/mobileBuild.controller');
 const { generateApplicationId, reservePackageIdForHospital } = require('../utils/applicationId.util');
 const { allocateNextVersion, atomicClaimBuildWithVersion, handleBuildDispatchFailure } = require('../utils/versionAllocation.util');
+const {
+    isMockStorageUrl,
+    isGitHubRunSummaryUrl,
+    isVerifiedDirectArtifactUrl,
+    isGenuinePublicUrl,
+    verifyApkFileAuthenticity,
+    PRODUCTION_RELEASE_CERT_SHA256,
+} = require('../utils/artifactStorage.util');
 
 /**
  * Validate webhook secret using timing-safe comparison.
@@ -355,20 +363,50 @@ router.post('/webhook/github/upload', uploadApk.single('apk'), async (req, res) 
  */
 router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
     try {
-        const hospital = await Hospital.findById(req.params.id).select('appConfig name').lean();
+        const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Not found' });
         
-        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        let apkFile = `${safeName}-release.apk`;
-        let aabFile = `${safeName}-release.aab`;
-        let targetApkPath = path.join(__dirname, '../../public/downloads/apks', apkFile);
+        let rawApk = hospital.appConfig?.apkUrl || '';
+        let rawAab = hospital.appConfig?.aabUrl || '';
 
-        if (!fs.existsSync(targetApkPath)) {
-            apkFile = 'cityhospital-release.apk';
-            aabFile = 'cityhospital-release.aab';
+        // Clean stale mock URLs from database
+        let needsDbClean = false;
+        const unsets = {};
+        if (isMockStorageUrl(rawApk)) {
+            rawApk = '';
+            unsets['appConfig.apkUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (isMockStorageUrl(rawAab)) {
+            rawAab = '';
+            unsets['appConfig.aabUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (needsDbClean) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, { $unset: unsets });
+            } catch (_) {}
+        }
+
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        const expectedPackageId = hospital.appConfig?.androidPackageId || `com.medical365.${hospital.slug || safeName}`;
+
+        let verifiedLocalApk = '';
+        if (safeName) {
+            const candidateApkPath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-release.apk`);
+            const candidateRnApkPath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`);
+            const localPath = fs.existsSync(candidateApkPath) ? candidateApkPath : (fs.existsSync(candidateRnApkPath) ? candidateRnApkPath : null);
+            if (localPath) {
+                const auth = verifyApkFileAuthenticity(localPath, expectedPackageId);
+                if (auth.valid) {
+                    verifiedLocalApk = `/downloads/apks/${path.basename(localPath)}`;
+                }
+            }
         }
 
         const buildStatus = hospital.appConfig?.buildStatus || 'NOT_BUILT';
+        const finalApkUrl = isVerifiedDirectArtifactUrl(rawApk) ? rawApk : verifiedLocalApk;
+        const finalAabUrl = isVerifiedDirectArtifactUrl(rawAab) ? rawAab : '';
 
         res.json({
             success: true,
@@ -376,8 +414,8 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
             buildStartedAt: hospital.appConfig?.buildStartedAt,
             lastBuiltAt: hospital.appConfig?.lastBuiltAt,
             buildError: hospital.appConfig?.buildError || '',
-            apkUrl: buildStatus === 'COMPLETED' ? (hospital.appConfig?.apkUrl || `/downloads/apks/${apkFile}`) : '',
-            aabUrl: buildStatus === 'COMPLETED' ? (hospital.appConfig?.aabUrl || `/downloads/aabs/${aabFile}`) : ''
+            apkUrl: buildStatus === 'COMPLETED' ? finalApkUrl : '',
+            aabUrl: buildStatus === 'COMPLETED' ? finalAabUrl : ''
         });
     } catch (err) {
         console.error('Build status error:', err);
@@ -391,23 +429,64 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
 router.get('/:id/download/apk', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
-        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        
-        let filePath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-release.apk`);
-        if (!fs.existsSync(filePath)) {
-            filePath = path.join(__dirname, '../../public/downloads/apks/cityhospital-release.apk');
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Verified APK not available for this hospital tenant. Hospital tenant not found.' });
         }
 
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: "APK file not found on server." });
+        // 1. Clean stale mock URLs from database
+        const rawApk = hospital.appConfig?.apkUrl;
+        const rawRnApk = hospital.appConfig?.rnApkUrl;
+        let needsDbClean = false;
+        const unsets = {};
+        if (isMockStorageUrl(rawApk)) {
+            unsets['appConfig.apkUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (isMockStorageUrl(rawRnApk)) {
+            unsets['appConfig.rnApkUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (needsDbClean) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, { $unset: unsets });
+            } catch (_) {}
         }
 
-        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-release.apk"`);
-        return res.sendFile(path.resolve(filePath));
+        // 2. Redirect to verified direct artifact URL if configured
+        const cloudUrl = (!isMockStorageUrl(rawApk) && isVerifiedDirectArtifactUrl(rawApk))
+            ? rawApk
+            : ((!isMockStorageUrl(rawRnApk) && isVerifiedDirectArtifactUrl(rawRnApk)) ? rawRnApk : null);
+
+        if (cloudUrl) {
+            return res.redirect(cloudUrl);
+        }
+
+        // 3. Check for genuine local APK strictly matching hospital tenant packageId and production signing cert
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        const expectedPackageId = hospital.appConfig?.androidPackageId || `com.medical365.${hospital.slug || safeName}`;
+
+        let filePath = safeName ? path.join(__dirname, '../../public/downloads/apks', `${safeName}-release.apk`) : null;
+        if (!filePath || !fs.existsSync(filePath)) {
+            filePath = safeName ? path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`) : null;
+        }
+
+        if (filePath && fs.existsSync(filePath)) {
+            const auth = verifyApkFileAuthenticity(filePath, expectedPackageId);
+            if (auth.valid) {
+                res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+                res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-release.apk"`);
+                return res.sendFile(path.resolve(filePath));
+            }
+        }
+
+        // 4. Fail closed: Never substitute the wrong hospital APK or debug APK
+        return res.status(404).json({
+            success: false,
+            message: 'Verified APK not available for this hospital tenant. No genuine release APK artifact found.'
+        });
     } catch (err) {
         console.error('Download APK error:', err);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 
@@ -417,21 +496,48 @@ router.get('/:id/download/apk', async (req, res) => {
 router.get('/:id/download/aab', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
-        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        
-        let filePath = path.join(__dirname, '../../public/downloads/aabs', `${safeName}-release.aab`);
-        if (!fs.existsSync(filePath)) {
-            filePath = path.join(__dirname, '../../public/downloads/aabs/cityhospital-release.aab');
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
         }
 
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: "AAB binary not found on server." });
+        const rawAab = hospital.appConfig?.aabUrl;
+        const rawRnAab = hospital.appConfig?.rnAabUrl;
+        if (isMockStorageUrl(rawAab) || isMockStorageUrl(rawRnAab)) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, {
+                    $unset: {
+                        ...(isMockStorageUrl(rawAab) ? { 'appConfig.aabUrl': 1 } : {}),
+                        ...(isMockStorageUrl(rawRnAab) ? { 'appConfig.rnAabUrl': 1 } : {})
+                    }
+                });
+            } catch (_) {}
         }
-        
-        res.download(filePath);
+
+        const cloudUrl = (!isMockStorageUrl(rawAab) && isVerifiedDirectArtifactUrl(rawAab))
+            ? rawAab
+            : ((!isMockStorageUrl(rawRnAab) && isVerifiedDirectArtifactUrl(rawRnAab)) ? rawRnAab : null);
+
+        if (cloudUrl) {
+            return res.redirect(cloudUrl);
+        }
+
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        let filePath = safeName ? path.join(__dirname, '../../public/downloads/aabs', `${safeName}-release.aab`) : null;
+        if (!filePath || !fs.existsSync(filePath)) {
+            filePath = safeName ? path.join(__dirname, '../../public/downloads/aabs', `${safeName}-rn-release.aab`) : null;
+        }
+
+        if (filePath && fs.existsSync(filePath)) {
+            return res.download(filePath);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: 'Verified AAB not available for this hospital tenant. No genuine release AAB artifact found.'
+        });
     } catch (err) {
         console.error('Download AAB error:', err);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 
@@ -441,11 +547,19 @@ router.get('/:id/download/aab', async (req, res) => {
 router.get('/:id/download/rn-apk', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
-        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Verified APK not available for this hospital tenant. Hospital tenant not found.' });
+        }
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        const expectedPackageId = hospital.appConfig?.androidPackageId || `com.medical365.${hospital.slug || safeName}`;
         
-        // If durable cloud storage URL is configured, track telemetry and redirect
-        const cloudUrl = hospital?.appConfig?.rnApkUrl;
-        if (cloudUrl && (cloudUrl.startsWith('https://') || cloudUrl.startsWith('http://'))) {
+        // 1. If a mock URL is detected, clean it from DB and reject
+        const cloudUrl = hospital.appConfig?.rnApkUrl;
+        if (isMockStorageUrl(cloudUrl)) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, { $unset: { 'appConfig.rnApkUrl': 1 } });
+            } catch (_) {}
+        } else if (isVerifiedDirectArtifactUrl(cloudUrl)) {
             try {
                 const ReleaseArtifact = require('../models/releaseArtifact.model');
                 await ReleaseArtifact.updateOne(
@@ -456,21 +570,26 @@ router.get('/:id/download/rn-apk', async (req, res) => {
             return res.redirect(cloudUrl);
         }
 
-        let filePath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`);
-        if (!fs.existsSync(filePath)) {
-            filePath = path.join(__dirname, '../../public/downloads/apks/cityhospital-rn-release.apk');
+        // 2. Check local disk fallback ONLY if a genuine release binary exists and is verified
+        let filePath = safeName ? path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`) : null;
+
+        if (filePath && fs.existsSync(filePath)) {
+            const auth = verifyApkFileAuthenticity(filePath, expectedPackageId);
+            if (auth.valid) {
+                res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+                res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-rn-release.apk"`);
+                return res.sendFile(path.resolve(filePath));
+            }
         }
 
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: "RN APK file not found on server." });
-        }
-
-        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-rn-release.apk"`);
-        return res.sendFile(path.resolve(filePath));
+        // 3. Clear error if no genuine verified stored APK exists
+        return res.status(404).json({
+            success: false,
+            message: 'Verified APK not available for this hospital tenant. No genuine release APK artifact found. The build has not been uploaded to verified durable cloud storage, and no local artifact exists.'
+        });
     } catch (err) {
         console.error('Download RN APK error:', err);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 
@@ -480,11 +599,18 @@ router.get('/:id/download/rn-apk', async (req, res) => {
 router.get('/:id/download/rn-aab', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
-        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+        }
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
         
-        // If durable cloud storage URL is configured, track telemetry and redirect
-        const cloudUrl = hospital?.appConfig?.rnAabUrl;
-        if (cloudUrl && (cloudUrl.startsWith('https://') || cloudUrl.startsWith('http://'))) {
+        // 1. If a mock URL is detected, clean it from DB
+        const cloudUrl = hospital.appConfig?.rnAabUrl;
+        if (isMockStorageUrl(cloudUrl)) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, { $unset: { 'appConfig.rnAabUrl': 1 } });
+            } catch (_) {}
+        } else if (isVerifiedDirectArtifactUrl(cloudUrl)) {
             try {
                 const ReleaseArtifact = require('../models/releaseArtifact.model');
                 await ReleaseArtifact.updateOne(
@@ -495,21 +621,24 @@ router.get('/:id/download/rn-aab', async (req, res) => {
             return res.redirect(cloudUrl);
         }
 
-        let filePath = path.join(__dirname, '../../public/downloads/aabs', `${safeName}-rn-release.aab`);
-        if (!fs.existsSync(filePath)) {
-            filePath = path.join(__dirname, '../../public/downloads/aabs/cityhospital-rn-release.aab');
+        // 2. Check local disk fallback ONLY if a genuine release binary exists on disk
+        let filePath = safeName ? path.join(__dirname, '../../public/downloads/aabs', `${safeName}-rn-release.aab`) : null;
+
+        if (filePath && fs.existsSync(filePath)) {
+            return res.download(filePath);
         }
 
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: "RN AAB binary not found on server." });
-        }
-        
-        res.download(filePath);
+        // 3. Clear error if no genuine stored AAB exists
+        return res.status(404).json({
+            success: false,
+            message: 'No genuine release AAB artifact found. The build has not been uploaded to verified durable cloud storage, and no local artifact exists.'
+        });
     } catch (err) {
         console.error('Download RN AAB error:', err);
-        res.status(500).json({ message: 'Internal Server Error' });
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
+
 
 /**
  * Helper: Safely delete temporary uploaded files
@@ -857,20 +986,48 @@ router.post('/:id/reset-rn-build', verifyCentralAdmin, async (req, res) => {
  */
 router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
     try {
-        const hospital = await Hospital.findById(req.params.id).select('appConfig name').lean();
+        const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Not found' });
         
-        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        let apkFile = `${safeName}-rn-release.apk`;
-        let aabFile = `${safeName}-rn-release.aab`;
-        let targetApkPath = path.join(__dirname, '../../public/downloads/apks', apkFile);
+        let rawApk = hospital.appConfig?.rnApkUrl || '';
+        let rawAab = hospital.appConfig?.rnAabUrl || '';
 
-        if (!fs.existsSync(targetApkPath)) {
-            apkFile = 'cityhospital-rn-release.apk';
-            aabFile = 'cityhospital-rn-release.aab';
+        // Clean stale mock URLs from database
+        let needsDbClean = false;
+        const unsets = {};
+        if (isMockStorageUrl(rawApk)) {
+            rawApk = '';
+            unsets['appConfig.rnApkUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (isMockStorageUrl(rawAab)) {
+            rawAab = '';
+            unsets['appConfig.rnAabUrl'] = 1;
+            needsDbClean = true;
+        }
+        if (needsDbClean) {
+            try {
+                await Hospital.findByIdAndUpdate(hospital._id, { $unset: unsets });
+            } catch (_) {}
+        }
+
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        const expectedPackageId = hospital.appConfig?.androidPackageId || `com.medical365.${hospital.slug || safeName}`;
+
+        let verifiedLocalApk = '';
+        if (safeName) {
+            const targetApkPath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`);
+            if (fs.existsSync(targetApkPath)) {
+                const auth = verifyApkFileAuthenticity(targetApkPath, expectedPackageId);
+                if (auth.valid) {
+                    verifiedLocalApk = `/downloads/apks/${safeName}-rn-release.apk`;
+                }
+            }
         }
 
         const rnBuildStatus = hospital.appConfig?.rnBuildStatus || 'NOT_BUILT';
+        const resolvedApkUrl = isVerifiedDirectArtifactUrl(rawApk) ? rawApk : verifiedLocalApk;
+        const resolvedAabUrl = isVerifiedDirectArtifactUrl(rawAab) ? rawAab : '';
 
         res.json({
             success: true,
@@ -883,8 +1040,8 @@ router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
             buildStartedAt: hospital.appConfig?.rnBuildStartedAt,
             lastBuiltAt: hospital.appConfig?.rnLastBuiltAt,
             buildError: hospital.appConfig?.rnBuildError || '',
-            apkUrl: rnBuildStatus === 'COMPLETED' ? (hospital.appConfig?.rnApkUrl || `/downloads/apks/${apkFile}`) : '',
-            aabUrl: rnBuildStatus === 'COMPLETED' ? (hospital.appConfig?.rnAabUrl || `/downloads/aabs/${aabFile}`) : ''
+            apkUrl: rnBuildStatus === 'COMPLETED' ? resolvedApkUrl : '',
+            aabUrl: rnBuildStatus === 'COMPLETED' ? resolvedAabUrl : ''
         });
     } catch (err) {
         console.error('RN build status error:', err);
@@ -948,6 +1105,19 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
                 });
             }
             const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+            // Strictly validate candidate URLs: Never store a GitHub Actions run-summary URL or mock URL
+            const incomingApk = req.body.apkUrl || req.body.artifactUrl;
+            const candidateApk = (incomingApk && isVerifiedDirectArtifactUrl(incomingApk))
+                ? incomingApk
+                : hospital.appConfig?.rnApkUrl;
+            const safeApkUrl = isVerifiedDirectArtifactUrl(candidateApk) ? candidateApk : '';
+
+            const incomingAab = req.body.aabUrl;
+            const candidateAab = (incomingAab && isVerifiedDirectArtifactUrl(incomingAab))
+                ? incomingAab
+                : hospital.appConfig?.rnAabUrl;
+            const safeAabUrl = isVerifiedDirectArtifactUrl(candidateAab) ? candidateAab : '';
+
             const nextCode = hospital.appConfig?.pendingVersionCode || hospital.appConfig?.lastAllocatedVersionCode || hospital.appConfig?.versionCode || 1;
             const nextName = hospital.appConfig?.pendingVersionName || hospital.appConfig?.versionName || '1.0.0';
 
@@ -966,8 +1136,8 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
                         'appConfig.versionName': nextName,
                         'appConfig.pendingVersionCode': null,
                         'appConfig.pendingVersionName': null,
-                        'appConfig.rnApkUrl': hospital.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
-                        'appConfig.rnAabUrl': hospital.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`,
+                        'appConfig.rnApkUrl': safeApkUrl,
+                        'appConfig.rnAabUrl': safeAabUrl,
                         ...(releaseId ? { 'appConfig.rnReleaseId': releaseId } : {}),
                         ...(checksumSha256 ? { 'appConfig.rnChecksumSha256': checksumSha256 } : {})
                     }
@@ -992,8 +1162,8 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
                 rnBuildStatus: 'COMPLETED',
                 versionCode: completedHospital.appConfig.versionCode,
                 versionName: completedHospital.appConfig.versionName,
-                apkUrl: completedHospital.appConfig.rnApkUrl,
-                aabUrl: completedHospital.appConfig.rnAabUrl
+                apkUrl: safeApkUrl,
+                aabUrl: safeAabUrl
             });
         } else if (status === 'FAILED') {
             // State protection:
@@ -1183,11 +1353,15 @@ router.post(
             // return success without rewriting files or modifying DB.
             if (activeStatus === 'COMPLETED' && activeBuildId === rnBuildId && fs.existsSync(destApk) && fs.existsSync(destAab)) {
                 safeDeleteFiles(tempFiles);
+                const existingApk = hospital.appConfig?.rnApkUrl;
+                const safeApk = isGenuinePublicUrl(existingApk) ? existingApk : `/downloads/apks/${safeName}-rn-release.apk`;
+                const existingAab = hospital.appConfig?.rnAabUrl;
+                const safeAab = isGenuinePublicUrl(existingAab) ? existingAab : `/downloads/aabs/${safeName}-rn-release.aab`;
                 return res.json({
                     success: true,
                     message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
-                    apkUrl: hospital.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
-                    aabUrl: hospital.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                    apkUrl: safeApk,
+                    aabUrl: safeAab
                 });
             }
 
@@ -1235,11 +1409,15 @@ router.post(
                 // Check if a concurrent callback already completed the build
                 const currentDoc = await Hospital.findById(tenantId);
                 if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && fs.existsSync(destApk) && fs.existsSync(destAab)) {
+                    const currentApk = currentDoc.appConfig?.rnApkUrl;
+                    const safeApk = isGenuinePublicUrl(currentApk) ? currentApk : `/downloads/apks/${safeName}-rn-release.apk`;
+                    const currentAab = currentDoc.appConfig?.rnAabUrl;
+                    const safeAab = isGenuinePublicUrl(currentAab) ? currentAab : `/downloads/aabs/${safeName}-rn-release.aab`;
                     return res.json({
                         success: true,
                         message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
-                        apkUrl: currentDoc.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
-                        aabUrl: currentDoc.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                        apkUrl: safeApk,
+                        aabUrl: safeAab
                     });
                 }
                 return res.status(409).json({
@@ -1281,8 +1459,9 @@ router.post(
             safeDeleteFiles(tempFiles);
 
             // Persist to durable cloud object storage (S3 / ImageKit)
-            let durableApkUrl = `/downloads/apks/${safeName}-rn-release.apk`;
-            let durableAabUrl = `/downloads/aabs/${safeName}-rn-release.aab`;
+            let durableApkUrl = '';
+            let durableAabUrl = '';
+
             try {
                 const { uploadReleaseArtifact } = require('../utils/artifactStorage.util');
                 const docToUse = claimedHospital || hospital;
@@ -1290,6 +1469,7 @@ router.post(
                 const vName = docToUse?.appConfig?.pendingVersionName || docToUse?.appConfig?.versionName || '1.0.0';
                 const appId = docToUse?.appConfig?.androidPackageId || 'com.medical365.app';
 
+                // Release uploads must explicitly require a real configured provider
                 const apkUpload = await uploadReleaseArtifact({
                     fileBuffer: fs.readFileSync(destApk),
                     fileName: `${safeName}-rn-release.apk`,
@@ -1301,10 +1481,14 @@ router.post(
                     rnBuildId,
                     releaseId,
                     expectedSha256: checksumSha256,
+                    requireRealProvider: true,
                 });
-                if (apkUpload?.publicUrl) {
-                    durableApkUrl = apkUpload.publicUrl;
+                if (!apkUpload?.publicUrl || !isVerifiedDirectArtifactUrl(apkUpload.publicUrl) || apkUpload.isMock || apkUpload.provider === 'mock') {
+                    const err = new Error('Release upload failed: storage provider did not return a verified direct artifact URL');
+                    err.code = 'INVALID_ARTIFACT_URL';
+                    throw err;
                 }
+                durableApkUrl = apkUpload.publicUrl;
 
                 const aabUpload = await uploadReleaseArtifact({
                     fileBuffer: fs.readFileSync(destAab),
@@ -1316,15 +1500,18 @@ router.post(
                     tenantId,
                     rnBuildId,
                     releaseId,
+                    requireRealProvider: true,
                 });
-                if (aabUpload?.publicUrl) {
-                    durableAabUrl = aabUpload.publicUrl;
+                if (!aabUpload?.publicUrl || !isVerifiedDirectArtifactUrl(aabUpload.publicUrl) || aabUpload.isMock || aabUpload.provider === 'mock') {
+                    const err = new Error('Release upload failed: storage provider did not return a verified direct artifact URL for AAB');
+                    err.code = 'INVALID_ARTIFACT_URL';
+                    throw err;
                 }
+                durableAabUrl = aabUpload.publicUrl;
             } catch (storageErr) {
-                console.warn('[DurableStorage] Cloud storage upload skipped or failed:', storageErr.message);
-                if (process.env.NODE_ENV === 'production' && storageErr.code === 'UNCONFIGURED_STORAGE') {
-                    throw storageErr;
-                }
+                console.error('[DurableStorage] Cloud storage upload failed:', storageErr.message);
+                // Fail closed: release uploads require a real configured provider
+                throw storageErr;
             }
 
             // 4. PHASE 1: Keep rnBuildStatus = PROCESSING in database (DO NOT set COMPLETED yet)

@@ -292,14 +292,21 @@ router.get('/branding', async (req, res) => {
         }
         if (!brandingData.appName && rawBS.appName) brandingData.appName = rawBS.appName;
         if (!brandingData.logoUrl && rawBS.logoUrl) brandingData.logoUrl = rawBS.logoUrl;
+        if (!brandingData.logoUrl && hospital.logo) brandingData.logoUrl = hospital.logo;
         if (!brandingData.primaryColor && (rawBS.primaryColor || rawBS.themeColors?.primary)) {
             brandingData.primaryColor = rawBS.primaryColor || rawBS.themeColors?.primary;
         }
+
+        brandingData.slug = brandingData.slug || hospital.slug || '';
+        brandingData.hospitalId = hospital._id;
+        brandingData.packageId = hospital.appConfig?.androidPackageId || '';
 
         res.json({ 
             success: true,
             hospitalName: brandingData.appName || hospital.name,
             hospitalId: hospital._id,
+            slug: hospital.slug,
+            packageId: hospital.appConfig?.androidPackageId || '',
             branding: brandingData 
         });
     } catch (error) {

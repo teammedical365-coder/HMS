@@ -1398,6 +1398,32 @@ function dispatchExpressRequest(url) {
         assert(hospitalWithCloudArtifact.appConfig.rnApkUrl.startsWith('https://'));
     });
 
+    await test('Phase 8: Reject mock storage URLs and never treat mocked upload as genuine', async () => {
+        const mockUrl = 'https://mock-storage.medical365.internal/releases/com.medical365.app/1/app-rn-release.apk';
+        const realCloudUrl = 'https://ik.imagekit.io/b3pvj0biyx/releases/com.medical365.app/1/app-rn-release.apk';
+        const githubArtifactUrl = 'https://github.com/teammedical365-coder/HMS-REACT-NATIVE-APP/actions/runs/123456';
+
+        assert.strictEqual(artifactStorage.isMockStorageUrl(mockUrl), true, 'Identifies mock storage URL');
+        assert.strictEqual(artifactStorage.isGenuinePublicUrl(mockUrl), false, 'Rejects mock storage URL as public');
+        assert.strictEqual(artifactStorage.isGenuinePublicUrl(realCloudUrl), true, 'Accepts real ImageKit cloud URL');
+        assert.strictEqual(artifactStorage.isGitHubRunSummaryUrl(githubArtifactUrl), true, 'Identifies GitHub Actions run-summary URL');
+        assert.strictEqual(artifactStorage.isGenuinePublicUrl(githubArtifactUrl), false, 'Rejects GitHub Actions run-summary URL as direct artifact URL');
+        assert.strictEqual(artifactStorage.isGenuinePublicUrl('/downloads/apks/cityhospital-rn-release.apk'), false, 'Relative path is not public cloud URL');
+
+        // Verify MockStorageAdapter returns isMock: true
+        const mockAdapter = new artifactStorage.MockStorageAdapter();
+        artifactStorage.setStorageAdapter(mockAdapter);
+        const apkBuffer = Buffer.from('MOCK_APK_FOR_URL_CHECK');
+        const uploadResult = await artifactStorage.uploadReleaseArtifact({
+            buffer: apkBuffer,
+            fileName: 'check.apk',
+            artifactType: 'APK',
+        });
+        assert.strictEqual(uploadResult.isMock, true, 'Mocked upload is flagged as isMock: true');
+        assert.strictEqual(artifactStorage.isGenuinePublicUrl(uploadResult.publicUrl), false, 'Mock upload publicUrl is not genuine');
+        artifactStorage.resetStorageAdapter();
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
     // SUMMARY
     // ─────────────────────────────────────────────────────────────────────────
