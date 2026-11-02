@@ -15,7 +15,7 @@ const Session = require('../models/session.model');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
 
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
-const { emailOtpSendLimiter, emailOtpVerifyLimiter } = require('../middleware/rateLimiter');
+const { emailOtpSendLimiter, emailOtpVerifyLimiter, loginLimiter } = require('../middleware/rateLimiter');
 const { sendLoginOtpEmail } = require('../services/email.service');
 const { isDemoAccount, isDemoHospital, isPredefinedDemoUser, resolveDemoHospitalId } = require('../config/demoConfig');
 
@@ -282,28 +282,25 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
 
         const normalizedEmail = email.toLowerCase().trim();
 
-        // ── Central Admin Detection ───────────────────────────────────────────
-        // When loginType is 'admin' OR the request originates from admin.medical365.in,
-        // OR the user account in DB has global superadmin/centraladmin role,
-        // completely bypass hospital tenant resolution.
-        let isCentralAdminLogin = (loginType === 'admin') || req.isCentralAdmin;
+        // ── Central Admin Detection (Trusted Server-Side Verification) ────────
+        // Administrative privileges are strictly derived from verified DB user roles,
+        // NEVER from client-supplied identity headers (FINDING-12 Remediation).
+        let isCentralAdminLogin = false;
         let user = null;
 
-        if (!isCentralAdminLogin) {
-            // Check if user is a global Central/Super Admin logging in from any portal
-            const possibleGlobalUser = await User.findOne({ email: normalizedEmail });
-            if (possibleGlobalUser) {
-                let roleName = '';
-                if (mongoose.Types.ObjectId.isValid(possibleGlobalUser.role)) {
-                    const rDoc = await Role.findById(possibleGlobalUser.role);
-                    roleName = (rDoc?.name || '').toLowerCase();
-                } else if (typeof possibleGlobalUser.role === 'string') {
-                    roleName = possibleGlobalUser.role.toLowerCase();
-                }
-                if (['superadmin', 'centraladmin'].includes(roleName)) {
-                    isCentralAdminLogin = true;
-                    user = possibleGlobalUser;
-                }
+        // Check if user is a verified global Central/Super Admin in database
+        const possibleGlobalUser = await User.findOne({ email: normalizedEmail });
+        if (possibleGlobalUser) {
+            let roleName = '';
+            if (mongoose.Types.ObjectId.isValid(possibleGlobalUser.role)) {
+                const rDoc = await Role.findById(possibleGlobalUser.role);
+                roleName = (rDoc?.name || '').toLowerCase();
+            } else if (typeof possibleGlobalUser.role === 'string') {
+                roleName = possibleGlobalUser.role.toLowerCase();
+            }
+            if (['superadmin', 'centraladmin'].includes(roleName)) {
+                isCentralAdminLogin = true;
+                user = possibleGlobalUser;
             }
         }
 
@@ -890,7 +887,7 @@ router.post('/resend', emailOtpSendLimiter, async (req, res) => {
 // Invalidate previous session → create new session → generate JWT
 // Called when user confirms "Logout Previous Device & Continue"
 // ══════════════════════════════════════════════════════════════════════════════
-router.post('/force-login', async (req, res) => {
+router.post('/force-login', loginLimiter, async (req, res) => {
     try {
         const { preAuthToken } = req.body;
 

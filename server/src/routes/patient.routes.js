@@ -6,22 +6,140 @@ const { resolveTenant } = require('../middleware/tenantMiddleware');
 const auditLog = require('../middleware/audit.middleware');
 const MasterUser = require('../models/user.model');
 
-// Serve patient report files via public endpoint (guarantees proxy compatibility)
-router.get('/reports/:filename', (req, res) => {
+// Serve patient report files with strict authentication, path containment, and tenant isolation (FINDING-02)
+router.get('/reports/:filename', async (req, res) => {
     try {
         const path = require('path');
         const fs = require('fs');
-        const filename = req.params.filename;
-        const filePath = path.join(__dirname, '../../uploads/patient-reports', filename);
+        const rawFilename = req.params.filename;
 
-        if (fs.existsSync(filePath)) {
-            return res.sendFile(filePath);
+        if (!rawFilename || typeof rawFilename !== 'string') {
+            return res.status(400).json({ success: false, message: 'Filename parameter is required.' });
+        }
+
+        // 1. Boundary & Path Traversal Prevention
+        const safeFilename = path.basename(rawFilename);
+        const baseDir = path.resolve(__dirname, '../../uploads/patient-reports');
+        const resolvedPath = path.resolve(baseDir, safeFilename);
+
+        if (!resolvedPath.startsWith(baseDir) || rawFilename.includes('..') || safeFilename !== rawFilename) {
+            return res.status(403).json({ success: false, message: 'Access denied: Invalid or unsafe file path.' });
+        }
+
+        // 2. Authentication Verification (Header Bearer token or URL token parameter)
+        let token = null;
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.split(' ')[1];
+        } else if (req.query.token) {
+            token = req.query.token;
+        }
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Authentication required to access confidential medical reports.' });
+        }
+
+        const jwt = require('jsonwebtoken');
+        const { JWT_SECRET } = require('../config/jwt');
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (jwtErr) {
+            return res.status(401).json({ success: false, message: 'Invalid or expired authorization token.' });
+        }
+
+        // 3. Record-Level Tenant & Patient Ownership Verification
+        const Report = require('../models/report.model');
+        const LabReport = require('../models/labReport.model');
+        const ClinicPatient = require('../models/clinicPatient.model');
+
+        const safeRegex = new RegExp(`^${safeFilename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        const safeSubstringRegex = new RegExp(safeFilename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+        const [reportDoc, labReportDoc, clinicPatientDoc] = await Promise.all([
+            Report.findOne({
+                $or: [
+                    { fileName: safeRegex },
+                    { fileId: safeRegex },
+                    { url: safeSubstringRegex }
+                ]
+            }).lean(),
+            LabReport.findOne({
+                $or: [
+                    { 'reportFile.name': safeRegex },
+                    { 'reportFile.fileId': safeRegex },
+                    { 'reportFile.url': safeSubstringRegex }
+                ]
+            }).lean(),
+            ClinicPatient.findOne({
+                'reports.filename': safeRegex
+            }).lean()
+        ]);
+
+        if (!reportDoc && !labReportDoc && !clinicPatientDoc) {
+            return res.status(404).json({ success: false, message: 'Medical report record not found or unassociated with any authorized clinical record.' });
+        }
+
+        let docHospitalId = null;
+        let docPatientId = null;
+
+        if (reportDoc) {
+            docHospitalId = reportDoc.hospitalId ? String(reportDoc.hospitalId) : null;
+            docPatientId = reportDoc.patientId ? String(reportDoc.patientId) : null;
+        } else if (labReportDoc) {
+            docHospitalId = labReportDoc.hospitalId ? String(labReportDoc.hospitalId) : null;
+            docPatientId = labReportDoc.patientId ? String(labReportDoc.patientId) : (labReportDoc.userId ? String(labReportDoc.userId) : null);
+        } else if (clinicPatientDoc) {
+            docHospitalId = clinicPatientDoc.clinicId ? String(clinicPatientDoc.clinicId) : null;
+            docPatientId = clinicPatientDoc._id ? String(clinicPatientDoc._id) : null;
+        }
+
+        const isCentralAdmin = decoded.role === 'centraladmin' || decoded.role === 'superadmin';
+
+        if (!isCentralAdmin) {
+            if (decoded.patientId) {
+                // Patient token: caller must be the owner patient
+                const callerPatientId = String(decoded.patientId);
+                if (docPatientId && docPatientId !== callerPatientId) {
+                    return res.status(403).json({ success: false, message: 'Access denied. You are only authorized to access your own medical reports.' });
+                }
+                if (docHospitalId && decoded.hospitalId && docHospitalId !== String(decoded.hospitalId)) {
+                    return res.status(403).json({ success: false, message: 'Access denied. Tenant hospital mismatch.' });
+                }
+            } else if (decoded.userId) {
+                // Staff/Doctor/Admin token: verify hospital tenant scoping
+                const callerHospitalId = decoded.hospitalId ? String(decoded.hospitalId) : null;
+                const callerUser = await MasterUser.findById(decoded.userId).select('role hospitalId').lean();
+                if (!callerUser) {
+                    return res.status(401).json({ success: false, message: 'Authenticated user account not found.' });
+                }
+
+                const effectiveHospitalId = callerHospitalId || (callerUser.hospitalId ? String(callerUser.hospitalId) : null);
+
+                if (callerUser.role === 'patient') {
+                    const callerUserId = String(callerUser._id);
+                    if (docPatientId && docPatientId !== callerUserId) {
+                        return res.status(403).json({ success: false, message: 'Access denied. You are only authorized to access your own medical reports.' });
+                    }
+                } else {
+                    if (docHospitalId && effectiveHospitalId && docHospitalId !== effectiveHospitalId) {
+                        return res.status(403).json({ success: false, message: 'Access denied. Report belongs to a different hospital facility.' });
+                    }
+                }
+            } else {
+                return res.status(401).json({ success: false, message: 'Invalid token identity payload.' });
+            }
+        }
+
+        // 4. File Delivery
+        if (fs.existsSync(resolvedPath)) {
+            return res.sendFile(resolvedPath);
         } else {
-            return res.status(404).send('Report file not found');
+            return res.status(404).json({ success: false, message: 'Report file not found on storage server.' });
         }
     } catch (error) {
         console.error('Error serving report file:', error);
-        res.status(500).send('Internal server error');
+        res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
 
@@ -309,8 +427,8 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
 
         res.json({ success: true, user, timeline });
     } catch (error) {
-        console.error("CRITICAL PROFILE ROUTE TRACE:", error.stack);
-        return res.status(500).json({ error: error.message, stack: error.stack });
+        console.error("CRITICAL PROFILE ROUTE TRACE:", error.message);
+        return res.status(500).json({ success: false, message: 'Failed to retrieve patient profile' });
     }
 });
 
@@ -358,16 +476,23 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
 
         if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
+        const validateFileType = require('../utils/validateFileType');
+        const typeErr = await validateFileType(req.file, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+        if (typeErr) {
+            return res.status(400).json({ success: false, message: typeErr });
+        }
+
+        const safeOriginalName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
         const imagekit = require('../utils/imagekit');
         const result = await imagekit.upload({
             file: req.file.buffer,
-            fileName: `consent_${userId}_${Date.now()}_${req.file.originalname}`,
+            fileName: `consent_${userId}_${Date.now()}_${safeOriginalName}`,
             folder: '/consent-forms',
             tags: ['consent', req.file.mimetype]
         });
 
         const consentEntry = {
-            fileName: req.file.originalname,
+            fileName: safeOriginalName,
             title: req.body.procedureName || req.body.title || req.file.originalname,
             consentType: req.body.consentType || 'GENERAL_ADMISSION',
             procedureName: req.body.procedureName || '',
@@ -435,18 +560,29 @@ router.get('/:id/consent', verifyToken, resolveTenant, async (req, res) => {
     }
 });
 
-// DELETE /api/patients/:id/consent/:index — Delete a consent form
+// DELETE /api/patients/:id/consent/:index — Delete a consent form (FINDING-07 Remediation)
 router.delete('/:id/consent/:index', verifyToken, resolveTenant, async (req, res) => {
     try {
         const userId = req.params.id;
         const index = parseInt(req.params.index, 10);
         const { fileId } = req.body || {};
 
+        const effectiveHospitalId = req.hospitalId || req.user?.hospitalId;
+        const isCentral = req.user?.role === 'centraladmin' || req.user?.role === 'superadmin';
+
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
         const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
         const user = await MasterUser.findOne(userQuery);
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        // Security Control (FINDING-07): Enforce tenant boundary
+        if (!isCentral && effectiveHospitalId && user.hospitalId && String(user.hospitalId) !== String(effectiveHospitalId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: Patient belongs to another hospital facility.'
+            });
+        }
 
         if (!user.fertilityProfile || !Array.isArray(user.fertilityProfile.consentForms)) {
             return res.status(404).json({ success: false, message: 'No consent forms found' });
@@ -527,13 +663,13 @@ router.post('/:id/documents', verifyToken, resolveTenant, consentUpload.single('
 
         res.json({ success: true, message: 'Document uploaded', document: docEntry });
     } catch (error) {
-        console.error('[document-upload] FULL ERROR:', error);
-        res.status(500).json({ success: false, message: 'Upload failed', error: error.message, stack: error.stack });
+        console.error('[document-upload] ERROR:', error.message);
+        res.status(500).json({ success: false, message: 'Upload failed' });
     }
 });
 
-// GET /api/patients/:id/documents — Fetch all uploaded documents
-router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
+// GET /api/patients/:id/documents — Fetch all uploaded documents (audited)
+router.get('/:id/documents', verifyToken, resolveTenant, auditLog('VIEW_PATIENT', (req) => ({ model: 'User', id: req.params.id })), async (req, res) => {
     try {
         const userId = req.params.id;
         const hid = req.user.hospitalId;

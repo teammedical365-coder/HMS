@@ -1,4 +1,4 @@
-﻿################################################################################
+################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
@@ -9,3 +9,30 @@
 /.vs/crm.slnx/v18/DocumentLayout.json
 /.vs/slnx.sqlite
 /.vs/VSWorkspaceState.json
+
+# Environment variables & secrets (FINDING-18 Remediation)
+.env
+.env.*
+!.env.example
+!.env.local.example
+server/.env
+server/.testenv
+server/.env_live
+client/.env
+client/.env.*
+*.pem
+*.key
+*.cert
+id_rsa
+id_ecdsa
+*.p8
+*.p12
+
+# Node & Build artifacts
+node_modules/
+dist/
+build/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

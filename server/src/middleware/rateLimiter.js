@@ -67,4 +67,13 @@ const emailOtpVerifyLimiter = rateLimit({
     message: { success: false, message: 'Too many verification attempts. Please try again after 15 minutes.' },
 });
 
-module.exports = { loginLimiter, signupLimiter, otpLimiter, generalLimiter, emailOtpSendLimiter, emailOtpVerifyLimiter };
+// Password recovery — 5 attempts per 15 min per IP
+const passwordRecoveryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many password recovery attempts. Please try again after 15 minutes.' },
+});
+
+module.exports = { loginLimiter, signupLimiter, otpLimiter, generalLimiter, emailOtpSendLimiter, emailOtpVerifyLimiter, passwordRecoveryLimiter };

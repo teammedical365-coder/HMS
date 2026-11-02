@@ -36,8 +36,10 @@ const config = {
 
     // Callback signature verification: URL of ABDM's published signing keys (JWKS)
     jwksUrl: t(e.ABDM_JWKS_URL),
-    // Sandbox-only escape hatch while you confirm the JWKS URL. Ignored when ABDM_ENV=production.
-    allowUnsignedCallbacks: t(e.ABDM_ALLOW_UNSIGNED_CALLBACKS) === 'true' && env !== 'production',
+    // Strictly disallowed in production and staging environments (FINDING-09 Remediation)
+    allowUnsignedCallbacks: t(e.ABDM_ALLOW_UNSIGNED_CALLBACKS) === 'true' &&
+        env !== 'production' && env !== 'staging' &&
+        process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging',
 
     // Sandbox-only fixed OTP for care-context linking when no SMS provider is wired yet
     sandboxFixedOtp: env === 'sandbox' && /^\d{6}$/.test(t(e.ABDM_SANDBOX_FIXED_OTP)) ? t(e.ABDM_SANDBOX_FIXED_OTP) : '',

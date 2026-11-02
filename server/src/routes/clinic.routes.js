@@ -21,6 +21,7 @@ const ClinicSubscription = require('../models/clinicSubscription.model');
 const TreatmentPlan = require('../models/treatmentPlan.model');
 const Notification = require('../models/notification.model');
 const User = require('../models/user.model');
+const quotaService = require('../services/appointmentQuota.service');
 
 // ─── Report upload configuration ─────────────────────────────────────────────
 const reportsDir = path.join(__dirname, '../../uploads/patient-reports');
@@ -874,6 +875,17 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
         }
         // ---------------------------------------
 
+        // Atomic Daily Appointment Quota Reservation (Free Doctor OPD Plan)
+        const quotaResult = await quotaService.reserveAppointmentSlot({
+            hospitalId: clinicId,
+            doctorId: finalDoctor._id,
+            appointmentDate: startOfSelectedDay,
+            AppointmentModel: Appointment
+        });
+        if (!quotaResult.allowed) {
+            return res.status(403).json({ success: false, message: quotaResult.message });
+        }
+
         const appointment = new Appointment({
             clinicPatientId: patient._id,
             patientId:       patient.patientUid, // display ID
@@ -895,7 +907,18 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             upiScreenshotUrl: upiScreenshotUrl ? String(upiScreenshotUrl).slice(0, 500) : '',
         });
 
-        await appointment.save();
+        try {
+            await appointment.save();
+        } catch (saveErr) {
+            if (quotaResult.reserved) {
+                await quotaService.releaseAppointmentSlot({
+                    hospitalId: clinicId,
+                    doctorId: finalDoctor._id,
+                    appointmentDate: startOfSelectedDay
+                });
+            }
+            throw saveErr;
+        }
 
         const message = isTokenMode
             ? `Token #${tokenNumber} assigned to ${patient.name}`
@@ -1043,12 +1066,20 @@ router.put('/appointments/:id/pay', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/appointments/:id/cancel', verifyClinicStaff, async (req, res) => {
     try {
-        const appt = await Appointment.findOneAndUpdate(
-            { _id: req.params.id, hospitalId: hid(req) },
-            { status: 'cancelled' },
-            { new: true }
-        );
+        const appt = await Appointment.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
+        if (appt.status === 'cancelled') {
+            return res.json({ success: true, message: 'Appointment already cancelled', appointment: appt });
+        }
+        appt.status = 'cancelled';
+        await appt.save();
+
+        await quotaService.releaseAppointmentSlot({
+            hospitalId: appt.hospitalId,
+            doctorId: appt.doctorId || appt.doctorUserId,
+            appointmentDate: appt.appointmentDate
+        });
+
         res.json({ success: true, appointment: appt });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });

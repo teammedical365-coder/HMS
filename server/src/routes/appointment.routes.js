@@ -8,12 +8,13 @@ const MasterAppointment = require('../models/appointment.model');
 const MasterUser = require('../models/user.model');
 const Doctor = require('../models/doctor.model');
 const Hospital = require('../models/hospital.model');
+const quotaService = require('../services/appointmentQuota.service');
 const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 // Permission helper
 const checkAccess = (user, legacyRoles = [], requiredPermission = '') => {
     if (user.role === 'superadmin' || user.role === 'centraladmin') return true;
-    if (legacyRoles.includes(user.role)) return true;
+    if (legacyRoles.includes(user.role) || (user.role === 'receptionist' && legacyRoles.includes('reception'))) return true;
     const roleData = user._roleData;
     if (roleData?.permissions?.includes('*')) return true;
     if (roleData?.permissions?.includes(requiredPermission)) return true;
@@ -67,9 +68,26 @@ router.patch('/reception/reschedule/:id', verifyToken, resolveTenant, async (req
         const { date, time } = req.body;
         if (!date || !time) return res.status(400).json({ success: false, message: 'Date and time are required' });
 
+        const effectiveHospitalId = req.hospitalId || req.user?.hospitalId;
+        const isCentral = req.user?.role === 'centraladmin' || req.user?.role === 'superadmin';
+
         const { Appointment } = getModels(req);
-        const appointment = await Appointment.findById(id);
+        let appointment = await Appointment.findById(id);
+        if (!appointment && MasterAppointment !== Appointment) {
+            const masterAppt = await MasterAppointment.findById(id);
+            if (masterAppt) {
+                if (!isCentral && effectiveHospitalId && masterAppt.hospitalId && String(masterAppt.hospitalId) !== String(effectiveHospitalId)) {
+                    return res.status(403).json({ success: false, message: 'Access denied: Appointment belongs to another hospital facility' });
+                }
+                appointment = masterAppt;
+            }
+        }
         if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
+
+        // Security Control (FINDING-06): Verify tenant boundary
+        if (!isCentral && effectiveHospitalId && appointment.hospitalId && String(appointment.hospitalId) !== String(effectiveHospitalId)) {
+            return res.status(403).json({ success: false, message: 'Access denied: Appointment belongs to another hospital facility' });
+        }
 
         const today = new Date();
         const reqDate = new Date(date);
@@ -113,10 +131,30 @@ router.patch('/reception/reschedule/:id', verifyToken, resolveTenant, async (req
             return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
+        // Atomic Daily Appointment Quota check & reservation for rescheduling
+        const quotaResched = await quotaService.rescheduleAppointmentSlot({
+            hospitalId: appointment.hospitalId || effectiveHospitalId,
+            doctorId: appointment.doctorId,
+            oldDate: appointment.appointmentDate,
+            newDate: reqDateStr,
+            AppointmentModel: Appointment
+        });
+        if (!quotaResched.allowed) {
+            return res.status(403).json({ success: false, message: quotaResched.message });
+        }
+
         appointment.appointmentDate = new Date(reqDateStr);
         appointment.appointmentTime = time;
         if (appointment.status === 'cancelled') appointment.status = 'confirmed';
         await appointment.save();
+
+        if (MasterAppointment !== Appointment) {
+            await MasterAppointment.findByIdAndUpdate(id, {
+                appointmentDate: new Date(reqDateStr),
+                appointmentTime: time,
+                status: appointment.status
+            });
+        }
 
         res.json({ success: true, message: 'Appointment rescheduled successfully', appointment });
     } catch (error) {
@@ -124,17 +162,53 @@ router.patch('/reception/reschedule/:id', verifyToken, resolveTenant, async (req
     }
 });
 
-// Cancel Appointment
+// Cancel Appointment (FINDING-06 Remediation)
 router.patch('/reception/cancel/:id', verifyToken, resolveTenant, async (req, res) => {
     try {
         if (!checkAccess(req.user, ['reception', 'admin', 'hospitaladmin'], 'appointment_manage')) {
             return res.status(403).json({ success: false, message: 'Access denied' });
         }
+
+        const effectiveHospitalId = req.hospitalId || req.user?.hospitalId;
+        const isCentral = req.user?.role === 'centraladmin' || req.user?.role === 'superadmin';
+
         const { Appointment } = getModels(req);
-        const appointment = await Appointment.findByIdAndUpdate(
-            req.params.id, { status: 'cancelled' }, { new: true }
-        );
+        let appointment = await Appointment.findById(req.params.id);
+        if (!appointment && MasterAppointment !== Appointment) {
+            const masterAppt = await MasterAppointment.findById(req.params.id);
+            if (masterAppt) {
+                if (!isCentral && effectiveHospitalId && masterAppt.hospitalId && String(masterAppt.hospitalId) !== String(effectiveHospitalId)) {
+                    return res.status(403).json({ success: false, message: 'Access denied: Appointment belongs to another hospital facility' });
+                }
+                appointment = masterAppt;
+            }
+        }
         if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
+
+        // Security Control (FINDING-06): Verify tenant boundary
+        if (!isCentral && effectiveHospitalId && appointment.hospitalId && String(appointment.hospitalId) !== String(effectiveHospitalId)) {
+            return res.status(403).json({ success: false, message: 'Access denied: Appointment belongs to another hospital facility' });
+        }
+
+        // Prevent duplicate quota release on already cancelled appointments
+        if (appointment.status === 'cancelled') {
+            return res.json({ success: true, message: 'Appointment already cancelled', appointment });
+        }
+
+        appointment.status = 'cancelled';
+        await appointment.save();
+
+        if (MasterAppointment !== Appointment) {
+            await MasterAppointment.findByIdAndUpdate(req.params.id, { status: 'cancelled' });
+        }
+
+        // Release daily quota slot
+        await quotaService.releaseAppointmentSlot({
+            hospitalId: appointment.hospitalId || effectiveHospitalId,
+            doctorId: appointment.doctorId,
+            appointmentDate: appointment.appointmentDate
+        });
+
         res.json({ success: true, message: 'Appointment cancelled', appointment });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error cancelling appointment' });
@@ -228,6 +302,17 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
             return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
+        // Atomic Daily Appointment Quota Reservation (Free Doctor OPD Plan)
+        const quotaResult = await quotaService.reserveAppointmentSlot({
+            hospitalId,
+            doctorId: doctorDoc._id,
+            appointmentDate: reqDateStr,
+            AppointmentModel: Appointment
+        });
+        if (!quotaResult.allowed) {
+            return res.status(403).json({ success: false, message: quotaResult.message });
+        }
+
         const appointment = new Appointment({
             userId,
             patientId: user.patientId,
@@ -252,7 +337,20 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
             paymentStatus: 'Pending'
         });
 
-        const savedAppointment = await appointment.save();
+        let savedAppointment;
+        try {
+            savedAppointment = await appointment.save();
+        } catch (saveErr) {
+            if (quotaResult.reserved) {
+                await quotaService.releaseAppointmentSlot({
+                    hospitalId,
+                    doctorId: doctorDoc._id,
+                    appointmentDate: reqDateStr
+                });
+            }
+            throw saveErr;
+        }
+
         res.status(201).json({ success: true, message: 'Appointment booked successfully', appointment: savedAppointment });
 
     } catch (error) {

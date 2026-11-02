@@ -8,6 +8,7 @@ const { resolveTenant } = require('../middleware/tenantMiddleware');
 const MasterAdmission = require('../models/admission.model');
 const { getTenantModels } = require('../db/tenantModels');
 const { sendAppointmentConfirmationEmail } = require('../services/email.service');
+const quotaService = require('../services/appointmentQuota.service');
 const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 const verifyReception = (req, res, next) => {
@@ -600,6 +601,18 @@ router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async
         return res.status(400).json({ success: false, message: patientConflict.message });
     }
 
+    // Atomic Daily Appointment Quota check & reservation for rescheduling
+    const quotaResched = await quotaService.rescheduleAppointmentSlot({
+        hospitalId: appt.hospitalId || req.user.hospitalId,
+        doctorId: appt.doctorId,
+        oldDate: appt.appointmentDate,
+        newDate: date,
+        AppointmentModel: Appointment
+    });
+    if (!quotaResched.allowed) {
+        return res.status(403).json({ success: false, message: quotaResched.message });
+    }
+
     appt.appointmentDate = date;
     appt.appointmentTime = time;
     appt.status = 'confirmed';
@@ -609,8 +622,23 @@ router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async
 router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (req, res) => {
     const cancelQuery = { _id: req.params.id };
     if (req.user.hospitalId) cancelQuery.hospitalId = req.user.hospitalId;
-    const appt = await Appointment.findOneAndUpdate(cancelQuery, { status: 'cancelled' });
+    const appt = await Appointment.findOne(cancelQuery);
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+
+    // Prevent duplicate release on already cancelled appointments
+    if (appt.status === 'cancelled') {
+        return res.json({ success: true, message: 'Appointment already cancelled' });
+    }
+
+    appt.status = 'cancelled';
+    await appt.save();
+
+    await quotaService.releaseAppointmentSlot({
+        hospitalId: appt.hospitalId || req.user.hospitalId,
+        doctorId: appt.doctorId,
+        appointmentDate: appt.appointmentDate
+    });
+
     res.json({ success: true });
 });
 // 6. FOLLOW-UP VALIDITY
@@ -903,6 +931,17 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         const finalCardRef = (isUpiInvolved || isCardInvolved) ? (transactionId || bankReference || cardDetails || '') : '';
         const finalUpiId = isUpiInvolved ? (upiId || '') : '';
 
+        // Atomic Daily Appointment Quota Reservation (Free Doctor OPD Plan)
+        const quotaResult = await quotaService.reserveAppointmentSlot({
+            hospitalId,
+            doctorId: doctor._id,
+            appointmentDate: date,
+            AppointmentModel: Appointment
+        });
+        if (!quotaResult.allowed) {
+            return res.status(403).json({ success: false, message: quotaResult.message });
+        }
+
         const newAppointment = new Appointment({
             userId: patient._id,
             hospitalId,
@@ -928,7 +967,18 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             bookedBy: req.user._id
         });
 
-        await newAppointment.save();
+        try {
+            await newAppointment.save();
+        } catch (saveErr) {
+            if (quotaResult.reserved) {
+                await quotaService.releaseAppointmentSlot({
+                    hospitalId,
+                    doctorId: doctor._id,
+                    appointmentDate: date
+                });
+            }
+            throw saveErr;
+        }
 
         // Create PaymentTransaction for audit and billing history when appointment is paid
         if (finalAmount > 0 && (newAppointment.paymentStatus === 'Paid' || paymentStatus === 'Paid')) {

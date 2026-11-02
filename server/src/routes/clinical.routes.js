@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ClinicalVisit = require('../models/clinicalVisit.model');
 const { verifyToken } = require('../middleware/auth.middleware');
+const auditLog = require('../middleware/audit.middleware');
 const LabReport = require('../models/labReport.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
 
@@ -31,8 +32,8 @@ router.post('/intake', verifyToken, async (req, res) => {
     }
 });
 
-// 2. DOCTOR: Get Patient History
-router.get('/history/:patientId', verifyToken, async (req, res) => {
+// 2. DOCTOR: Get Patient History (Audited for DPDP & ABDM Milestone 2 Compliance)
+router.get('/history/:patientId', verifyToken, auditLog('VIEW_CLINICAL_HISTORY', (req) => ({ model: 'ClinicalVisit', id: req.params.patientId })), async (req, res) => {
     try {
         // RLS: scope by hospitalId so cross-hospital data never leaks
         const filter = { patientId: req.params.patientId };

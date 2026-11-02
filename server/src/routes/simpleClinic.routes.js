@@ -319,6 +319,10 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
+        if (clinic.subscriptionPlan === 'free_doctor_opd' && clinic.adminUserId) {
+            return res.status(400).json({ success: false, message: 'Free Doctor OPD Plan allows only 1 administrator.' });
+        }
+
         const isStarter = clinic.subscriptionPlan === 'starter' || clinic.clinicPlan === 'starter' || (!clinic.subscriptionPlan && clinic.clinicPlan !== 'basic');
         if (isStarter && clinic.adminUserId) {
             return res.status(400).json({ success: false, message: 'Starter Plan allows only 1 Hospital Admin.' });
@@ -443,6 +447,26 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
+
+        // Free Doctor OPD Plan validation: 1 doctor max, 0 staff
+        if (clinic.subscriptionPlan === 'free_doctor_opd') {
+            if (staffRole && staffRole !== 'doctor') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Staff creation is not allowed on the Free Doctor OPD Plan. The doctor operates the OPD independently. Please upgrade your subscription to add staff.'
+                });
+            }
+            const currentDoctorCount = await User.countDocuments({
+                hospitalId: clinic._id,
+                $or: [{ role: 'doctor' }, { role: roleDoc._id }]
+            });
+            if (currentDoctorCount >= 1) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Doctor quota reached. The Free Doctor OPD Plan allows a maximum of 1 doctor account. Please upgrade your subscription to add more doctors.'
+                });
+            }
+        }
 
         // Starter Plan check
         const isStarter = clinic.subscriptionPlan === 'starter' || clinic.clinicPlan === 'starter' || (!clinic.subscriptionPlan && clinic.clinicPlan !== 'basic');

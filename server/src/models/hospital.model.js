@@ -109,7 +109,7 @@ const hospitalSchema = new mongoose.Schema({
     clinicPlan: { type: String, enum: ['starter', 'basic'], default: 'starter' },
 
     // Global subscription plan (for new backend quotas)
-    subscriptionPlan: { type: String, enum: ['multi_speciality_starter', 'clinic_basic', 'enterprise', 'starter', 'none'], default: 'none' },
+    subscriptionPlan: { type: String, enum: ['multi_speciality_starter', 'clinic_basic', 'enterprise', 'starter', 'free_doctor_opd', 'none'], default: 'none' },
 
     // Permanent unique Hospital Code (e.g. "APL", "APL1", "FOR") — never auto-regenerated once set
     hospitalCode: { type: String, uppercase: true, trim: true, unique: true, sparse: true },
@@ -127,7 +127,8 @@ const hospitalSchema = new mongoose.Schema({
     tier: {
         maxDoctors:       { type: Number, default: 1 },
         maxReceptionists: { type: Number, default: 1 },
-        maxStaff:         { type: Number, default: Infinity },
+        maxStaff:             { type: Number, default: Infinity },
+        maxDailyAppointments: { type: Number, default: Infinity },
     },
 
     // Subscription / billing config (set by centraladmin)
@@ -202,6 +203,38 @@ function deriveBaseCode(name) {
 
     return firstWord.substring(0, 3);
 }
+
+hospitalSchema.pre('save', function (next) {
+    if (this.subscriptionPlan === 'free_doctor_opd') {
+        if (!this.tier) this.tier = {};
+        this.tier.maxDoctors = 1;
+        this.tier.maxStaff = 0;
+        this.tier.maxReceptionists = 0;
+        this.tier.maxDailyAppointments = 20;
+    }
+    next();
+});
+
+hospitalSchema.pre(['findOneAndUpdate', 'updateOne'], function (next) {
+    const update = this.getUpdate();
+    if (!update) return next();
+    const plan = update.subscriptionPlan || (update.$set && update.$set.subscriptionPlan);
+    if (plan === 'free_doctor_opd') {
+        if (update.$set) {
+            update.$set['tier.maxDoctors'] = 1;
+            update.$set['tier.maxStaff'] = 0;
+            update.$set['tier.maxReceptionists'] = 0;
+            update.$set['tier.maxDailyAppointments'] = 20;
+        } else {
+            if (!update.tier) update.tier = {};
+            update.tier.maxDoctors = 1;
+            update.tier.maxStaff = 0;
+            update.tier.maxReceptionists = 0;
+            update.tier.maxDailyAppointments = 20;
+        }
+    }
+    next();
+});
 
 hospitalSchema.pre('save', async function (next) {
     // Only generate for hospital entity types (do NOT touch clinic module)

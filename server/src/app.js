@@ -64,38 +64,57 @@ app.use(compression({
     threshold: 1024 // Only compress responses > 1KB
 }));
 
-// ── 1. CORS Configuration (With in-memory Domain Cache) ───────────────────────
+// ── 1. CORS Configuration (Exact Allowlist Matching & Domain Cache) ─────────
+const ALLOWED_EXACT_ORIGINS = new Set([
+    'https://medical365.in',
+    'https://www.medical365.in',
+    'https://hms-react-native-app.vercel.app'
+]);
+
+// Parse any additional allowed origins from environment configuration
+if (process.env.CORS_ALLOWED_ORIGINS) {
+    process.env.CORS_ALLOWED_ORIGINS.split(',').forEach(o => {
+        const trimmed = o.trim();
+        if (trimmed) ALLOWED_EXACT_ORIGINS.add(trimmed);
+    });
+}
+
 const isAllowedOrigin = (origin) => {
-    if (!origin) return true; // Direct REST calls / Android Native requests
-    const clean = String(origin).trim().toLowerCase().replace(/\/+$/, '');
-
-    // Localhost and dev networks
-    if (clean.includes('localhost') || clean.includes('127.0.0.1')) return true;
-    if (clean.startsWith('capacitor://') || clean.startsWith('http://capacitor') || clean.startsWith('ionic://')) return true;
-    if (clean.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
-
-    // Official Medical365 domains and ALL subdomains (admin.medical365.in, etc.)
-    if (
-        clean === 'https://medical365.in' ||
-        clean === 'http://medical365.in' ||
-        clean === 'https://www.medical365.in' ||
-        clean === 'http://www.medical365.in' ||
-        clean.endsWith('.medical365.in') ||
-        clean.includes('medical365.in')
-    ) {
-        return true;
+    if (!origin) return true; // Direct REST / non-browser requests (mobile native, server-to-server)
+    
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(origin);
+    } catch {
+        return false;
     }
 
-    // Cloud hosting & deployment platforms
-    if (
-        clean === 'https://hms-react-native-app.vercel.app' ||
-        clean.endsWith('.onrender.com') ||
-        clean.endsWith('.vercel.app') ||
-        clean.endsWith('.netlify.app') ||
-        clean.includes('onrender.com') ||
-        clean.includes('vercel.app')
-    ) {
-        return true;
+    const { protocol, hostname, origin: normalizedOrigin } = parsedUrl;
+
+    // Reject non-http(s) except approved native schemes
+    if (protocol !== 'http:' && protocol !== 'https:') {
+        if (['capacitor:', 'ionic:'].includes(protocol)) return true;
+        return false;
+    }
+
+    // Exact allowlist match
+    if (ALLOWED_EXACT_ORIGINS.has(normalizedOrigin)) return true;
+
+    // Subdomains of medical365.in (strictly https in production, e.g. admin.medical365.in, apollo.medical365.in)
+    // Validates that hostname strictly ends with .medical365.in and prefix is valid alphanumeric subdomain
+    const isM365Subdomain = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?\.medical365\.in$/.test(hostname);
+    if (isM365Subdomain) {
+        if (protocol === 'https:' || process.env.NODE_ENV !== 'production') {
+            return true;
+        }
+    }
+
+    // Local development network origins (strictly non-production)
+    if (process.env.NODE_ENV !== 'production') {
+        if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+        if (hostname.endsWith('.localhost')) return true;
+        // Private LAN IP ranges: 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+        if (/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(hostname)) return true;
     }
 
     return false;
@@ -107,18 +126,23 @@ const verifiedDomainCache = new Map(); // domain -> { allowed: boolean, expireAt
 // Preflight & CORS Header Fallback (Guarantees preflight OPTIONS 204 response with proper CORS headers)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (origin && isAllowedOrigin(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-        const requestHeaders = req.headers['access-control-request-headers'];
-        const defaultAllowedHeaders = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, x-offline-ping, X-Offline-Ping, x-client-operation-id, X-Client-Operation-Id, Cache-Control, Pragma, Expires';
+    if (origin) {
+        const allowed = isAllowedOrigin(origin);
+        if (allowed) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+            const requestHeaders = req.headers['access-control-request-headers'];
+            const defaultAllowedHeaders = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, x-offline-ping, X-Offline-Ping, x-client-operation-id, X-Client-Operation-Id, Cache-Control, Pragma, Expires';
 
-        res.setHeader(
-            'Access-Control-Allow-Headers',
-            requestHeaders ? `${defaultAllowedHeaders}, ${requestHeaders}` : defaultAllowedHeaders
-        );
-        res.setHeader('Access-Control-Max-Age', '86400');
+            res.setHeader(
+                'Access-Control-Allow-Headers',
+                requestHeaders ? `${defaultAllowedHeaders}, ${requestHeaders}` : defaultAllowedHeaders
+            );
+            res.setHeader('Access-Control-Max-Age', '86400');
+        } else if (req.method === 'OPTIONS') {
+            return res.status(403).json({ success: false, message: 'CORS origin not allowed' });
+        }
     }
 
     // Instant response to OPTIONS preflight
@@ -134,7 +158,14 @@ const corsOptions = {
             return callback(null, true);
         }
 
-        const domainOnly = origin.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(origin);
+        } catch {
+            return callback(null, false);
+        }
+
+        const domainOnly = parsedUrl.hostname.toLowerCase();
 
         // Fast In-Memory Cache Check
         const cached = verifiedDomainCache.get(domainOnly);
@@ -156,7 +187,7 @@ const corsOptions = {
             })
             .catch(err => {
                 console.warn('[CORS DB Check Warning]:', err.message);
-                callback(null, true); // Fallback allow on DB error
+                callback(null, false); // Fail closed on DB error
             });
     },
     credentials: true,
@@ -190,12 +221,29 @@ app.options('*', cors(corsOptions));
 // Enable reverse proxy support for Render / Cloudflare rate-limiting
 app.set('trust proxy', 1);
 
-// ── Security headers ──────────────────────────────────────────────────────────
+// ── Security headers (Helmet CSP, COOP, HSTS, Frameguard, NoSniff) ───────────
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    crossOriginOpenerPolicy: false,
-    contentSecurityPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://cdnjs.cloudflare.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com", "data:"],
+            imgSrc: ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https:"],
+            connectSrc: ["'self'", "https:", "wss:", "ws:"],
+            frameSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+        }
+    },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    frameguard: { action: 'sameorigin' },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
 // ── CORS configuration moved to top of file ──
@@ -256,9 +304,10 @@ app.use('/api/hospital-policies', hospitalPolicyRoutes);
 app.use('/api/superadmin/hospitals', require('./routes/superadmin.build.routes')); // Added superadmin build routes
 app.use('/api/finance', financeRoutes);
 
-// ── Static Downloads for Generated Apps ─────────────────────────────────────────
-app.use('/downloads/apks', express.static(path.join(__dirname, '../public/downloads/apks')));
-app.use('/downloads/aabs', express.static(path.join(__dirname, '../public/downloads/aabs')));
+// ── Protected Downloads for Generated Apps (FINDING-19 Remediation) ────────────
+const { authenticateBuildDownload } = require('./middleware/buildAuth.middleware');
+app.use('/downloads/apks', authenticateBuildDownload, express.static(path.join(__dirname, '../public/downloads/apks')));
+app.use('/downloads/aabs', authenticateBuildDownload, express.static(path.join(__dirname, '../public/downloads/aabs')));
 app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);

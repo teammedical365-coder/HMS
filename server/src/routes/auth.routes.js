@@ -193,11 +193,16 @@ router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password, hospitalId, hospitalSlug, tenantId } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid email and password strings are required' });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      return res.status(400).json({ success: false, message: 'Valid email address format is required' });
+    }
+
+    const normalizedEmail = trimmedEmail.toLowerCase();
     
     let resolvedHospitalId = isDemoHospital(hospitalId) ? resolveDemoHospitalId(hospitalId) : hospitalId;
     if (!resolvedHospitalId && (hospitalSlug || tenantId)) {

@@ -82,6 +82,27 @@ const verifyCentralAdmin = async (req, res, next) => {
     }
 };
 
+const { authenticateBuildDownload } = require('../middleware/buildAuth.middleware');
+
+// Validate download authorization and tenant scope for hospital builds
+const verifyBuildDownloadAccess = async (req, res, next) => {
+    await authenticateBuildDownload(req, res, () => {
+        if (req.isCentralAdmin) {
+            return next();
+        }
+        // Hospital admin can only download builds for their own hospital
+        const callerHospitalId = req.user?.hospitalId ? req.user.hospitalId.toString() : '';
+        const targetHospitalId = req.params.id ? req.params.id.toString() : '';
+        if (callerHospitalId && targetHospitalId && callerHospitalId === targetHospitalId) {
+            return next();
+        }
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied. You cannot download builds for other hospitals.'
+        });
+    });
+};
+
 /**
  * POST /api/superadmin/hospitals/:id/trigger-mobile-build
  * Triggers the React Native Mobile Build in an isolated controller
@@ -394,7 +415,7 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
 /**
  * GET /api/superadmin/hospitals/:id/download/apk
  */
-router.get('/:id/download/apk', async (req, res) => {
+router.get('/:id/download/apk', verifyBuildDownloadAccess, async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
@@ -420,7 +441,7 @@ router.get('/:id/download/apk', async (req, res) => {
 /**
  * GET /api/superadmin/hospitals/:id/download/aab
  */
-router.get('/:id/download/aab', async (req, res) => {
+router.get('/:id/download/aab', verifyBuildDownloadAccess, async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
@@ -444,7 +465,7 @@ router.get('/:id/download/aab', async (req, res) => {
 /**
  * GET /api/superadmin/hospitals/:id/download/rn-apk
  */
-router.get('/:id/download/rn-apk', async (req, res) => {
+router.get('/:id/download/rn-apk', verifyBuildDownloadAccess, async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
@@ -470,7 +491,7 @@ router.get('/:id/download/rn-apk', async (req, res) => {
 /**
  * GET /api/superadmin/hospitals/:id/download/rn-aab
  */
-router.get('/:id/download/rn-aab', async (req, res) => {
+router.get('/:id/download/rn-aab', verifyBuildDownloadAccess, async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';

@@ -190,10 +190,58 @@ router.post('/bill', verifyLocalServer, async (req, res) => {
     }
 });
 
-// ─── ALL /api/tunnel/:clinicId/* — Patient app tunnel proxy ──────────────────
-// Patient app hits this endpoint → cloud forwards to local clinic via WebSocket tunnel
-router.all('/tunnel/:clinicId/*', async (req, res) => {
+const { verifyToken } = require('../middleware/auth.middleware');
+
+// Permitted upstream path prefixes for the clinic sync tunnel (Anti-Proxy / Anti-SSRF Abuse)
+const ALLOWED_TUNNEL_PATH_PREFIXES = [
+    '/api/appointments',
+    '/api/patients',
+    '/api/queue',
+    '/api/doctors',
+    '/api/prescriptions',
+    '/api/sync',
+    '/api/clinical'
+];
+
+// ─── ALL /api/sync/tunnel/:clinicId/* — Patient/Staff tunnel proxy (FINDING-08 Remediation) ───
+// Cloud forwards verified requests to local clinic via WebSocket tunnel
+router.all('/tunnel/:clinicId/*', verifyToken, async (req, res) => {
     const { clinicId } = req.params;
+
+    // 1. Tenant Authorization & Clinic Validation
+    const effectiveHospitalId = req.user.hospitalId ? String(req.user.hospitalId) : null;
+    const isCentral = req.user.role === 'centraladmin' || req.user.role === 'superadmin';
+
+    if (!isCentral) {
+        if (!effectiveHospitalId || effectiveHospitalId !== String(clinicId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied: You are not authorized to access this clinic sync tunnel'
+            });
+        }
+    }
+
+    // 2. Strict Path & Method Restriction (Prevent Arbitrary Internal Proxying)
+    const allowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+    if (!allowedMethods.includes(req.method.toUpperCase())) {
+        return res.status(405).json({ success: false, message: 'Method not allowed on sync tunnel' });
+    }
+
+    const localPath = req.path.replace(`/tunnel/${clinicId}`, '') || '/';
+
+    // Prevent path traversal sequences
+    if (localPath.includes('..') || localPath.includes('\\') || localPath.includes('%2e') || localPath.includes('%2E')) {
+        return res.status(403).json({ success: false, message: 'Access denied: Invalid or unsafe tunnel path' });
+    }
+
+    const isPermittedPath = ALLOWED_TUNNEL_PATH_PREFIXES.some(prefix => localPath.startsWith(prefix));
+    if (!isPermittedPath) {
+        return res.status(403).json({
+            success: false,
+            message: 'Access denied: Requested destination path is not permitted through the clinic sync tunnel'
+        });
+    }
+
     const tunnelServer = require('../utils/tunnelServer');
 
     if (!tunnelServer.isClinicOnline(clinicId)) {
@@ -204,9 +252,7 @@ router.all('/tunnel/:clinicId/*', async (req, res) => {
         });
     }
 
-    // Strip /api/tunnel/:clinicId from path — forward the rest to local server
-    const localPath = req.path.replace(`/tunnel/${clinicId}`, '') || '/';
-    const query     = Object.keys(req.query).length ? '?' + new URLSearchParams(req.query).toString() : '';
+    const query = Object.keys(req.query).length ? '?' + new URLSearchParams(req.query).toString() : '';
 
     try {
         const result = await tunnelServer.forward(

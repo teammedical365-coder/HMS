@@ -21,6 +21,9 @@ const upload = multer({
   }
 });
 
+const validateFileType = require('../utils/validateFileType');
+const { sanitizeFilename } = validateFileType;
+
 // Route: POST /api/upload/images
 router.post('/images', verifyToken, upload.array("images", 10), async (req, res) => {
   try {
@@ -30,19 +33,28 @@ router.post('/images', verifyToken, upload.array("images", 10), async (req, res)
       return res.status(400).json({ success: false, message: "No files uploaded" });
     }
 
+    // Validate magic bytes and extensions for all uploaded files (FINDING-14)
+    for (const file of files) {
+      const typeErr = await validateFileType(file, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+      if (typeErr) {
+        return res.status(400).json({ success: false, message: typeErr });
+      }
+    }
+
     const uploadedResults = [];
 
     for (const file of files) {
       try {
+        const safeName = sanitizeFilename(file.originalname);
         const result = await imagekit.upload({
           file: file.buffer,
-          fileName: `crm_${Date.now()}_${file.originalname}`,
+          fileName: `crm_${Date.now()}_${safeName}`,
           folder: "/prescriptions",
           tags: ['crm_upload', file.mimetype]
         });
 
         const newFileRecord = new UploadedFile({
-          fileName: file.originalname,
+          fileName: safeName,
           url: result.url,
           fileId: result.fileId,
           mimeType: file.mimetype,

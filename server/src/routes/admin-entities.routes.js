@@ -8,6 +8,7 @@ const Pharmacy = require('../models/pharmacy.model');
 const Reception = require('../models/reception.model');
 const Service = require('../models/service.model');
 const User = require('../models/user.model');
+const Hospital = require('../models/hospital.model');
 const { verifyAdminOrSuperAdmin } = require('../middleware/auth.middleware');
 const bcrypt = require('bcryptjs');
 const { sendStaffWelcomeEmail } = require('../services/email.service');
@@ -56,6 +57,23 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
 
     // Check if email already exists in this hospital
     const targetHospitalId = getHospitalId(req);
+
+    // Free Doctor OPD Plan validation: max 1 doctor
+    if (targetHospitalId) {
+      const hospitalDoc = await Hospital.findById(targetHospitalId).select('subscriptionPlan tier').lean();
+      if (hospitalDoc && hospitalDoc.subscriptionPlan === 'free_doctor_opd') {
+        const activeDoctorCount = await Doctor.countDocuments({
+          hospitalId: targetHospitalId,
+          status: { $ne: 'Inactive' }
+        });
+        if (activeDoctorCount >= 1) {
+          return res.status(403).json({
+            success: false,
+            message: 'Doctor quota reached. The Free Doctor OPD Plan allows a maximum of 1 doctor account. Please upgrade your subscription to add more doctors.'
+          });
+        }
+      }
+    }
     const checkUserQuery = { email: email.toLowerCase() };
     if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
     const existingUser = await User.findOne(checkUserQuery);
@@ -219,7 +237,7 @@ router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 // Update doctor
 router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments, gender, password } = req.body;
+    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments, gender, password, status } = req.body;
 
     let doctor = await Doctor.findById(req.params.id);
     if (!doctor) {
@@ -227,6 +245,24 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     }
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Doctor not found' });
+    }
+
+    // Check activation limit for Free Doctor OPD Plan
+    if (status && status === 'Active' && doctor.status === 'Inactive' && doctor.hospitalId) {
+      const hospitalDoc = await Hospital.findById(doctor.hospitalId).select('subscriptionPlan tier').lean();
+      if (hospitalDoc && hospitalDoc.subscriptionPlan === 'free_doctor_opd') {
+        const activeDoctorCount = await Doctor.countDocuments({
+          hospitalId: doctor.hospitalId,
+          _id: { $ne: doctor._id },
+          status: { $ne: 'Inactive' }
+        });
+        if (activeDoctorCount >= 1) {
+          return res.status(403).json({
+            success: false,
+            message: 'Cannot activate doctor. The Free Doctor OPD Plan allows a maximum of 1 active doctor account. Please upgrade your subscription to add more doctors.'
+          });
+        }
+      }
     }
 
     // Hospital isolation check for hospitaladmin
@@ -305,6 +341,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     if (patientsCount !== undefined) doctor.patientsCount = patientsCount;
     if (image !== undefined) doctor.image = image;
     if (bio !== undefined) doctor.bio = bio;
+    if (status !== undefined) doctor.status = status;
     
     // Safely cast consultationFee to Number to avoid CastError with empty string or invalid input
     if (consultationFee !== undefined && consultationFee !== null && consultationFee !== '') {
@@ -372,6 +409,17 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
 
     // Check if email already exists in User collection for this hospital
     const targetHospitalId = getHospitalId(req);
+
+    // Free Doctor OPD Plan validation: max staff 0
+    if (targetHospitalId) {
+      const hospitalDoc = await Hospital.findById(targetHospitalId).select('subscriptionPlan tier').lean();
+      if (hospitalDoc && hospitalDoc.subscriptionPlan === 'free_doctor_opd') {
+        return res.status(403).json({
+          success: false,
+          message: 'Staff creation (Lab) is not allowed on the Free Doctor OPD Plan. The doctor operates the OPD independently. Please upgrade your subscription to add staff.'
+        });
+      }
+    }
     const checkUserQuery = { email: email.toLowerCase() };
     if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
     const existingUser = await User.findOne(checkUserQuery);
@@ -524,6 +572,17 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
 
     // Check if email already exists in User collection for this hospital
     const targetHospitalId = getHospitalId(req);
+
+    // Free Doctor OPD Plan validation: max staff 0
+    if (targetHospitalId) {
+      const hospitalDoc = await Hospital.findById(targetHospitalId).select('subscriptionPlan tier').lean();
+      if (hospitalDoc && hospitalDoc.subscriptionPlan === 'free_doctor_opd') {
+        return res.status(403).json({
+          success: false,
+          message: 'Staff creation (Pharmacy) is not allowed on the Free Doctor OPD Plan. The doctor operates the OPD independently. Please upgrade your subscription to add staff.'
+        });
+      }
+    }
     const checkUserQuery = { email: email.toLowerCase() };
     if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
     const existingUser = await User.findOne(checkUserQuery);
@@ -675,6 +734,17 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
 
     // Check if email already exists in User collection for this hospital
     const targetHospitalId = getHospitalId(req);
+
+    // Free Doctor OPD Plan validation: max receptionists 0
+    if (targetHospitalId) {
+      const hospitalDoc = await Hospital.findById(targetHospitalId).select('subscriptionPlan tier').lean();
+      if (hospitalDoc && hospitalDoc.subscriptionPlan === 'free_doctor_opd') {
+        return res.status(403).json({
+          success: false,
+          message: 'Receptionist creation is not allowed on the Free Doctor OPD Plan. The doctor operates the OPD independently. Please upgrade your subscription to add receptionists.'
+        });
+      }
+    }
     const checkUserQuery = { email: email.toLowerCase() };
     if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
     const existingUser = await User.findOne(checkUserQuery);

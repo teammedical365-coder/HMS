@@ -163,7 +163,10 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         }
 
         const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [], whiteLabelEnabled, brandingSchema };
-        if (plan === 'multi_speciality_starter') {
+        if (plan === 'free_doctor_opd') {
+            hospitalData.subscriptionPlan = 'free_doctor_opd';
+            hospitalData.tier = { maxDoctors: 1, maxStaff: 0, maxReceptionists: 0, maxDailyAppointments: 20 };
+        } else if (plan === 'multi_speciality_starter') {
             hospitalData.subscriptionPlan = 'multi_speciality_starter';
             hospitalData.tier = { maxDoctors: 15, maxStaff: 25 };
         } else if (plan === 'clinic_basic') {
@@ -332,7 +335,10 @@ const updateHospital = async (req, res) => {
         if (whiteLabelEnabled !== undefined) hospital.whiteLabelEnabled = whiteLabelEnabled;
         if (brandingSchema !== undefined) hospital.brandingSchema = brandingSchema;
 
-        if (plan === 'multi_speciality_starter') {
+        if (plan === 'free_doctor_opd') {
+            hospital.subscriptionPlan = 'free_doctor_opd';
+            hospital.tier = { maxDoctors: 1, maxStaff: 0, maxReceptionists: 0, maxDailyAppointments: 20 };
+        } else if (plan === 'multi_speciality_starter') {
             hospital.subscriptionPlan = 'multi_speciality_starter';
             hospital.tier = { maxDoctors: 15, maxStaff: 25 };
         } else if (plan === 'clinic_basic') {

@@ -60,6 +60,14 @@ const attach = (httpServer) => {
     wss.on('connection', (socket) => {
         let clinicId = null;
         let pingTimer = null;
+        const authTimeout = setTimeout(() => {
+            if (!clinicId) {
+                try {
+                    socket.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }));
+                    socket.close();
+                } catch (_) {}
+            }
+        }, 10000);
 
         socket.on('message', async (raw) => {
             let msg;
@@ -69,12 +77,18 @@ const attach = (httpServer) => {
             if (msg.type === 'register') {
                 const valid = await verifyClinicApiKey(msg.clinicId, msg.apiKey);
                 if (!valid) {
+                    clearTimeout(authTimeout);
                     socket.send(JSON.stringify({ type: 'error', message: 'Invalid clinic credentials' }));
                     socket.close();
                     return;
                 }
 
+                clearTimeout(authTimeout);
                 clinicId = msg.clinicId;
+                const existing = clinicConnections.get(clinicId);
+                if (existing && existing !== socket) {
+                    try { existing.close(1000, 'Replaced by newer connection'); } catch (_) {}
+                }
                 clinicConnections.set(clinicId, socket);
                 console.log(`[TunnelServer] Clinic ${clinicId} connected`);
 
@@ -105,6 +119,7 @@ const attach = (httpServer) => {
         });
 
         socket.on('close', () => {
+            clearTimeout(authTimeout);
             if (clinicId) {
                 clinicConnections.delete(clinicId);
                 console.log(`[TunnelServer] Clinic ${clinicId} disconnected`);

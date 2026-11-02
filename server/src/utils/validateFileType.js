@@ -65,4 +65,12 @@ async function validateFileType(file, allowedMimes) {
     return null;
 }
 
+function sanitizeFilename(originalName) {
+    if (!originalName || typeof originalName !== 'string') return 'upload';
+    const base = path.basename(originalName);
+    return base.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
 module.exports = validateFileType;
+module.exports.validateFileType = validateFileType;
+module.exports.sanitizeFilename = sanitizeFilename;

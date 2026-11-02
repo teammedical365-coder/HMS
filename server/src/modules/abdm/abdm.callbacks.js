@@ -31,11 +31,14 @@ let warnedUnsigned = false;
 let joseMod = null;
 let jwks = null;
 
+let cachedJwksUrl = null;
+
 const deny = (res, status, message) => res.status(status).json({ error: { code: status, message } });
 
 async function verifySignature(token) {
     if (!joseMod) joseMod = await import('jose'); // works from CommonJS; jose may be ESM-only
-    if (!jwks) {
+    if (!jwks || cachedJwksUrl !== config.jwksUrl) {
+        cachedJwksUrl = config.jwksUrl;
         const options = {};
         if (config.jwksUrl && config.jwksUrl.includes('abdm.gov.in')) {
             try {
@@ -60,25 +63,30 @@ async function verifyAbdmCallback(req, res, next) {
         if (!cm || cm !== config.xCmId.toLowerCase()) return deny(res, 401, 'Invalid or missing X-CM-ID');
 
         // 2. Signed bearer token from the gateway
+        const isProductionOrStaging = ['production', 'staging'].includes(String(process.env.NODE_ENV || '').toLowerCase());
         const auth = String(req.get('Authorization') || '');
         const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
         if (config.jwksUrl) {
             if (!token) return deny(res, 401, 'Missing bearer token');
             try { await verifySignature(token); } catch (_) { return deny(res, 401, 'Invalid gateway token'); }
-        } else if (config.allowUnsignedCallbacks) {
+        } else if (isProductionOrStaging || !config.allowUnsignedCallbacks) {
+            return deny(res, 503, 'Callback verification is strictly required (set ABDM_JWKS_URL)');
+        } else {
             if (!warnedUnsigned) {
                 warnedUnsigned = true;
                 console.warn('[ABDM] WARNING: callback signature verification is OFF (sandbox only). Set ABDM_JWKS_URL.');
             }
-        } else {
-            return deny(res, 503, 'Callback verification is not configured (set ABDM_JWKS_URL)');
         }
 
-        // 3. Basic shape + replay window
+        // 3. Basic shape + replay window & mandatory timestamp
         const body = req.body;
         if (!body || typeof body !== 'object') return deny(res, 400, 'Malformed callback body');
-        const ts = Date.parse(req.get('TIMESTAMP') || body.timestamp || '');
-        if (!Number.isNaN(ts) && Math.abs(Date.now() - ts) > DRIFT_MS) return deny(res, 400, 'Callback timestamp outside allowed window');
+
+        const rawTimestamp = req.get('TIMESTAMP') || (body && body.timestamp);
+        if (!rawTimestamp) return deny(res, 400, 'Missing mandatory callback timestamp');
+        const ts = Date.parse(rawTimestamp);
+        if (Number.isNaN(ts)) return deny(res, 400, 'Invalid callback timestamp format');
+        if (Math.abs(Date.now() - ts) > DRIFT_MS) return deny(res, 400, 'Callback timestamp outside allowed window');
 
         return next();
     } catch (err) {

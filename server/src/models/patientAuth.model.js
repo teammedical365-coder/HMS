@@ -17,7 +17,11 @@ const patientAuthSchema = new mongoose.Schema({
     mobileVerified: { type: Boolean, default: false },
     
     // Future expansion for associating with a specific MRN/Patient Profile once registered clinically
-    linkedPatientProfileId: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', default: null }
+    linkedPatientProfileId: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', default: null },
+
+    // Password reset tracking (one-time use and invalidation - FINDING-03)
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null }
 }, { timestamps: true });
 
 // Ensure email, mobile, and aadhaarNumber are unique strictly PER hospital

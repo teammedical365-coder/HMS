@@ -18,6 +18,14 @@ export const SUBSCRIPTION_PLANS = {
         name: 'Starter Plan',
         maxDoctors: Infinity,
         maxStaff: Infinity,
+    },
+    free_doctor_opd: {
+        name: 'Free Doctor OPD Plan',
+        price: 0,
+        maxDoctors: 1,
+        maxStaff: 0,
+        maxReceptionists: 0,
+        maxDailyAppointments: 20,
     }
 };
 

@@ -83,7 +83,9 @@ async function onLinkToken({ body }) {
         await AbdmLinkToken.updateOne({ _id: doc._id }, { $set: { status: 'FAILED', error: String((body.error && body.error.message) || 'No token returned').slice(0, 300) } });
         return { result: 'TOKEN_FAILED' };
     }
-    await AbdmLinkToken.updateOne({ _id: doc._id }, { $set: { token, status: 'READY', error: null } });
+    // Secure cryptographic storage (FINDING-15 Remediation): Hash + AES-256-GCM encrypt
+    doc.setSecureToken(token, 60);
+    await doc.save();
 
     // token arrived: now link everything waiting for this patient
     await linkPendingForPatient({ hospitalId: doc.hospitalId, patientId: doc.patientId });
@@ -335,7 +337,8 @@ async function requestLinking({ hospitalId, patientId }) {
     }
 
     const tok = await AbdmLinkToken.findOne({ hospitalId, patientId });
-    if (tok && tok.status === 'READY' && tok.token) {
+    const activeToken = tok ? (tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token) : null;
+    if (tok && tok.status === 'READY' && activeToken) {
         await linkPendingForPatient({ hospitalId, patientId });
         return { status: 'LINKING' };
     }
@@ -366,15 +369,21 @@ async function linkPendingForPatient({ hospitalId, patientId }) {
     const hospital = await Hospital.findById(hospitalId).select('_id abdm').lean();
     const tok = await AbdmLinkToken.findOne({ hospitalId, patientId, status: 'READY' });
     const patient = await User.findOne({ _id: patientId, hospitalId }).select('name patientId abdm').lean();
-    if (!hospital || !tok || !patient || !patient.abdm) return { linked: 0 };
-
     const ccs = await AbdmCareContext.find({ hospitalId, patientId, status: 'CREATED' }).limit(20);
+    if (tok.isExpired && tok.isExpired()) {
+        tok.status = 'EXPIRED';
+        await tok.save();
+        return { linked: 0 };
+    }
+    const bearerLinkToken = tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token;
+    if (!bearerLinkToken) return { linked: 0 };
+
     let requested = 0;
     for (const cc of ccs) {
         try {
             const { requestId } = await client.linkCareContext({
                 hipId: hospital.abdm.hipId,
-                linkToken: tok.token,
+                linkToken: bearerLinkToken,
                 body: {
                     abhaNumber: Number(String(patient.abdm.abhaNumber).replace(/\D/g, '')),
                     abhaAddress: patient.abdm.abhaAddress,

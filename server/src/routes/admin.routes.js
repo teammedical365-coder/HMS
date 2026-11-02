@@ -6,6 +6,7 @@ const Role = require('../models/role.model');
 const Hospital = require('../models/hospital.model');
 const jwt = require('jsonwebtoken');
 const { verifyAdmin, verifyAdminOrSuperAdmin, verifyToken } = require('../middleware/auth.middleware');
+const { loginLimiter, signupLimiter } = require('../middleware/rateLimiter');
 const { nanoid } = require('nanoid');
 
 // Entity models
@@ -286,10 +287,42 @@ router.delete('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
 // 2. ADMIN AUTH ROUTES
 // ==========================================
 
-// Central Admin Signup — creates centraladmin account
-router.post('/signup', async (req, res) => {
+// Central Admin Signup — creates centraladmin account (strictly requires existing Central Admin authorization once initialized)
+router.post('/signup', signupLimiter, async (req, res) => {
     try {
         let { name, email, password, phone } = req.body;
+
+        // Security Control (FINDING-01): Verify whether central administrative accounts already exist
+        const existingAdminCount = await User.countDocuments({ role: { $in: ['centraladmin', 'superadmin'] } });
+        if (existingAdminCount > 0) {
+            // Require authenticated Central Admin / Super Admin session
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Authentication required. Administrative account provisioning requires an authorized Central Admin session.'
+                });
+            }
+
+            const authToken = authHeader.split(' ')[1];
+            let decodedCaller;
+            try {
+                decodedCaller = jwt.verify(authToken, JWT_SECRET);
+            } catch (jwtErr) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid or expired administrative authorization token.'
+                });
+            }
+
+            const callerUser = await User.findById(decodedCaller.userId);
+            if (!callerUser || (callerUser.role !== 'centraladmin' && callerUser.role !== 'superadmin')) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied. Central Admin privileges required to provision administrative accounts.'
+                });
+            }
+        }
 
         let sanitizedPhone = phone ? String(phone).trim() : '';
         if (sanitizedPhone.startsWith('+91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(3);
@@ -317,6 +350,7 @@ router.post('/signup', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already registered.' });
         }
 
+        // Server-enforced role and tenant scoping (never client-controlled)
         const admin = new User({
             name, email, password, phone: phone || '', role: 'centraladmin', hospitalId: null
         });
@@ -346,10 +380,12 @@ router.post('/signup', async (req, res) => {
 });
 
 // Central Admin Login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required' });
+        if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ success: false, message: 'Valid email and password strings required' });
+        }
 
         const user = await User.findOne({ email });
         if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -618,6 +654,14 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     return res.status(403).json({
                         success: false,
                         message: 'Doctors cannot be created from Staff Management. Please use the Doctors Feed.'
+                    });
+                }
+
+                // Free Doctor OPD Plan validation: max staff 0
+                if (subscriptionPlan === 'free_doctor_opd') {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Staff creation is not allowed on the Free Doctor OPD Plan. The doctor operates the OPD independently. Please upgrade your subscription to add staff.'
                     });
                 }
                 

@@ -3,7 +3,9 @@ const router = express.Router();
 const PatientAuth = require('../models/patientAuth.model');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
+const quotaService = require('../services/appointmentQuota.service');
 const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
+const { loginLimiter, signupLimiter, emailOtpSendLimiter, emailOtpVerifyLimiter, passwordRecoveryLimiter } = require('../middleware/rateLimiter');
 
 // Universal MRN Generator matching Hospital & Clinic exact formats
 async function generateUniversalMRN(hospitalId, hospital, User) {
@@ -32,7 +34,7 @@ async function generateUniversalMRN(hospitalId, hospital, User) {
 
 // POST /api/patient-auth/register
 // Register a new patient authentication account
-router.post('/register', async (req, res) => {
+router.post('/register', signupLimiter, async (req, res) => {
     try {
         let { name, email, mobile, password, hospitalId, age, aadhaarNumber } = req.body;
 
@@ -143,12 +145,12 @@ router.post('/register', async (req, res) => {
 
 // POST /api/patient-auth/login
 // Login patient with email or mobile
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { loginId, password, hospitalId } = req.body;
 
-        if (!loginId || !password || !hospitalId) {
-            return res.status(400).json({ success: false, message: 'Email/Mobile, password, and hospital reference are required.' });
+        if (!loginId || !password || !hospitalId || typeof loginId !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ success: false, message: 'Email/Mobile, password, and hospital reference are required as valid strings.' });
         }
 
         // Find patient matching either email or mobile strictly within the current hospital
@@ -259,7 +261,7 @@ function maskEmail(email) {
 
 // POST /api/patient-auth/send-otp
 // Send 6-digit OTP for patient login
-router.post('/send-otp', async (req, res) => {
+router.post('/send-otp', emailOtpSendLimiter, async (req, res) => {
     try {
         const { loginId, password, hospitalId } = req.body;
         if (!loginId || !hospitalId) {
@@ -424,7 +426,7 @@ router.post('/send-otp', async (req, res) => {
 
 // POST /api/patient-auth/verify-otp
 // Verify patient 6-digit OTP code
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', emailOtpVerifyLimiter, async (req, res) => {
     try {
         const { preAuthToken, otp } = req.body;
         if (!preAuthToken || !otp) {
@@ -520,7 +522,7 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 // POST /api/patient-auth/resend-otp
-router.post('/resend-otp', async (req, res) => {
+router.post('/resend-otp', emailOtpSendLimiter, async (req, res) => {
     try {
         const { preAuthToken } = req.body;
         if (!preAuthToken) {
@@ -594,49 +596,50 @@ router.post('/resend-otp', async (req, res) => {
 });
 
 // POST /api/patient-auth/forgot-password
-// Request reset password token
-router.post('/forgot-password', async (req, res) => {
+// Request reset password token (FINDING-03 Remediation)
+router.post('/forgot-password', passwordRecoveryLimiter, async (req, res) => {
     try {
         const { email, hospitalId } = req.body;
         if (!email || !hospitalId) {
             return res.status(400).json({ success: false, message: 'Email and hospital reference are required.' });
         }
 
-        const patient = await PatientAuth.findOne({ email: email.toLowerCase(), hospitalId });
-        if (!patient) {
-            // Note: Returning success anyway to protect user privacy (prevent email enumerations)
-            // But we will also send the token in the response so they can proceed with local testing
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const patient = await PatientAuth.findOne({ email: normalizedEmail, hospitalId });
+        
+        if (patient) {
+            const crypto = require('crypto');
             const jwt = require('jsonwebtoken');
             const { JWT_SECRET } = require('../config/jwt');
-            const mockToken = jwt.sign(
-                { email: email.toLowerCase(), hospitalId, purpose: 'reset-password' },
+
+            const jti = crypto.randomUUID();
+            const resetToken = jwt.sign(
+                { 
+                    patientId: patient._id,
+                    email: patient.email, 
+                    hospitalId: patient.hospitalId, 
+                    purpose: 'reset-password',
+                    jti 
+                },
                 JWT_SECRET,
                 { expiresIn: '15m' }
             );
-            return res.json({
-                success: true,
-                message: 'If the email exists, a password reset link has been generated.',
-                token: mockToken,
-                mock: true
-            });
+
+            // Persist token binding and 15-minute expiration on patient document
+            patient.resetPasswordToken = jti;
+            patient.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000);
+            await patient.save();
+
+            // Sanitized logging without disclosing secret token in console
+            const maskedEmail = normalizedEmail.replace(/(?<=.).(?=.*@)/g, '*');
+            console.log(`[AUTH] Password recovery link generated for ${maskedEmail}`);
         }
 
-        const jwt = require('jsonwebtoken');
-        const { JWT_SECRET } = require('../config/jwt');
-        const resetToken = jwt.sign(
-            { email: patient.email, hospitalId, purpose: 'reset-password' },
-            JWT_SECRET,
-            { expiresIn: '15m' }
-        );
-
-        // Modular stub for email dispatch
-        console.log(`[STUB] Sending reset password link to ${patient.email}: /patient/reset-password?token=${resetToken}`);
-
+        // Uniform response to prevent account/email enumeration (FINDING-03)
+        // Never expose reset token or mock flag in HTTP responses
         res.json({
             success: true,
-            message: 'Password reset link generated successfully.',
-            token: resetToken,
-            mock: false
+            message: 'If the email exists, a password reset link has been dispatched to your registered email address.'
         });
 
     } catch (error) {
@@ -646,8 +649,8 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // POST /api/patient-auth/reset-password
-// Reset password using token
-router.post('/reset-password', async (req, res) => {
+// Reset password using token with one-time use verification and invalidation (FINDING-03 Remediation)
+router.post('/reset-password', passwordRecoveryLimiter, async (req, res) => {
     try {
         const { token, password } = req.body;
         if (!token || !password) {
@@ -660,6 +663,7 @@ router.post('/reset-password', async (req, res) => {
 
         const jwt = require('jsonwebtoken');
         const { JWT_SECRET } = require('../config/jwt');
+        const TokenBlacklist = require('../models/tokenBlacklist.model');
 
         let decoded;
         try {
@@ -668,8 +672,14 @@ router.post('/reset-password', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid or expired reset token.' });
         }
 
-        if (decoded.purpose !== 'reset-password') {
-            return res.status(400).json({ success: false, message: 'Invalid token purpose.' });
+        if (decoded.purpose !== 'reset-password' || !decoded.jti) {
+            return res.status(400).json({ success: false, message: 'Invalid token purpose or missing identifier.' });
+        }
+
+        // Check if token has already been blacklisted/used
+        const isBlacklisted = await TokenBlacklist.exists({ jti: decoded.jti });
+        if (isBlacklisted) {
+            return res.status(400).json({ success: false, message: 'Reset token has already been used or invalidated.' });
         }
 
         const patient = await PatientAuth.findOne({ email: decoded.email, hospitalId: decoded.hospitalId });
@@ -677,9 +687,30 @@ router.post('/reset-password', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Patient account not found.' });
         }
 
+        // Verify single-use binding and expiry against patient record
+        if (!patient.resetPasswordToken || patient.resetPasswordToken !== decoded.jti) {
+            return res.status(400).json({ success: false, message: 'Reset token has already been used or invalidated.' });
+        }
+
+        if (!patient.resetPasswordExpires || patient.resetPasswordExpires < new Date()) {
+            return res.status(400).json({ success: false, message: 'Reset token has expired. Please request a new link.' });
+        }
+
         // Update password (pre-save hook will hash it automatically)
         patient.password = password;
+        patient.resetPasswordToken = null;
+        patient.resetPasswordExpires = null;
         await patient.save();
+
+        // Invalidate token in TokenBlacklist to prevent replay attacks
+        try {
+            await TokenBlacklist.create({
+                jti: decoded.jti,
+                expireAt: new Date(decoded.exp ? decoded.exp * 1000 : Date.now() + 15 * 60 * 1000)
+            });
+        } catch (blErr) {
+            // Ignore duplicate key error if already saved
+        }
 
         res.json({ success: true, message: 'Password updated successfully. Please login with your new credentials.' });
 
@@ -1017,6 +1048,17 @@ router.post('/book-appointment', verifyPatientToken, async (req, res) => {
             visitType = 'Follow-up';
         }
 
+        // Atomic Daily Appointment Quota Reservation (Free Doctor OPD Plan)
+        const quotaResult = await quotaService.reserveAppointmentSlot({
+            hospitalId,
+            doctorId: doctor._id,
+            appointmentDate: date,
+            AppointmentModel: Appointment
+        });
+        if (!quotaResult.allowed) {
+            return res.status(403).json({ success: false, message: quotaResult.message });
+        }
+
         const newAppointment = new Appointment({
             userId: patient._id,
             hospitalId,
@@ -1038,7 +1080,18 @@ router.post('/book-appointment', verifyPatientToken, async (req, res) => {
             notes: notes || 'Booked directly via Patient Portal'
         });
 
-        await newAppointment.save();
+        try {
+            await newAppointment.save();
+        } catch (saveErr) {
+            if (quotaResult.reserved) {
+                await quotaService.releaseAppointmentSlot({
+                    hospitalId,
+                    doctorId: doctor._id,
+                    appointmentDate: date
+                });
+            }
+            throw saveErr;
+        }
 
         res.json({ success: true, appointment: newAppointment });
     } catch (error) {

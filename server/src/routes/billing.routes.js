@@ -456,8 +456,8 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
         });
 
     } catch (error) {
-        console.error('[patient-billing-error]', error);
-        res.status(500).json({ success: false, message: error.message || 'An internal error occurred', stack: error.stack });
+        console.error('[patient-billing-error]', error.message);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -530,9 +530,56 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
 
         const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
 
+        // Security Control (FINDING-05): Cross-tenant BOLA prevention
+        const effectiveHospitalId = req.hospitalId || req.user?.hospitalId;
+        const isCentral = req.user?.role === 'centraladmin' || req.user?.role === 'superadmin';
+
+        if (!isCentral && effectiveHospitalId) {
+            const hIdStr = String(effectiveHospitalId);
+            const itemsToCheck = [];
+            if (appointmentIds.length > 0) {
+                itemsToCheck.push(MasterAppointment.find({ _id: { $in: appointmentIds } }).select('hospitalId').lean());
+                if (MasterAppointment !== Appointment) itemsToCheck.push(Appointment.find({ _id: { $in: appointmentIds } }).select('hospitalId').lean());
+            }
+            if (labReportIds.length > 0) {
+                itemsToCheck.push(MasterLabReport.find({ _id: { $in: labReportIds } }).select('hospitalId').lean());
+                if (MasterLabReport !== LabReport) itemsToCheck.push(LabReport.find({ _id: { $in: labReportIds } }).select('hospitalId').lean());
+            }
+            if (admissionIds.length > 0) {
+                itemsToCheck.push(MasterAdmission.find({ _id: { $in: admissionIds } }).select('hospitalId').lean());
+                if (MasterAdmission !== Admission) itemsToCheck.push(Admission.find({ _id: { $in: admissionIds } }).select('hospitalId').lean());
+            }
+            if (surgeryPlanIds.length > 0) {
+                itemsToCheck.push(MasterSurgeryPlan.find({ _id: { $in: surgeryPlanIds } }).select('hospitalId').lean());
+                if (MasterSurgeryPlan !== SurgeryPlan) itemsToCheck.push(SurgeryPlan.find({ _id: { $in: surgeryPlanIds } }).select('hospitalId').lean());
+            }
+            if (pharmacyOrderIds.length > 0) {
+                itemsToCheck.push(MasterPharmacyOrder.find({ _id: { $in: pharmacyOrderIds } }).select('hospitalId').lean());
+                if (MasterPharmacyOrder !== PharmacyOrder) itemsToCheck.push(PharmacyOrder.find({ _id: { $in: pharmacyOrderIds } }).select('hospitalId').lean());
+            }
+            if (facilityChargeIds.length > 0) {
+                itemsToCheck.push(MasterFacilityCharge.find({ _id: { $in: facilityChargeIds } }).select('hospitalId').lean());
+                if (MasterFacilityCharge !== FacilityCharge) itemsToCheck.push(FacilityCharge.find({ _id: { $in: facilityChargeIds } }).select('hospitalId').lean());
+            }
+
+            const itemGroups = await Promise.all(itemsToCheck);
+            for (const group of itemGroups) {
+                for (const item of group) {
+                    if (item.hospitalId && String(item.hospitalId) !== hIdStr) {
+                        return res.status(403).json({
+                            success: false,
+                            message: 'Access denied: One or more billing items belong to another hospital facility.'
+                        });
+                    }
+                }
+            }
+        }
+
+        const hospitalFilter = (!isCentral && effectiveHospitalId) ? { hospitalId: effectiveHospitalId } : {};
+
         // Calculate and persist ICU charges for any admissions before marking Paid
         if (admissionIds.length > 0) {
-            const admissionsToPay = await Admission.find({ _id: { $in: admissionIds } });
+            const admissionsToPay = await Admission.find({ _id: { $in: admissionIds }, ...hospitalFilter });
             for (const adm of admissionsToPay) {
                 if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
                     const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
@@ -566,7 +613,7 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
 
         // Process Surgery Plan payments (supports full & partial payments)
         if (surgeryPlanIds.length > 0) {
-            const plansToPay = await SurgeryPlan.find({ _id: { $in: surgeryPlanIds } });
+            const plansToPay = await SurgeryPlan.find({ _id: { $in: surgeryPlanIds }, ...hospitalFilter });
             for (const sp of plansToPay) {
                 const totalCost = Number(sp.surgeryCost) || 0;
                 const currentPaid = Number(sp.paidAmount) || 0;
@@ -595,7 +642,7 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 // If linked facility charge exists and plan is fully paid, update it too
                 if (sp.facilityChargeId) {
                     if (sp.paymentStatus === 'PAID') {
-                        await FacilityCharge.findByIdAndUpdate(sp.facilityChargeId, { paymentStatus: 'Paid' });
+                        await FacilityCharge.findOneAndUpdate({ _id: sp.facilityChargeId, ...hospitalFilter }, { paymentStatus: 'Paid' });
                     }
                 }
             }
@@ -603,24 +650,24 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
 
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
+                { _id: { $in: appointmentIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
             appointmentIds.length > 0 && MasterAppointment !== Appointment && MasterAppointment.updateMany(
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
+                { _id: { $in: appointmentIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
             
             labReportIds.length > 0 && LabReport.updateMany(
-                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', status: 'Completed', paymentMethod: actualPaymentMode, splitPayments } }),
+                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', status: 'Completed', paymentMethod: actualPaymentMode, splitPayments } }),
             labReportIds.length > 0 && MasterLabReport !== LabReport && MasterLabReport.updateMany(
-                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'PAID', testStatus: 'DONE', paymentMethod: actualPaymentMode, splitPayments } }),
+                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'PAID', testStatus: 'DONE', paymentMethod: actualPaymentMode, splitPayments } }),
 
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
+                { _id: { $in: pharmacyOrderIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
             pharmacyOrderIds.length > 0 && MasterPharmacyOrder !== PharmacyOrder && MasterPharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
+                { _id: { $in: pharmacyOrderIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
 
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
-                { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
+                { _id: { $in: facilityChargeIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments } }),
             facilityChargeIds.length > 0 && MasterFacilityCharge !== FacilityCharge && MasterFacilityCharge.updateMany(
-                { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
+                { _id: { $in: facilityChargeIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));
 
         if (patientId) {

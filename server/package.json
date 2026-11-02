@@ -37,7 +37,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "nanoid": "^3.3.6",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.1.0",
     "otplib": "^13.4.0",
     "pdf-parse": "1.1.1",
     "pdfkit": "^0.19.1",

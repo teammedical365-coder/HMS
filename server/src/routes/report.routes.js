@@ -12,92 +12,204 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
+const dns = require('dns');
+const net = require('net');
+
 /**
- * Universal file buffer fetcher: handles base64 data URIs, local disk files,
- * relative API paths (/api/patients/reports/...), and remote HTTP/HTTPS URLs.
+ * Check if an IP address belongs to loopback, private, link-local, or cloud metadata ranges (SSRF Prevention)
+ */
+function isPrivateOrReservedIP(ip) {
+  if (!ip || !net.isIP(ip)) return true;
+  // Normalize IPv4-mapped IPv6
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
+  }
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    // 0.0.0.0/8 (Current network)
+    if (parts[0] === 0) return true;
+    // 10.0.0.0/8 (Private RFC 1918)
+    if (parts[0] === 10) return true;
+    // 100.64.0.0/10 (Carrier-grade NAT)
+    if (parts[0] === 100 && (parts[1] >= 64 && parts[1] <= 127)) return true;
+    // 127.0.0.0/8 (Loopback)
+    if (parts[0] === 127) return true;
+    // 169.254.0.0/16 (Link-local / Cloud metadata: 169.254.169.254)
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    // 172.16.0.0/12 (Private RFC 1918)
+    if (parts[0] === 172 && (parts[1] >= 16 && parts[1] <= 31)) return true;
+    // 192.0.0.0/24, 192.0.2.0/24 (Test / Reserved)
+    if (parts[0] === 192 && parts[1] === 0 && (parts[2] === 0 || parts[2] === 2)) return true;
+    // 192.168.0.0/16 (Private RFC 1918)
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    // 198.18.0.0/15 (Benchmarking)
+    if (parts[0] === 198 && (parts[1] === 18 || parts[1] === 19)) return true;
+    // 198.51.100.0/24, 203.0.113.0/24 (Documentation)
+    if ((parts[0] === 198 && parts[1] === 51 && parts[2] === 100) ||
+        (parts[0] === 203 && parts[1] === 0 && parts[2] === 113)) return true;
+    // 224.0.0.0/4 (Multicast), 240.0.0.0/4 (Reserved)
+    if (parts[0] >= 224) return true;
+    // Broadcast
+    if (ip === '255.255.255.255') return true;
+    return false;
+  }
+  if (net.isIPv6(ip)) {
+    const lower = ip.toLowerCase();
+    if (lower === '::1' || lower === '::') return true; // Loopback/unspecified
+    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // Link-local
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // Unique local
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Check if destination hostname is on the approved external storage allowlist
+ */
+function isAllowedRemoteHost(hostname) {
+  if (!hostname) return false;
+  const lowerHost = hostname.toLowerCase();
+
+  // 1. ImageKit official storage CDN
+  if (lowerHost === 'ik.imagekit.io' || lowerHost.endsWith('.imagekit.io')) return true;
+
+  // 2. AWS S3 / CloudFront
+  if (lowerHost.endsWith('.amazonaws.com') || lowerHost.endsWith('.cloudfront.net')) return true;
+
+  // 3. User configured allowed report domains (from environment)
+  const envDomains = (process.env.ALLOWED_REPORT_DOMAINS || '')
+    .split(',')
+    .map(d => d.trim().toLowerCase())
+    .filter(Boolean);
+  if (envDomains.some(d => lowerHost === d || lowerHost.endsWith('.' + d))) {
+    return true;
+  }
+
+  // 4. Configured ImageKit endpoint from environment
+  if (process.env.IMAGEKIT_URL_ENDPOINTS) {
+    try {
+      const parsedIK = new URL(process.env.IMAGEKIT_URL_ENDPOINTS);
+      if (lowerHost === parsedIK.hostname.toLowerCase()) return true;
+    } catch (_) {}
+  }
+
+  return false;
+}
+
+/**
+ * Safely validate and fetch remote HTTPS URL with DNS rebinding and SSRF protection
+ */
+async function validateAndFetchRemoteUrl(urlStr) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(urlStr);
+  } catch (err) {
+    throw new Error('Invalid URL format');
+  }
+
+  // Strictly enforce HTTPS
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error('Access denied: Only secure HTTPS URLs are permitted for remote report retrieval');
+  }
+
+  const hostname = parsedUrl.hostname;
+  if (!isAllowedRemoteHost(hostname)) {
+    throw new Error(`Access denied: Destination host "${hostname}" is not on the permitted storage allowlist`);
+  }
+
+  // Resolve DNS to verify all destination IPs (prevents DNS rebinding and internal network scanning)
+  const resolved = await dns.promises.lookup(hostname, { all: true });
+  if (!resolved || resolved.length === 0) {
+    throw new Error(`Unable to resolve destination host: ${hostname}`);
+  }
+
+  for (const record of resolved) {
+    if (isPrivateOrReservedIP(record.address)) {
+      throw new Error(`Access denied: Destination address ${record.address} resolves to a restricted network range`);
+    }
+  }
+
+  // Fetch with axios: strictly disable redirects and impose size/time limits
+  const response = await axios.get(urlStr, {
+    responseType: 'arraybuffer',
+    timeout: 15000,
+    maxRedirects: 0, // Prevent redirect-based SSRF
+    maxContentLength: 15 * 1024 * 1024 // 15 MB limit
+  });
+
+  return Buffer.from(response.data);
+}
+
+/**
+ * Safely resolve local report files strictly confined within the uploads directory
+ */
+async function resolveLocalReportFile(fileUrl) {
+  const safeUploadsDir = path.resolve(__dirname, '../../uploads/patient-reports');
+
+  let filename = null;
+  const reportsMatch = fileUrl.match(/\/api\/patients\/reports\/([^?#]+)/);
+  const uploadsMatch = fileUrl.match(/\/uploads\/patient-reports\/([^?#]+)/);
+
+  if (reportsMatch) {
+    filename = decodeURIComponent(reportsMatch[1]);
+  } else if (uploadsMatch) {
+    filename = decodeURIComponent(uploadsMatch[1]);
+  } else if (!fileUrl.includes('/') && !fileUrl.includes('\\') && !fileUrl.startsWith('.')) {
+    filename = fileUrl;
+  }
+
+  if (!filename) {
+    return null;
+  }
+
+  const safeFilename = path.basename(filename);
+  const candidate = path.resolve(safeUploadsDir, safeFilename);
+
+  // Path traversal check
+  if (!candidate.startsWith(safeUploadsDir) || safeFilename.includes('..') || safeFilename !== filename) {
+    throw new Error('Access denied: Invalid local file path');
+  }
+
+  if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+    return await fs.promises.readFile(candidate);
+  }
+
+  return null;
+}
+
+/**
+ * Universal file buffer fetcher: handles base64 data URIs, safe local disk files,
+ * and allowlisted remote HTTPS URLs with strict SSRF controls.
  */
 async function fetchFileBuffer(fileUrl) {
-  if (!fileUrl) throw new Error('File URL is required');
+  if (!fileUrl || typeof fileUrl !== 'string') {
+    throw new Error('File URL string is required');
+  }
 
-  // Case 1: Data URL (base64)
-  if (typeof fileUrl === 'string' && fileUrl.startsWith('data:')) {
-    const base64Index = fileUrl.indexOf(';base64,');
+  const cleanUrl = fileUrl.trim();
+
+  // Case 1: Base64 data URL
+  if (cleanUrl.startsWith('data:')) {
+    const base64Index = cleanUrl.indexOf(';base64,');
     if (base64Index !== -1) {
-      return Buffer.from(fileUrl.substring(base64Index + 8), 'base64');
+      return Buffer.from(cleanUrl.substring(base64Index + 8), 'base64');
     }
-    const commaIndex = fileUrl.indexOf(',');
-    return Buffer.from(fileUrl.substring(commaIndex + 1), 'base64');
+    const commaIndex = cleanUrl.indexOf(',');
+    return Buffer.from(cleanUrl.substring(commaIndex + 1), 'base64');
   }
 
-  const cleanUrl = String(fileUrl).trim();
-
-  // Case 2: Check local filesystem directories
-  const candidatePaths = [];
-
-  // Match /api/patients/reports/:filename
-  const reportsMatch = cleanUrl.match(/\/api\/patients\/reports\/([^?#]+)/);
-  if (reportsMatch) {
-    const filename = decodeURIComponent(reportsMatch[1]);
-    candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', filename));
-    candidatePaths.push(path.join(__dirname, '../../../uploads/patient-reports', filename));
-    candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', filename));
-  }
-
-  // Match /uploads/...
-  const uploadsMatch = cleanUrl.match(/\/uploads\/patient-reports\/([^?#]+)/) || cleanUrl.match(/\/uploads\/([^?#]+)/);
-  if (uploadsMatch) {
-    const filename = decodeURIComponent(uploadsMatch[1]);
-    candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', filename));
-    candidatePaths.push(path.join(__dirname, '../../uploads', filename));
-    candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', filename));
-    candidatePaths.push(path.join(process.cwd(), 'uploads', filename));
-  }
-
-  // Direct paths
-  candidatePaths.push(cleanUrl);
-  candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', path.basename(cleanUrl)));
-  candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', path.basename(cleanUrl)));
-  candidatePaths.push(path.join(__dirname, '../../uploads', path.basename(cleanUrl)));
-  candidatePaths.push(path.join(process.cwd(), 'uploads', path.basename(cleanUrl)));
-
-  for (const p of candidatePaths) {
-    try {
-      if (p && fs.existsSync(p) && fs.statSync(p).isFile()) {
-        return await fs.promises.readFile(p);
-      }
-    } catch (e) {
-      // Continue searching
-    }
-  }
-
-  // Case 3: HTTP/HTTPS URL
+  // Case 2: Remote HTTPS URL with SSRF Protection
   if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-    try {
-      const response = await axios.get(cleanUrl, { responseType: 'arraybuffer', timeout: 30000 });
-      return Buffer.from(response.data, 'binary');
-    } catch (netErr) {
-      // If localhost or local server, try falling back to local disk
-      const urlBaseName = path.basename(cleanUrl.split('?')[0]);
-      const fallbackLocal = path.join(__dirname, '../../uploads/patient-reports', urlBaseName);
-      if (fs.existsSync(fallbackLocal)) {
-        return await fs.promises.readFile(fallbackLocal);
-      }
-      throw new Error(`Failed to fetch report from URL: ${netErr.message}`);
-    }
+    return await validateAndFetchRemoteUrl(cleanUrl);
   }
 
-  // Case 4: Relative path with '/'
-  if (cleanUrl.startsWith('/')) {
-    const port = process.env.PORT || 3000;
-    try {
-      const response = await axios.get(`http://localhost:${port}${cleanUrl}`, { responseType: 'arraybuffer', timeout: 15000 });
-      return Buffer.from(response.data, 'binary');
-    } catch (e) {
-      throw new Error(`Unable to load report file: ${cleanUrl}`);
-    }
+  // Case 3: Confined local report file
+  const localBuffer = await resolveLocalReportFile(cleanUrl);
+  if (localBuffer) {
+    return localBuffer;
   }
 
-  throw new Error(`Report file not found or inaccessible: ${fileUrl}`);
+  throw new Error(`Report file not found or inaccessible: ${cleanUrl}`);
 }
 
 // Configure Multer for memory storage (Required for ImageKit)
@@ -127,6 +239,12 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
 
     if (!file) {
       return res.status(400).json({ success: false, message: "No report file uploaded." });
+    }
+
+    const validateFileType = require('../utils/validateFileType');
+    const typeErr = await validateFileType(file, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+    if (typeErr) {
+      return res.status(400).json({ success: false, message: typeErr });
     }
 
     const Appointment = require('../models/appointment.model');
@@ -174,9 +292,10 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
     };
 
     const uniqueTag = targetPatientId || appointmentId || 'pt';
+    const safeOriginalName = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
     const result = await imagekit.upload({
       file: file.buffer,
-      fileName: `report_${uniqueTag}_${Date.now()}_${file.originalname}`,
+      fileName: `report_${uniqueTag}_${Date.now()}_${safeOriginalName}`,
       folder: "/appointment-reports",
       tags: ['appointment_report', file.mimetype]
     });
@@ -438,9 +557,16 @@ router.post('/summary', verifyToken, async (req, res) => {
 
   } catch (error) {
     console.error('[Generate Summary Route] Error:', error);
-    res.status(500).json({
+    const msg = error.message || "Failed to generate AI summary.";
+    const isClientErr = msg.includes('Access denied:') ||
+                        msg.includes('Report file not found') ||
+                        msg.includes('Unable to resolve') ||
+                        msg.includes('Only secure HTTPS') ||
+                        msg.includes('restricted network range') ||
+                        msg.includes('storage allowlist');
+    res.status(isClientErr ? 400 : 500).json({
       success: false,
-      message: error.message || "Failed to generate AI summary."
+      message: msg
     });
   }
 });
