@@ -118,6 +118,73 @@ const CentralAdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('hospitals');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [copiedFreeOpdUrl, setCopiedFreeOpdUrl] = useState(false);
+    const [freeOpdSearch, setFreeOpdSearch] = useState('');
+    const [freeOpdPage, setFreeOpdPage] = useState(1);
+    const [copiedClinicSlug, setCopiedClinicSlug] = useState(null);
+    const FREE_OPD_PER_PAGE = 9;
+    const FREE_OPD_SIGNUP_URL = 'https://medical365.in/free-opd-signup';
+
+    const handleCopyFreeOpdUrl = () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(FREE_OPD_SIGNUP_URL)
+                .then(() => {
+                    setCopiedFreeOpdUrl(true);
+                    setTimeout(() => setCopiedFreeOpdUrl(false), 2500);
+                })
+                .catch(() => {
+                    const el = document.createElement('input');
+                    el.value = FREE_OPD_SIGNUP_URL;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    setCopiedFreeOpdUrl(true);
+                    setTimeout(() => setCopiedFreeOpdUrl(false), 2500);
+                });
+        } else {
+            const el = document.createElement('input');
+            el.value = FREE_OPD_SIGNUP_URL;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            setCopiedFreeOpdUrl(true);
+            setTimeout(() => setCopiedFreeOpdUrl(false), 2500);
+        }
+    };
+
+    const handleOpenFreeOpdSignup = () => {
+        window.open(FREE_OPD_SIGNUP_URL, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleCopyClinicUrl = (e, slug) => {
+        e.stopPropagation();
+        const baseHost = getBaseHost();
+        const fullUrl = `https://${slug}.${baseHost}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(fullUrl).then(() => {
+                setCopiedClinicSlug(slug);
+                setTimeout(() => setCopiedClinicSlug(null), 2000);
+            });
+        } else {
+            const el = document.createElement('input');
+            el.value = fullUrl;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            setCopiedClinicSlug(slug);
+            setTimeout(() => setCopiedClinicSlug(null), 2000);
+        }
+    };
+
+    const handleOpenClinicUrl = (e, slug) => {
+        e.stopPropagation();
+        const baseHost = getBaseHost();
+        const fullUrl = `https://${slug}.${baseHost}`;
+        window.open(fullUrl, '_blank', 'noopener,noreferrer');
+    };
 
     // Hospital list
     const [hospitals, setHospitals] = useState([]);
@@ -223,6 +290,7 @@ const CentralAdminDashboard = () => {
         if (tab === 'multi-speciality') return 'multi_speciality_starter';
         if (tab === 'clinic-basic') return 'clinic_basic';
         if (tab === 'simple-clinics') return 'starter';
+        if (tab === 'free-doctor-opd') return 'free_doctor_opd';
         return 'enterprise';
     };
 
@@ -376,6 +444,8 @@ const CentralAdminDashboard = () => {
         } else if (activeTab === 'simple-clinics') {
             fetchClinics(plan);
             fetchRoles(plan);
+        } else if (activeTab === 'free-doctor-opd') {
+            fetchClinics('free_doctor_opd', true);
         } else if (activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') {
             fetchHospitals(plan);
             fetchRoles(plan);
@@ -966,6 +1036,17 @@ const CentralAdminDashboard = () => {
             icon: (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+            )
+        },
+        { 
+            id: 'free-doctor-opd', 
+            name: 'Free Doctor OPD', 
+            label: 'Free Doctor OPD', 
+            desc: 'Single Doctor OPD Plan', 
+            icon: (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
             )
         },
@@ -3983,6 +4064,409 @@ const CentralAdminDashboard = () => {
                                 <button onClick={() => handleDeleteClinic(deleteClinicConfirm)} className="btn-confirm-delete">Delete</button>
                                 <button onClick={() => setDeleteClinicConfirm(null)} className="btn-cancel">Cancel</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ========== FREE DOCTOR OPD TAB ========== */}
+                {activeTab === 'free-doctor-opd' && !selectedClinic && (
+                    <div key={activeTab} className="cad-featured-plan-section cad-tab-content-anim">
+                        {/* Section Header */}
+                        <div className="cad-plan-header-row">
+                            <div className="cad-plan-title-col">
+                                <div className="cad-plan-badge-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <h2 className="cad-plan-section-title" style={{ margin: 0 }}>Free Doctor OPD</h2>
+                                        <span style={{ 
+                                            background: '#dcfce7', 
+                                            color: '#15803d', 
+                                            border: '1px solid #86efac', 
+                                            padding: '2px 10px', 
+                                            borderRadius: '12px', 
+                                            fontSize: '12px', 
+                                            fontWeight: 700, 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            gap: '5px' 
+                                        }}>
+                                            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+                                            Status: Active
+                                        </span>
+                                    </div>
+                                    <p className="cad-plan-section-sub">Zero-cost dedicated OPD management for single practitioners with automated public signup.</p>
+                                </div>
+                            </div>
+                            <div className="cad-plan-actions-row">
+                                <button 
+                                    className="cad-btn-secondary"
+                                    onClick={handleCopyFreeOpdUrl}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                    title="Copy Public Signup URL"
+                                >
+                                    {copiedFreeOpdUrl ? '✅ Copied!' : '📋 Copy URL'}
+                                </button>
+                                <button 
+                                    className="cad-btn-primary"
+                                    onClick={handleOpenFreeOpdSignup}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <span>↗ Open Signup Page</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Plan Details & Provision Cards Grid */}
+                        <div className="cad-plan-cards-grid">
+                            {/* Left Card: Operational Specifications */}
+                            <div className="cad-plan-info-card" style={{ borderColor: '#a7f3d0' }}>
+                                <div className="cad-info-card-header">
+                                    <h3 className="cad-info-plan-name" style={{ color: '#065f46' }}>Free Doctor OPD</h3>
+                                    <span className="cad-info-plan-price" style={{ color: '#059669', fontSize: '1.15rem' }}>₹0</span>
+                                    <span style={{ marginLeft: 'auto', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                                        Active
+                                    </span>
+                                </div>
+                                <h4 className="cad-info-provision-heading" style={{ color: '#047857' }}>Plan Provision & Limits</h4>
+                                <div className="cad-info-features-grid">
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Plan Price:</strong> ₹0</span>
+                                    </div>
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Doctors:</strong> 1</span>
+                                    </div>
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Staff:</strong> 0</span>
+                                    </div>
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Appointments:</strong> 20 per day</span>
+                                    </div>
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Patients:</strong> Unlimited</span>
+                                    </div>
+                                    <div className="cad-feature-item">
+                                        <span style={{ color: '#059669', fontWeight: 800 }}>✓</span> 
+                                        <span><strong>Status:</strong> Active</span>
+                                    </div>
+                                </div>
+                                <div className="cad-shield-watermark" style={{ opacity: 0.2 }}>
+                                    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                        <path d="m9 12 2 2 4-4" stroke="#059669" strokeWidth="2"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            {/* Right Card: Public Self-Service Signup Details */}
+                            <div className="cad-addon-card" style={{ borderColor: '#a7f3d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' }}>
+                                <div className="cad-addon-content-col" style={{ width: '100%' }}>
+                                    <div className="cad-addon-tag" style={{ background: '#dcfce7', color: '#166534', borderColor: '#86efac' }}>
+                                        <span className="cad-addon-sparkle">🌐</span>
+                                        <span className="cad-addon-tag-text">PUBLIC SELF-SERVICE SIGNUP</span>
+                                    </div>
+                                    <p style={{ fontSize: '13px', color: '#475569', margin: '10px 0 8px', lineHeight: 1.5 }}>
+                                        Doctors can self-signup at the public registration link. Subdomain, doctor credentials, and 20/day OPD quota are automatically configured.
+                                    </p>
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '8px', 
+                                        background: '#ffffff', 
+                                        border: '1px solid #cbd5e1', 
+                                        padding: '8px 12px', 
+                                        borderRadius: '8px',
+                                        marginTop: '4px',
+                                        wordBreak: 'break-all'
+                                    }}>
+                                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', flex: 1, fontFamily: 'monospace' }}>
+                                            https://medical365.in/free-opd-signup
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={handleCopyFreeOpdUrl}
+                                            className="cad-btn-secondary" 
+                                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
+                                        >
+                                            {copiedFreeOpdUrl ? '✅ URL Copied' : '📋 Copy URL'}
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={handleOpenFreeOpdSignup}
+                                            className="cad-btn-primary" 
+                                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600 }}
+                                        >
+                                            ↗ Open Signup Page
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Clinics Registered Under Free Doctor OPD */}
+                        <div style={{ marginTop: '28px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#1e293b' }}>
+                                        Registered Free Doctor OPD Clinics
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                                        Audited list of single doctor clinics under the Free Doctor OPD plan
+                                    </p>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <div style={{ position: 'relative', width: '280px' }}>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search clinic, doctor, email..." 
+                                            value={freeOpdSearch} 
+                                            onChange={(e) => { setFreeOpdSearch(e.target.value); setFreeOpdPage(1); }} 
+                                            style={{ 
+                                                width: '100%', 
+                                                padding: '7px 32px 7px 12px', 
+                                                borderRadius: '8px', 
+                                                border: '1px solid #cbd5e1', 
+                                                fontSize: '13px', 
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }} 
+                                        />
+                                        {freeOpdSearch ? (
+                                            <button 
+                                                onClick={() => { setFreeOpdSearch(''); setFreeOpdPage(1); }} 
+                                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}
+                                                title="Clear search"
+                                            >
+                                                ✕
+                                            </button>
+                                        ) : (
+                                            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none', fontSize: '13px' }}>
+                                                🔍
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button 
+                                        className="btn-edit" 
+                                        onClick={() => fetchClinics('free_doctor_opd', true)} 
+                                        style={{ padding: '7px 14px', fontSize: '12px' }}
+                                    >
+                                        ↻ Refresh
+                                    </button>
+                                </div>
+                            </div>
+
+                            {loadingClinics ? (
+                                <div className="loading-message">⏳ Loading Free Doctor OPD clinics...</div>
+                            ) : (() => {
+                                const allFreeClinics = clinics.filter(c => c.subscriptionPlan === 'free_doctor_opd');
+                                
+                                if (allFreeClinics.length === 0) {
+                                    return (
+                                        <div className="cad-empty-banner">
+                                            <span className="cad-empty-icon">🎁</span>
+                                            <span>No Free Doctor OPD clinics registered yet. Newly registered clinics from <a href="https://medical365.in/free-opd-signup" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: 600 }}>https://medical365.in/free-opd-signup</a> will appear here automatically.</span>
+                                        </div>
+                                    );
+                                }
+
+                                const filteredFreeClinics = allFreeClinics.filter(c => {
+                                    if (!freeOpdSearch.trim()) return true;
+                                    const q = freeOpdSearch.toLowerCase().trim();
+                                    const cName = (c.name || '').toLowerCase();
+                                    const dName = (c.adminUserId?.name || '').toLowerCase();
+                                    const dEmail = (c.adminUserId?.email || c.email || '').toLowerCase();
+                                    const dPhone = (c.adminUserId?.phone || c.phone || '').toLowerCase();
+                                    const cSlug = (c.slug || '').toLowerCase();
+                                    return cName.includes(q) || dName.includes(q) || dEmail.includes(q) || dPhone.includes(q) || cSlug.includes(q);
+                                }).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+                                if (filteredFreeClinics.length === 0) {
+                                    return (
+                                        <div className="cad-empty-banner">
+                                            <span className="cad-empty-icon">🔍</span>
+                                            <span>No clinics matching "<strong>{freeOpdSearch}</strong>". <button onClick={() => { setFreeOpdSearch(''); setFreeOpdPage(1); }} style={{ background: 'none', border: 'none', color: '#059669', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}>Clear search</button></span>
+                                        </div>
+                                    );
+                                }
+
+                                const totalPages = Math.ceil(filteredFreeClinics.length / FREE_OPD_PER_PAGE) || 1;
+                                const paginatedClinics = filteredFreeClinics.slice(
+                                    (freeOpdPage - 1) * FREE_OPD_PER_PAGE,
+                                    freeOpdPage * FREE_OPD_PER_PAGE
+                                );
+
+                                return (
+                                    <>
+                                        <div className="cad-hospitals-grid">
+                                            {paginatedClinics.map(clinic => (
+                                                <div key={clinic._id} className="cad-hospital-card" onClick={() => openClinicDetail(clinic)}>
+                                                    <div className="cad-hospital-card-header">
+                                                        <div className="cad-hospital-logo-box" style={{ background: '#ecfdf5', color: '#059669' }}>
+                                                            <span style={{ fontSize: '22px' }}>🩺</span>
+                                                        </div>
+                                                        <div className="cad-hospital-info">
+                                                            {/* 1. Clinic Name */}
+                                                            <h3 className="cad-hospital-name">{clinic.name}</h3>
+                                                            <p className="cad-hospital-tagline">
+                                                                {clinic.city ? (clinic.city + (clinic.state ? (', ' + clinic.state) : '')) : (clinic.address || 'OPD Clinic')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="cad-hospital-meta-list" style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        {/* 2. Doctor Name */}
+                                                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 600 }}>
+                                                            👤 Doctor: <span style={{ color: '#16a34a' }}>{clinic.adminUserId?.name || 'Primary Practitioner'}</span>
+                                                        </div>
+
+                                                        {/* 3. Doctor Email */}
+                                                        <div style={{ fontSize: '12px', color: '#475569' }}>
+                                                            ✉️ Email: <span style={{ color: '#1e293b' }}>{clinic.adminUserId?.email || clinic.email || 'N/A'}</span>
+                                                        </div>
+
+                                                        {/* 4. Doctor Phone */}
+                                                        <div style={{ fontSize: '12px', color: '#475569' }}>
+                                                            📞 Phone: <span style={{ color: '#1e293b' }}>{clinic.adminUserId?.phone || clinic.phone || 'N/A'}</span>
+                                                        </div>
+
+                                                        {/* 5. Clinic Subdomain URL with working Copy URL & Open Clinic */}
+                                                        {clinic.slug && (
+                                                            <div style={{ marginTop: '4px', background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }} onClick={e => e.stopPropagation()}>
+                                                                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '2px' }}>CLINIC SUBDOMAIN:</div>
+                                                                <div style={{ fontSize: '12px', fontFamily: 'monospace', color: '#0284c7', fontWeight: 700, wordBreak: 'break-all' }}>
+                                                                    https://{clinic.slug}.{getBaseHost()}
+                                                                </div>
+                                                                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleCopyClinicUrl(e, clinic.slug)}
+                                                                        style={{ 
+                                                                            padding: '3px 8px', 
+                                                                            fontSize: '11px', 
+                                                                            fontWeight: 600, 
+                                                                            borderRadius: '5px', 
+                                                                            border: '1px solid #cbd5e1', 
+                                                                            background: '#ffffff', 
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        {copiedClinicSlug === clinic.slug ? '✅ Copied' : '📋 Copy URL'}
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleOpenClinicUrl(e, clinic.slug)}
+                                                                        style={{ 
+                                                                            padding: '3px 8px', 
+                                                                            fontSize: '11px', 
+                                                                            fontWeight: 600, 
+                                                                            borderRadius: '5px', 
+                                                                            border: 'none', 
+                                                                            background: '#0284c7', 
+                                                                            color: '#ffffff', 
+                                                                            cursor: 'pointer',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        ↗ Open Clinic
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 6. Registration Date */}
+                                                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                                            📅 Registered: <strong style={{ color: '#334155' }}>
+                                                                {clinic.createdAt 
+                                                                    ? new Date(clinic.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                                                                    : 'N/A'}
+                                                            </strong>
+                                                        </div>
+
+                                                        {/* 7. Clinic Status & Plan Badge */}
+                                                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                                                                🎁 Free Doctor OPD
+                                                            </span>
+                                                            <span style={{ 
+                                                                display: 'inline-block', 
+                                                                padding: '2px 8px', 
+                                                                borderRadius: '4px', 
+                                                                background: clinic.isActive === false ? '#fef2f2' : '#f0fdf4', 
+                                                                color: clinic.isActive === false ? '#dc2626' : '#16a34a', 
+                                                                fontSize: '11px', 
+                                                                fontWeight: 700,
+                                                                border: clinic.isActive === false ? '1px solid #fecaca' : '1px solid #bbf7d0'
+                                                            }}>
+                                                                {clinic.isActive === false ? '● Inactive' : '● Active'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Pagination Controls */}
+                                        {totalPages > 1 && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '12px 16px', background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '10px' }}>
+                                                <span style={{ fontSize: '13px', color: '#64748b' }}>
+                                                    Showing <strong>{((freeOpdPage - 1) * FREE_OPD_PER_PAGE) + 1}</strong> to <strong>{Math.min(freeOpdPage * FREE_OPD_PER_PAGE, filteredFreeClinics.length)}</strong> of <strong>{filteredFreeClinics.length}</strong> clinics
+                                                </span>
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <button
+                                                        onClick={() => setFreeOpdPage(p => Math.max(1, p - 1))}
+                                                        disabled={freeOpdPage === 1}
+                                                        style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: freeOpdPage === 1 ? '#f1f5f9' : '#ffffff', cursor: freeOpdPage === 1 ? 'not-allowed' : 'pointer' }}
+                                                    >
+                                                        ← Previous
+                                                    </button>
+                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                                                        <button
+                                                            key={p}
+                                                            onClick={() => setFreeOpdPage(p)}
+                                                            style={{ 
+                                                                padding: '6px 12px', 
+                                                                fontSize: '12px', 
+                                                                borderRadius: '6px', 
+                                                                border: '1px solid',
+                                                                borderColor: freeOpdPage === p ? '#059669' : '#cbd5e1', 
+                                                                background: freeOpdPage === p ? '#059669' : '#ffffff', 
+                                                                color: freeOpdPage === p ? '#ffffff' : '#334155', 
+                                                                fontWeight: freeOpdPage === p ? 700 : 500,
+                                                                cursor: 'pointer' 
+                                                            }}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        onClick={() => setFreeOpdPage(p => Math.min(totalPages, p + 1))}
+                                                        disabled={freeOpdPage === totalPages}
+                                                        style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: freeOpdPage === totalPages ? '#f1f5f9' : '#ffffff', cursor: freeOpdPage === totalPages ? 'not-allowed' : 'pointer' }}
+                                                    >
+                                                        Next →
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
