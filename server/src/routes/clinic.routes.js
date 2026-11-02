@@ -396,7 +396,7 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
             patientUid,
             name: name.trim(),
             phone: cleanPhone,
-            email: email ? email.trim() : '',
+            email: email && String(email).trim() ? String(email).trim().toLowerCase() : undefined,
             age: cleanAge ? Number(cleanAge) : 1,
             aadhaarNumber: cleanAadhaar || undefined,
             dob: dob ? new Date(dob) : null,

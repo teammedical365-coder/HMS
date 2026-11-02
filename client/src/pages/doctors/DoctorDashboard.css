@@ -14,7 +14,7 @@
   justify-content: flex-start;
   min-height: calc(100vh - 76px);
   background: #f8fafc;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 /* --- 1. HERO BANNER (Full Bleed, Sleek Midnight Tech Navy, Seamless Doctor Neural Art) --- */
@@ -327,26 +327,28 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .doc-permission-pill {
-  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
   border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
   user-select: none;
   cursor: default;
   pointer-events: none;
+  min-width: 0;
 }
 
 .doc-permission-icon-circle {
@@ -365,7 +367,8 @@
   font-size: 0.84rem;
   font-weight: 700;
   color: #0f172a;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* --- RESPONSIVE ADJUSTMENTS --- */

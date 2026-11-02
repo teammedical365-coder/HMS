@@ -125,14 +125,10 @@ const App = () => {
         // Auto-detect any scrollable container with overflow-y auto/scroll
         let current = node;
         while (current && current !== document.body && current !== document.documentElement) {
-          if (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) {
+          if (current.scrollHeight > current.clientHeight + 2) {
             const style = window.getComputedStyle(current);
             const overflowY = style.overflowY;
-            const overflowX = style.overflowX;
-            if (
-              overflowY === 'auto' || overflowY === 'scroll' ||
-              overflowX === 'auto' || overflowX === 'scroll'
-            ) {
+            if (overflowY === 'auto' || overflowY === 'scroll') {
               return true;
             }
           }

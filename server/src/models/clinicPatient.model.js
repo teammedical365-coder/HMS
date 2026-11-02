@@ -83,9 +83,21 @@ const clinicPatientSchema = new mongoose.Schema({
 clinicPatientSchema.index({ clinicId: 1, patientUid: 1 }, { unique: true });
 // phone unique per clinic
 clinicPatientSchema.index({ clinicId: 1, phone: 1 }, { unique: true });
-// email unique per clinic
-clinicPatientSchema.index({ clinicId: 1, email: 1 }, { unique: true, sparse: true });
-// aadhaarNumber unique per clinic
-clinicPatientSchema.index({ clinicId: 1, aadhaarNumber: 1 }, { unique: true, sparse: true });
+// email unique per clinic only when non-empty string
+clinicPatientSchema.index(
+    { clinicId: 1, email: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { email: { $type: 'string', $gt: '' } }
+    }
+);
+// aadhaarNumber unique per clinic only when non-empty string
+clinicPatientSchema.index(
+    { clinicId: 1, aadhaarNumber: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { aadhaarNumber: { $type: 'string', $gt: '' } }
+    }
+);
 
 module.exports = mongoose.model('ClinicPatient', clinicPatientSchema);

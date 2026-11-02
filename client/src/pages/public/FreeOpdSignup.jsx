@@ -296,11 +296,11 @@ const FreeOpdSignup = () => {
         <div className="fos-page-wrapper">
             {/* Top Brand Bar */}
             <header className="fos-brand-bar">
-                <a href="/login" className="fos-logo-container">
+                <a href="https://medical365.in" className="fos-logo-container">
                     <div className="fos-logo-symbol">🏥</div>
                     <div className="fos-logo-text">Medical<span>365</span></div>
                 </a>
-                <a href="/login" className="fos-nav-link">
+                <a href="https://medical365.in/login" className="fos-nav-link">
                     Already registered? Sign In →
                 </a>
             </header>

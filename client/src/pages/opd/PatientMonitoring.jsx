@@ -134,12 +134,29 @@ const PatientMonitoring = () => {
             return;
         }
 
+        const cleanEmail = regForm.email && regForm.email.trim() ? regForm.email.trim().toLowerCase() : undefined;
+        if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+            setRegError('Please enter a valid email address');
+            return;
+        }
+
+        let ageNum = undefined;
+        if (regForm.age !== '' && regForm.age !== null && regForm.age !== undefined) {
+            ageNum = Number(regForm.age);
+            if (isNaN(ageNum) || ageNum < 1 || ageNum > 125) {
+                setRegError('Please enter a valid age between 1 and 125 years');
+                return;
+            }
+        }
+
         setRegistering(true);
         try {
             const payload = {
                 ...regForm,
+                name: regForm.name.trim(),
                 phone: cleanedPhone,
-                age: regForm.age ? Number(regForm.age) : undefined
+                email: cleanEmail,
+                age: ageNum
             };
             const res = await freeOpdAPI.registerPatient(payload);
             if (res.success) {
@@ -359,7 +376,7 @@ const PatientMonitoring = () => {
                ───────────────────────────────────────────────────────────── */}
             {showRegisterModal && (
                 <div className="pm-modal-overlay">
-                    <div className="pm-modal-card">
+                    <div className="pm-modal-card" role="dialog" aria-modal="true" data-scrollable="true">
                         <div className="pm-modal-header">
                             <h3 className="pm-modal-title">Register New Patient</h3>
                             <button
@@ -372,7 +389,7 @@ const PatientMonitoring = () => {
                         </div>
 
                         <form onSubmit={handleRegisterSubmit}>
-                            <div className="pm-modal-body">
+                            <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
                                 {regError && (
                                     <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
                                         ⚠ {regError}
@@ -400,8 +417,25 @@ const PatientMonitoring = () => {
                                             placeholder="9876543210"
                                             maxLength="10"
                                             value={regForm.phone}
-                                            onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })}
+                                            onChange={(e) => {
+                                                setRegError('');
+                                                setRegForm({ ...regForm, phone: e.target.value });
+                                            }}
                                             required
+                                        />
+                                    </div>
+
+                                    <div className="pm-form-group">
+                                        <label className="pm-label">Email Address (Optional)</label>
+                                        <input
+                                            type="email"
+                                            className="pm-input"
+                                            placeholder="patient@example.com"
+                                            value={regForm.email}
+                                            onChange={(e) => {
+                                                setRegError('');
+                                                setRegForm({ ...regForm, email: e.target.value });
+                                            }}
                                         />
                                     </div>
 
@@ -512,7 +546,7 @@ const PatientMonitoring = () => {
                ───────────────────────────────────────────────────────────── */}
             {selectedPatientId && (
                 <div className="pm-modal-overlay">
-                    <div className="pm-modal-card pm-modal-large">
+                    <div className="pm-modal-card pm-modal-large" role="dialog" aria-modal="true" data-scrollable="true">
                         <div className="pm-modal-header">
                             <h3 className="pm-modal-title">Patient Profile & Clinical Record</h3>
                             <button
@@ -524,7 +558,7 @@ const PatientMonitoring = () => {
                             </button>
                         </div>
 
-                        <div className="pm-modal-body">
+                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
                             {loadingDetails || !patientDetails ? (
                                 <div className="pm-empty-state">Loading patient records...</div>
                             ) : (

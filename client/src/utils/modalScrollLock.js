@@ -104,9 +104,9 @@ export const initModalScrollLock = () => {
   const handleWheel = (e) => {
     if (!isLocked) return;
 
-    // Check if target is inside an inner scrollable element (e.g. dropdown, textarea, table)
+    // Check if target is inside an inner scrollable element (e.g. dropdown, textarea, table, modal body)
     const innerScrollable = e.target.closest(
-      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"]'
+      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
     );
     if (innerScrollable) {
       // Allow inner scrollable elements to scroll freely with mouse wheel
@@ -115,7 +115,7 @@ export const initModalScrollLock = () => {
 
     // Check if target is inside a scrollable modal container
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"]'
+      '.pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
     );
 
     // If mouse is directly on the blurred backdrop or non-scrollable area outside modal, stop scroll completely
@@ -147,12 +147,12 @@ export const initModalScrollLock = () => {
   const handleTouchMove = (e) => {
     if (!isLocked) return;
     const innerScrollable = e.target.closest(
-      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"]'
+      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
     );
     if (innerScrollable) return;
 
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"]'
+      '.pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
     );
     if (!scrollableModal) {
       e.preventDefault();

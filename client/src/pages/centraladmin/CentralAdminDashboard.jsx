@@ -123,7 +123,7 @@ const CentralAdminDashboard = () => {
     const [freeOpdPage, setFreeOpdPage] = useState(1);
     const [copiedClinicSlug, setCopiedClinicSlug] = useState(null);
     const FREE_OPD_PER_PAGE = 9;
-    const FREE_OPD_SIGNUP_URL = 'https://medical365.in/signup';
+    const FREE_OPD_SIGNUP_URL = 'https://signup.medical365.in';
 
     const handleCopyFreeOpdUrl = () => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -4189,7 +4189,7 @@ const CentralAdminDashboard = () => {
                                         wordBreak: 'break-all'
                                     }}>
                                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', flex: 1, fontFamily: 'monospace' }}>
-                                            https://medical365.in/signup
+                                            https://signup.medical365.in
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
@@ -4275,7 +4275,7 @@ const CentralAdminDashboard = () => {
                                     return (
                                         <div className="cad-empty-banner">
                                             <span className="cad-empty-icon">🎁</span>
-                                            <span>No Free Doctor OPD clinics registered yet. Newly registered clinics from <a href="https://medical365.in/signup" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: 600 }}>https://medical365.in/signup</a> will appear here automatically.</span>
+                                            <span>No Free Doctor OPD clinics registered yet. Newly registered clinics from <a href="https://signup.medical365.in" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: 600 }}>https://signup.medical365.in</a> will appear here automatically.</span>
                                         </div>
                                     );
                                 }

@@ -233,7 +233,15 @@ async function registerPatient({
         throw new Error('Valid 10-digit phone number is required');
     }
 
-    // Check if patient already exists in this clinic
+    const cleanEmail = (email && typeof email === 'string' && email.trim().length > 0)
+        ? email.trim().toLowerCase()
+        : undefined;
+
+    if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+        throw new Error('Please enter a valid email address');
+    }
+
+    // Check if patient already exists in this clinic by phone
     let existing = await ClinicPatient.findOne({ clinicId: hospitalId, phone: cleanPhone });
     if (existing) {
         return {
@@ -241,6 +249,18 @@ async function registerPatient({
             existing: true,
             message: `Patient with phone ${cleanPhone} is already registered (${existing.patientUid})`
         };
+    }
+
+    // Check if patient already exists in this clinic by email
+    if (cleanEmail) {
+        const existingEmail = await ClinicPatient.findOne({ clinicId: hospitalId, email: cleanEmail });
+        if (existingEmail) {
+            return {
+                patient: existingEmail,
+                existing: true,
+                message: `Patient with email ${cleanEmail} is already registered (${existingEmail.patientUid})`
+            };
+        }
     }
 
     // Generate unique patientUid
@@ -260,7 +280,7 @@ async function registerPatient({
         patientUid,
         name: name.trim(),
         phone: cleanPhone,
-        email: email ? email.trim() : undefined,
+        email: cleanEmail,
         gender: gender || 'Male',
         age: (age && Number(age) > 0) ? Number(age) : 1,
         dob: dob ? new Date(dob) : undefined,

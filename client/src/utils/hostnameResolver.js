@@ -22,6 +22,7 @@ import { baseURL } from './api';
 // ── Portal Type Constants ────────────────────────────────────────────────────
 export const PORTAL_TYPES = Object.freeze({
     ADMIN: 'ADMIN',
+    SIGNUP: 'SIGNUP',
     HOSPITAL: 'HOSPITAL',
     CUSTOM_DOMAIN: 'CUSTOM_DOMAIN',
     DEVELOPMENT: 'DEVELOPMENT',
@@ -33,6 +34,7 @@ export const PORTAL_TYPES = Object.freeze({
 // ── Configuration ────────────────────────────────────────────────────────────
 const ADMIN_HOST = (import.meta.env.VITE_ADMIN_HOST || 'admin.medical365.in').toLowerCase();
 const BASE_DOMAIN = (import.meta.env.VITE_BASE_DOMAIN || 'medical365.in').toLowerCase();
+const SIGNUP_HOST = (import.meta.env.VITE_SIGNUP_HOST || `signup.${BASE_DOMAIN}`).toLowerCase();
 
 // Hosts that represent the platform itself (not a hospital)
 const PLATFORM_HOSTS = new Set([
@@ -90,6 +92,11 @@ export function resolveHostnameSync(hostname) {
     // 2. Exact admin hostname match
     if (h === ADMIN_HOST) {
         return { type: PORTAL_TYPES.ADMIN, tenantData: null };
+    }
+
+    // 2b. Exact dedicated signup hostname match (signup.medical365.in)
+    if (h === SIGNUP_HOST || h === `signup.${BASE_DOMAIN}`) {
+        return { type: PORTAL_TYPES.SIGNUP, tenantData: null };
     }
 
     // 3. Platform base domains (medical365.in, www.medical365.in)
@@ -261,4 +268,11 @@ export function useHostnameResolver() {
  */
 export function clearResolutionCache() {
     resolutionCache.clear();
+}
+
+/**
+ * Check if the portal is the dedicated signup portal (signup.medical365.in)
+ */
+export function isSignupPortal(portalType) {
+    return portalType === PORTAL_TYPES.SIGNUP;
 }

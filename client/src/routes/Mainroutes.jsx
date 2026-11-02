@@ -11,7 +11,7 @@ import RouteErrorBoundary from '../components/common/RouteErrorBoundary';
 import { useAuth } from '../store/hooks';
 import { getSubdomain } from '../utils/subdomain';
 import { prefetchRoutes } from '../utils/prefetch';
-import { useHostnameResolver, PORTAL_TYPES } from '../utils/hostnameResolver';
+import { useHostnameResolver, PORTAL_TYPES, isDevEnvironment, isSignupPortal } from '../utils/hostnameResolver';
 import InvalidPortalPage from '../pages/InvalidPortalPage';
 
 // ============================================================
@@ -342,6 +342,25 @@ const MainRoutes = () => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEDICATED SIGNUP PORTAL — signup.medical365.in
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (portalType === PORTAL_TYPES.SIGNUP) {
+        return (
+            <RouteErrorBoundary>
+                <Suspense fallback={<RouteLoadingFallback />}>
+                    <Routes>
+                        <Route path="/" element={<FreeOpdSignup />} />
+                        <Route path="/signup" element={<FreeOpdSignup />} />
+                        <Route path="/free-opd-signup" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </Suspense>
+            </RouteErrorBoundary>
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // VALID HOSTNAME — render routes based on portal type + auth state
     // ═══════════════════════════════════════════════════════════════════════════
     
@@ -575,8 +594,20 @@ const MainRoutes = () => {
                             } />
                             
                             {/* Legacy/Signups routing */}
-                            <Route path="/free-opd-signup" element={<Navigate to="/signup" replace />} />
-                            <Route path="/signup" element={<FreeOpdSignup />} />
+                            <Route path="/free-opd-signup" element={(() => {
+                                if (typeof window !== 'undefined' && !isDevEnvironment()) {
+                                    window.location.replace('https://signup.medical365.in');
+                                    return null;
+                                }
+                                return <FreeOpdSignup />;
+                            })()} />
+                            <Route path="/signup" element={(() => {
+                                if (typeof window !== 'undefined' && !isDevEnvironment()) {
+                                    window.location.replace('https://signup.medical365.in');
+                                    return null;
+                                }
+                                return <FreeOpdSignup />;
+                            })()} />
                             <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                             <Route path="/admin/signup" element={<AdminSignup />} />
                             
