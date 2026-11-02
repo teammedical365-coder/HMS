@@ -1,0 +1,233 @@
+/* DoctorPatientTray.css — Module 2 for Free Doctor OPD */
+
+.dpt-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* KPI Summary Cards */
+.dpt-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .dpt-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 500px) {
+    .dpt-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dpt-kpi-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dpt-kpi-num {
+    font-size: 26px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1;
+}
+
+.dpt-kpi-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.dpt-kpi-icon {
+    font-size: 28px;
+}
+
+/* Tray Layout (3 Columns: Waiting, In Consultation, Completed) */
+.dpt-tray-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+@media (max-width: 1024px) {
+    .dpt-tray-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dpt-column {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dpt-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 14px;
+}
+
+.dpt-column-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dpt-column-badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 9999px;
+}
+
+.dpt-badge-waiting {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.dpt-badge-active {
+    background: #e0f2fe;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+
+.dpt-badge-completed {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+/* Cards inside queue */
+.dpt-patient-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.dpt-patient-card:hover {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+}
+
+.dpt-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.dpt-patient-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.dpt-patient-time {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #0d9488;
+    background: #e6fffa;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.dpt-patient-meta {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 10px;
+}
+
+.dpt-card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.dpt-btn-start {
+    background: #14b8a6;
+    color: #ffffff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.dpt-btn-start:hover {
+    background: #0d9488;
+}
+
+.dpt-btn-cancel {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #ef4444;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.dpt-btn-cancel:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+/* Active Consultation Workspace in Column 2 */
+.dpt-active-workspace {
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.dpt-active-patient-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ccfbf1;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.dpt-active-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+}
+

@@ -55,8 +55,12 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
                 { subscriptionPlan: 'starter' },
                 { subscriptionPlan: 'none' },
                 { subscriptionPlan: { $exists: false } },
-                { clinicPlan: 'starter' }
+                { clinicPlan: 'starter' },
+                { subscriptionPlan: 'free_doctor_opd' }
             ];
+        } else if (plan === 'all') {
+            // Return all clinics regardless of plan
+            filter.clinicType = 'clinic';
         } else if (plan === 'clinic_basic') {
             filter.$or = [
                 { subscriptionPlan: 'clinic_basic' },

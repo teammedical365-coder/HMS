@@ -470,9 +470,180 @@ function renderEmailPreview({ type = 'otp', hospital = {}, recipientName = 'Dr. 
     };
 }
 
+/**
+ * Send welcome email to a doctor whose Free Doctor OPD Clinic has been created.
+ * This function NEVER throws — failures are logged silently so account creation is preserved.
+ *
+ * @param {Object} params
+ * @param {string} params.email
+ * @param {string} params.doctorName
+ * @param {string} params.clinicName
+ * @param {string} params.clinicUrl
+ * @param {string} params.loginUrl
+ * @param {string} [params.password]
+ */
+async function sendFreeOpdWelcomeEmail({ email, doctorName, clinicName, clinicUrl, loginUrl, password }) {
+    try {
+        if (!email) return;
+
+        if (isDemoRecipient(email)) {
+            console.log(`[email-service] [DEMO SAFEGUARD] Simulated Free Doctor OPD welcome email delivery for demo address: ${email}`);
+            return;
+        }
+
+        const cName = clinicName || 'Your OPD Clinic';
+        const dName = doctorName || 'Doctor';
+        const fromEmail = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@medical365.in';
+        const targetLoginUrl = loginUrl || clinicUrl || 'https://medical365.in/login';
+
+        const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:30px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:32px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#10b981;font-size:24px;font-weight:700;letter-spacing:0.5px;">
+                                Your Free Doctor OPD Clinic is Ready!
+                            </h1>
+                            <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">
+                                Congratulations on launching ${cName} on Medical365.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:32px 40px;">
+                            <p style="margin:0 0 20px;font-size:16px;color:#334155;line-height:1.6;">
+                                Dear <strong>${dName}</strong>,
+                            </p>
+                            <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+                                Your dedicated digital OPD workspace for <strong>${cName}</strong> has been provisioned and is active. You can now manage your daily appointments, consultations, prescriptions, and patient records with complete multi-tenant security.
+                            </p>
+
+                            <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:24px;">
+                                <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Clinic & Account Details</p>
+                                <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;color:#334155;">
+                                    <tr>
+                                        <td style="padding:6px 0;color:#64748b;width:140px;">Clinic Name:</td>
+                                        <td style="padding:6px 0;font-weight:600;color:#0f172a;">${cName}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:6px 0;color:#64748b;">Practitioner:</td>
+                                        <td style="padding:6px 0;font-weight:600;color:#0f172a;">${dName}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:6px 0;color:#64748b;">Registered Email:</td>
+                                        <td style="padding:6px 0;font-weight:600;color:#0f172a;">${email}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:6px 0;color:#64748b;">Your Clinic URL:</td>
+                                        <td style="padding:6px 0;font-weight:600;color:#0284c7;word-break:break-all;">
+                                            <a href="${clinicUrl}" style="color:#0284c7;text-decoration:none;">${clinicUrl}</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:18px 20px;margin-bottom:24px;">
+                                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;">Free Doctor OPD Plan — Features Included</p>
+                                <ul style="margin:0;padding-left:20px;font-size:14px;color:#15803d;line-height:1.7;">
+                                    <li><strong>1 Doctor Account:</strong> Independent solo doctor OPD management</li>
+                                    <li><strong>20 Daily Appointments:</strong> Free appointment quota reset every calendar day</li>
+                                    <li><strong>Unlimited Patient Records:</strong> Lifetime history and vitals tracking</li>
+                                    <li><strong>Digital Prescriptions:</strong> Full medication dosage and visit instructions</li>
+                                    <li><strong>100% Free Forever:</strong> ₹0 platform subscription charges</li>
+                                </ul>
+                            </div>
+
+                            <div style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:18px 20px;margin-bottom:28px;">
+                                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:0.5px;">How to Sign In (Email OTP Verification)</p>
+                                <ol style="margin:0;padding-left:20px;font-size:14px;color:#1e3a8a;line-height:1.7;">
+                                    <li>Visit your clinic portal at: <a href="${targetLoginUrl}" style="color:#2563eb;font-weight:600;">${targetLoginUrl}</a></li>
+                                    <li>Enter your registered email address (<strong>${email}</strong>) and password.</li>
+                                    <li>A secure <strong>6-digit Email OTP</strong> will be automatically sent to this email address to verify your identity.</li>
+                                    <li>Enter the OTP to access your doctor dashboard.</li>
+                                </ol>
+                            </div>
+
+                            <div style="text-align:center;margin-bottom:24px;">
+                                <a href="${targetLoginUrl}" style="display:inline-block;background-color:#10b981;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;box-shadow:0 2px 8px rgba(16,185,129,0.35);">
+                                    Access Your Clinic Portal
+                                </a>
+                            </div>
+
+                            <p style="margin:0;font-size:13px;color:#94a3b8;text-align:center;">
+                                Bookmark your clinic URL for fast, one-click access every day.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#0f172a;padding:20px 40px;text-align:center;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">
+                                This is an automated notification from Medical365 Healthcare Suite.
+                            </p>
+                            <p style="margin:8px 0 0;font-size:11px;color:#475569;">
+                                Powered by <span style="color:#10b981;font-weight:700;">Medical365</span>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+
+        const plainText = `Hello ${dName},
+
+Your Free Doctor OPD Clinic is Ready!
+
+Clinic Name: ${cName}
+Doctor: ${dName}
+Registered Email: ${email}
+Clinic URL: ${clinicUrl}
+Login URL: ${targetLoginUrl}
+
+Free Doctor OPD Plan Includes:
+- 1 Doctor Account
+- 20 Appointments per calendar day
+- Unlimited Patient Records & Prescriptions
+- Free Forever (₹0/month)
+
+Login Instructions:
+1. Open your clinic URL: ${targetLoginUrl}
+2. Enter your registered email: ${email}
+3. Enter your password
+4. A secure 6-digit Email OTP will be sent to your email to verify your session.
+
+Powered by Medical365`;
+
+        const mailOptions = {
+            from: `"Medical365 Free OPD" <${fromEmail}>`,
+            to: email,
+            subject: 'Your Free Doctor OPD Clinic is Ready!',
+            text: plainText,
+            html: htmlBody
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[email-service] Free Doctor OPD welcome email sent to ${email} for clinic "${cName}"`);
+
+    } catch (error) {
+        console.error('[email-service] Failed to send Free Doctor OPD welcome email:', error.message);
+    }
+}
+
 module.exports = {
     sendAppointmentConfirmationEmail,
     sendLoginOtpEmail,
     sendStaffWelcomeEmail,
+    sendFreeOpdWelcomeEmail,
     renderEmailPreview
 };

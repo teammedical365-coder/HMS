@@ -3,8 +3,10 @@ const mongoose = require('mongoose');
 const pharmacyItemSchema = new mongoose.Schema({
     medicineName: { type: String, required: [true, 'Medicine name is required'], trim: true },
     saltName: { type: String, default: '', trim: true },
+    dosage: { type: String, default: '', trim: true },
     frequency: { type: String, default: '', trim: true },
-    duration: { type: String, default: '', trim: true }
+    duration: { type: String, default: '', trim: true },
+    instructions: { type: String, default: '', trim: true }
 }, { _id: false });
 
 const vitalsSchema = new mongoose.Schema({
@@ -55,7 +57,7 @@ const appointmentSchema = new mongoose.Schema({
     tokenNumber: { type: Number, default: null },
     status: {
         type: String,
-        enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+        enum: ['pending', 'confirmed', 'in-consultation', 'completed', 'cancelled'],
         default: 'pending',
         index: true
     },
@@ -104,6 +106,8 @@ appointmentSchema.index(
 appointmentSchema.index({ hospitalId: 1, appointmentDate: -1, status: 1 });
 appointmentSchema.index({ hospitalId: 1, createdAt: -1 });
 appointmentSchema.index({ userId: 1, createdAt: -1 });
+appointmentSchema.index({ hospitalId: 1, followUpDate: 1 });
+appointmentSchema.index({ doctorId: 1, followUpDate: 1 });
 
 const Appointment = mongoose.model('Appointment', appointmentSchema);
 module.exports = Appointment;

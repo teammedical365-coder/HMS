@@ -3939,6 +3939,15 @@ const CentralAdminDashboard = () => {
                                                     {clinic.adminUserId && (
                                                         <span style={{ marginTop: '4px', color: '#16a34a', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
                                                     )}
+                                                    {clinic.subscriptionPlan === 'free_doctor_opd' ? (
+                                                        <span style={{ display: 'inline-block', marginTop: '4px', padding: '2px 8px', borderRadius: '4px', background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                                                            🎁 Free Doctor OPD Plan
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ display: 'inline-block', marginTop: '4px', padding: '2px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#475569', fontSize: '11px', fontWeight: 600 }}>
+                                                            📦 {clinic.subscriptionPlan || 'Starter'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="cad-hospital-card-footer">
                                                     <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>

@@ -1,0 +1,342 @@
+/* FreeOpdLayout.css — Medical365 Dedicated Single Doctor OPD Layout */
+
+.opd-layout-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f8fafc;
+    color: #1e293b;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SIDEBAR (Single Doctor OPD Navigation)
+   ───────────────────────────────────────────────────────────── */
+.opd-sidebar {
+    width: 260px;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    z-index: 40;
+    transition: transform 0.3s ease;
+}
+
+.opd-sidebar-header {
+    padding: 20px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.opd-brand-logo {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
+    flex-shrink: 0;
+}
+
+.opd-brand-info {
+    overflow: hidden;
+}
+
+.opd-clinic-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0a2647;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.opd-plan-badge {
+    display: inline-block;
+    background: #e6fffa;
+    color: #0f766e;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #99f6e4;
+    margin-top: 4px;
+    letter-spacing: 0.2px;
+}
+
+/* Sidebar Menu Navigation */
+.opd-sidebar-menu {
+    flex: 1;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+}
+
+.opd-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #475569;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.opd-nav-item:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.opd-nav-item.active {
+    background: #e6fffa;
+    color: #0d9488;
+    font-weight: 700;
+    border-color: #99f6e4;
+    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.08);
+}
+
+.opd-nav-icon {
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Sidebar Doctor Profile Footer */
+.opd-sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid #f1f5f9;
+    background: #fafafa;
+}
+
+.opd-doctor-profile-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.opd-doc-info {
+    overflow: hidden;
+}
+
+.opd-doc-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.opd-doc-role {
+    font-size: 11px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.opd-logout-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #ef4444;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.opd-logout-btn:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN CONTENT WRAPPER
+   ───────────────────────────────────────────────────────────── */
+.opd-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Top App Bar */
+.opd-topbar {
+    height: 64px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.opd-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.opd-menu-toggle {
+    display: none;
+    background: none;
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 18px;
+    color: #475569;
+    cursor: pointer;
+}
+
+.opd-page-title-wrap h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+
+.opd-page-title-wrap p {
+    font-size: 12px;
+    color: #64748b;
+    margin: 2px 0 0;
+}
+
+.opd-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Daily Quota Indicator Badge */
+.opd-quota-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f0fdfa;
+    border: 1px solid #ccfbf1;
+    color: #0f766e;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.opd-quota-badge.near-limit {
+    background: #fffbeb;
+    border-color: #fef3c7;
+    color: #b45309;
+}
+
+.opd-quota-badge.limit-reached {
+    background: #fef2f2;
+    border-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.opd-quota-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #14b8a6;
+    animation: opdPulse 2s infinite;
+}
+
+@keyframes opdPulse {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.opd-clock-badge {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Content Body */
+.opd-body-content {
+    flex: 1;
+    padding: 24px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Overlay for Mobile Drawer */
+.opd-mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 35;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   RESPONSIVE DESIGN (Tablets & Mobile)
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+    .opd-sidebar {
+        position: fixed;
+        left: -260px;
+        top: 0;
+        bottom: 0;
+    }
+
+    .opd-sidebar.open {
+        transform: translateX(260px);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .opd-menu-toggle {
+        display: flex;
+    }
+
+    .opd-mobile-overlay.active {
+        display: block;
+    }
+
+    .opd-clock-badge {
+        display: none;
+    }
+
+    .opd-body-content {
+        padding: 16px;
+    }
+}
+

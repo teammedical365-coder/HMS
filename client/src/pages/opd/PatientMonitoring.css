@@ -1,0 +1,386 @@
+/* PatientMonitoring.css — Module 1 for Free Doctor OPD */
+
+.pm-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Header & Controls */
+.pm-controls-bar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.pm-search-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 14px;
+    flex: 1;
+    min-width: 260px;
+    max-width: 480px;
+}
+
+.pm-search-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 14px;
+    color: #1e293b;
+    width: 100%;
+}
+
+.pm-action-btn-primary {
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    color: #ffffff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.pm-action-btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(20, 184, 166, 0.35);
+}
+
+/* Patients Table Card */
+.pm-table-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.pm-table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.pm-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+}
+
+.pm-table th {
+    background: #f8fafc;
+    padding: 12px 18px;
+    color: #475569;
+    font-weight: 700;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.pm-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+    vertical-align: middle;
+}
+
+.pm-table tr:hover td {
+    background: #f8fafc;
+}
+
+.pm-patient-id-badge {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+}
+
+.pm-view-btn {
+    background: #f0fdfa;
+    border: 1px solid #99f6e4;
+    color: #0d9488;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pm-view-btn:hover {
+    background: #14b8a6;
+    color: #ffffff;
+    border-color: #14b8a6;
+}
+
+/* Empty / Loading State */
+.pm-empty-state {
+    padding: 48px 24px;
+    text-align: center;
+    color: #64748b;
+}
+
+.pm-empty-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+/* Modal Overlay & Modal Window */
+.pm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+}
+
+.pm-modal-card {
+    background: #ffffff;
+    border-radius: 16px;
+    max-width: 680px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.pm-modal-large {
+    max-width: 920px;
+}
+
+.pm-modal-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+}
+
+.pm-modal-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+
+.pm-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #64748b;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.pm-modal-close-btn:hover {
+    color: #ef4444;
+}
+
+.pm-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Form Layout */
+.pm-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.pm-form-group.full-width {
+    grid-column: span 2;
+}
+
+.pm-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.pm-input, .pm-select, .pm-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1e293b;
+    background: #ffffff;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.pm-input:focus, .pm-select:focus, .pm-textarea:focus {
+    border-color: #14b8a6;
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+}
+
+/* Patient Profile View Tabs */
+.pm-profile-header-strip {
+    background: #f0fdfa;
+    border: 1px solid #ccfbf1;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.pm-profile-patient-name {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.pm-profile-meta {
+    font-size: 13px;
+    color: #0f766e;
+    margin-top: 2px;
+}
+
+.pm-tabs-bar {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 20px;
+}
+
+.pm-tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 18px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.pm-tab-btn.active {
+    color: #0d9488;
+    border-bottom-color: #0d9488;
+}
+
+/* Medicines Builder in Prescription tab */
+.pm-meds-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px;
+    font-size: 12.5px;
+}
+
+.pm-meds-table th {
+    background: #f1f5f9;
+    padding: 8px 10px;
+    text-align: left;
+    color: #475569;
+}
+
+.pm-meds-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.pm-add-med-btn {
+    background: #f1f5f9;
+    border: 1px dashed #cbd5e1;
+    color: #0f766e;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 12.5px;
+    width: 100%;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+}
+
+.pm-add-med-btn:hover {
+    background: #e6fffa;
+    border-color: #99f6e4;
+}
+
+.pm-modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #f8fafc;
+}
+
+.pm-btn-secondary {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pm-btn-primary {
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    border: none;
+    color: #ffffff;
+    padding: 9px 20px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+@media (max-width: 640px) {
+    .pm-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .pm-form-group.full-width {
+        grid-column: span 1;
+    }
+}
+

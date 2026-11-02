@@ -21,6 +21,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
+    const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
+    const isFreeDoctorOpd = (user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd');
     
     // Memoized Categorized Menus with prefetch hooks
     const menuItems = useMemo(() => {
@@ -78,6 +80,16 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Assistant Dashboard', path: '/assistant/dashboard', icon: <FiHome />, prefetchKey: 'asst_dash', prefetchFn: () => import('../../pages/assistant/DoctorAssistantDashboard') },
                 { label: 'Patient Queue', path: '/assistant/queue', icon: <FiUsers />, prefetchKey: 'asst_queue', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQueue') },
                 { label: 'Question Library', path: '/assistant/question-library', icon: <FiFileText />, prefetchKey: 'asst_ql', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQuestionLibrary') },
+            ];
+        }
+        const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd') {
+            return [
+                { label: 'Patient Monitoring', path: '/opd/patients', icon: <FiUsers />, prefetchKey: 'opd_patients', prefetchFn: () => import('../../pages/opd/PatientMonitoring') },
+                { label: 'Doctor Patient Tray', path: '/opd/tray', icon: <FiActivity />, prefetchKey: 'opd_tray', prefetchFn: () => import('../../pages/opd/DoctorPatientTray') },
+                { label: 'Appointment Management', path: '/opd/appointments', icon: <FiCalendar />, prefetchKey: 'opd_appts', prefetchFn: () => import('../../pages/opd/AppointmentManagement') },
+                { label: 'Money Tracker', path: '/opd/money-tracker', icon: <FiDollarSign />, prefetchKey: 'opd_money', prefetchFn: () => import('../../pages/opd/MoneyTracker') },
+                { label: 'Revisit Schedule', path: '/opd/revisits', icon: <FiClock />, prefetchKey: 'opd_revisits', prefetchFn: () => import('../../pages/opd/RevisitSchedule') },
             ];
         }
         if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || (role.includes('doctor') && !role.includes('assistant'))) {
@@ -239,7 +251,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 })}
 
                 {/* AI Assistant Card inside Sidebar (Image + AI Assistant title only) */}
-                {(role === 'hospitaladmin' || isCentralAdmin || role.includes('doctor')) && isOpen && (
+                {!isFreeDoctorOpd && (role === 'hospitaladmin' || isCentralAdmin || role.includes('doctor')) && isOpen && (
                     <div 
                         className="ha-sidebar-ai-card"
                         onClick={() => navigate('/doctor/ai-assistant')}
@@ -301,6 +313,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const location = useLocation();
     const role = (user?.role || '').toLowerCase();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
+    const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
+    const isFreeDoctorOpd = (user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd');
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -378,6 +392,11 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     };
 
     const getPageTitle = (pathname) => {
+        if (pathname === '/opd/patients') return 'Patient Monitoring';
+        if (pathname === '/opd/tray') return 'Doctor Patient Tray';
+        if (pathname === '/opd/appointments') return 'Appointment Management';
+        if (pathname === '/opd/money-tracker') return 'Money Tracker';
+        if (pathname === '/opd/revisits') return 'Revisit Schedule';
         if (pathname.includes('real-time-monitoring')) return 'Real-Time Monitoring';
         if (pathname === '/nurse/dashboard') return 'Nurse IPD Care';
         if (pathname === '/nurse/patient-documents') return 'Patient Reports & Clinical Consents';
@@ -418,7 +437,9 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                             {getPageTitle(location.pathname)}
                         </span>
                         <span className="path-slash">/</span>
-                        <span className="path-user-role">{user?.role}</span>
+                        <span className="path-user-role" style={isFreeDoctorOpd ? { color: '#0d9488', fontWeight: 700 } : undefined}>
+                            {isFreeDoctorOpd ? 'Free Doctor OPD' : user?.role}
+                        </span>
                     </div>
                 )}
             </div>

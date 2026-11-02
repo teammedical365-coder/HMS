@@ -1,0 +1,87 @@
+/* MoneyTracker.css — Module 4 for Free Doctor OPD */
+
+.mt-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Revenue Metric Cards */
+.mt-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 800px) {
+    .mt-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mt-metric-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.mt-metric-card.highlight {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+    border-color: #99f6e4;
+}
+
+.mt-metric-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 8px;
+}
+
+.mt-metric-amount {
+    font-size: 32px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+
+.mt-metric-breakdown {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 12px;
+    color: #475569;
+}
+
+.mt-mode-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.mt-badge-cash { background: #ecfdf5; color: #047857; }
+.mt-badge-upi { background: #e0f2fe; color: #0369a1; }
+.mt-badge-card { background: #fdf2f8; color: #be185d; }
+.mt-badge-online { background: #fef3c7; color: #b45309; }
+
+/* Filter & Action Toolbar */
+.mt-toolbar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+

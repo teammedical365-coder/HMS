@@ -31,6 +31,14 @@ const Dashboard = lazy(() => import('../pages/user/Dashboard'));
 const Pharmacy = lazy(() => import('../pages/user/Pharmacy'));
 const Login = lazy(() => import('../pages/user/Login'));
 const Signup = lazy(() => import('../pages/user/Signup'));
+const FreeOpdSignup = lazy(() => import('../pages/public/FreeOpdSignup'));
+
+// Dedicated Free Doctor OPD Pages
+const PatientMonitoring = lazy(() => import('../pages/opd/PatientMonitoring'));
+const DoctorPatientTray = lazy(() => import('../pages/opd/DoctorPatientTray'));
+const AppointmentManagement = lazy(() => import('../pages/opd/AppointmentManagement'));
+const MoneyTracker = lazy(() => import('../pages/opd/MoneyTracker'));
+const RevisitSchedule = lazy(() => import('../pages/opd/RevisitSchedule'));
 
 // Doctor Pages
 const DoctorDashboard = lazy(() => import('../pages/doctors/DoctorDashboard'));
@@ -153,6 +161,11 @@ const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
     const u = JSON.parse(localStorage.getItem('user') || '{}');
     const roleStr = (u.role || '').toLowerCase();
+    
+    // Dedicated Single Doctor OPD Plan → Patient Monitoring Hub
+    if (u.subscriptionPlan === 'free_doctor_opd') {
+        return <Navigate to="/opd/patients" replace />;
+    }
     
     if (roleStr === 'centraladmin' || roleStr === 'superadmin') {
         return <Navigate to="/supremeadmin" replace />;
@@ -351,6 +364,9 @@ const MainRoutes = () => {
                                 <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}>
                                     {(() => {
                                         const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        if (u.subscriptionPlan === 'free_doctor_opd') {
+                                            return <Navigate to="/opd/patients" replace />;
+                                        }
                                         if (u.subscriptionPlan === 'starter' && u.role === 'hospitaladmin') {
                                             return <Navigate to="/hospitaladmin" replace />;
                                         }
@@ -364,15 +380,46 @@ const MainRoutes = () => {
                                 <Route path="pharmacy" element={<Pharmacy />} />
 
                                 {/* Transitions between roles/admin */}
-                                <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
+                                <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}>
+                                    {(() => {
+                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/tray" replace />;
+                                        return <DoctorDashboard />;
+                                    })()}
+                                </ProtectedRoute>} />
                                 <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
-                                <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
+                                <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}>
+                                    {(() => {
+                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/patients" replace />;
+                                        return <Patient />;
+                                    })()}
+                                </ProtectedRoute>} />
                                 <Route path="doctor/patients/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                                 <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorPatientDetails /></ProtectedRoute>} />
-                                <Route path="doctor/ai-assistant" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><AIAssistant /></ProtectedRoute>} />
-                                <Route path="doctor/surgeries" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries /></ProtectedRoute>} />
+                                <Route path="doctor/ai-assistant" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}>
+                                    {(() => {
+                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/patients" replace />;
+                                        return <AIAssistant />;
+                                    })()}
+                                </ProtectedRoute>} />
+                                <Route path="doctor/surgeries" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}>
+                                    {(() => {
+                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/patients" replace />;
+                                        return <DoctorSurgeries />;
+                                    })()}
+                                </ProtectedRoute>} />
                                 <Route path="doctor/surgery-referrals" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="referrals" /></ProtectedRoute>} />
                                 <Route path="doctor/surgery-plans" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="plans" /></ProtectedRoute>} />
+
+                                {/* ── Dedicated Single Doctor Free OPD Routes (Strictly 5 Modules) ── */}
+                                <Route path="opd/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin']}><PatientMonitoring /></ProtectedRoute>} />
+                                <Route path="opd/tray" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin']}><DoctorPatientTray /></ProtectedRoute>} />
+                                <Route path="opd/appointments" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin']}><AppointmentManagement /></ProtectedRoute>} />
+                                <Route path="opd/money-tracker" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin']}><MoneyTracker /></ProtectedRoute>} />
+                                <Route path="opd/revisits" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin']}><RevisitSchedule /></ProtectedRoute>} />
 
                                 <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                                 <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
@@ -479,6 +526,7 @@ const MainRoutes = () => {
                                 {/* Supreme Admin remains outside of hospital slugs */}
                                 <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
                                 <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />
+                                <Route path="/free-opd-signup" element={<FreeOpdSignup />} />
 
                                 <Route path="*" element={<Navigate to="/my-dashboard" />} />
                             </Routes>
@@ -526,6 +574,7 @@ const MainRoutes = () => {
                             } />
                             
                             {/* Legacy/Signups routing */}
+                            <Route path="/free-opd-signup" element={<FreeOpdSignup />} />
                             <Route path="/signup" element={<Signup />} />
                             <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                             <Route path="/admin/signup" element={<AdminSignup />} />

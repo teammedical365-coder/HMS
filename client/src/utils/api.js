@@ -511,6 +511,100 @@ export const authAPI = {
     },
 };
 
+export const freeOpdAPI = {
+    // 1. Patient Monitoring
+    searchPatients: async (params = {}) => {
+        const response = await apiClient.get('/api/doctor/patients/search', { params });
+        return response.data;
+    },
+    getPatientOverview: async (patientId) => {
+        const response = await apiClient.get(`/api/doctor/patients/${patientId}/overview`);
+        return response.data;
+    },
+    registerPatient: async (payload) => {
+        const response = await apiClient.post('/api/doctor/patients/register', payload);
+        return response.data;
+    },
+
+    // 2. Doctor Patient Tray
+    getTodayTray: async (date) => {
+        const response = await apiClient.get('/api/doctor/tray/today', { params: { date } });
+        return response.data;
+    },
+    startConsultation: async (appointmentId) => {
+        const response = await apiClient.patch(`/api/doctor/tray/${appointmentId}/start`);
+        return response.data;
+    },
+    completeConsultation: async (appointmentId, payload = {}) => {
+        const response = await apiClient.patch(`/api/doctor/tray/${appointmentId}/complete`, payload);
+        return response.data;
+    },
+    updateConsultationStatus: async (appointmentId, status, payload = {}) => {
+        const response = await apiClient.patch(`/api/doctor/tray/${appointmentId}/status`, { status, ...payload });
+        return response.data;
+    },
+
+    // 3. Appointment Management
+    createAppointment: async (payload) => {
+        const response = await apiClient.post('/api/doctor/appointments', payload);
+        return response.data;
+    },
+    listAppointments: async (params = {}) => {
+        const response = await apiClient.get('/api/doctor/appointments', { params });
+        return response.data;
+    },
+    rescheduleAppointment: async (appointmentId, payload) => {
+        const response = await apiClient.patch(`/api/doctor/appointments/${appointmentId}/reschedule`, payload);
+        return response.data;
+    },
+    cancelAppointment: async (appointmentId, reason = '') => {
+        const response = await apiClient.patch(`/api/doctor/appointments/${appointmentId}/cancel`, { reason });
+        return response.data;
+    },
+
+    // 4. Money Tracker
+    getMoneySummary: async () => {
+        const response = await apiClient.get('/api/doctor/money-tracker/summary');
+        return response.data;
+    },
+    getTransactions: async (params = {}) => {
+        const response = await apiClient.get('/api/doctor/money-tracker/transactions', { params });
+        return response.data;
+    },
+    recordFee: async (appointmentId, payload) => {
+        const response = await apiClient.post(`/api/doctor/appointments/${appointmentId}/record-payment`, payload);
+        return response.data;
+    },
+
+    // 5. Revisit Schedule
+    getRevisits: async (params = {}) => {
+        const response = await apiClient.get('/api/doctor/revisits', { params });
+        return response.data;
+    },
+    saveFollowUpDate: async (appointmentId, followUpDate) => {
+        const response = await apiClient.patch(`/api/doctor/appointments/${appointmentId}/follow-up`, { followUpDate });
+        return response.data;
+    },
+    bookRevisitAppointment: async (originalAppointmentId, payload) => {
+        const response = await apiClient.post(`/api/doctor/revisits/${originalAppointmentId}/book-appointment`, payload);
+        return response.data;
+    },
+
+    // Prescriptions
+    savePrescription: async (payload) => {
+        const response = await apiClient.post('/api/doctor/prescriptions', payload);
+        return response.data;
+    },
+    getPatientPrescriptions: async (patientId) => {
+        const response = await apiClient.get(`/api/doctor/prescriptions/patient/${patientId}`);
+        return response.data;
+    },
+    getOpdSummaryReport: async (date) => {
+        const response = await apiClient.get('/api/doctor/reports/opd-summary', { params: { date } });
+        return response.data;
+    }
+};
+
 export const doctorAPI = {
     getAppointments: async () => {
         const response = await apiClient.get('/api/doctor/appointments');
@@ -766,6 +860,12 @@ export const publicAPI = {
         let url = `/api/doctor/${doctorId}/booked-slots?date=${date}`;
         if (hospitalId) url += `&hospitalId=${encodeURIComponent(hospitalId)}`;
         return (await apiClient.get(url)).data;
+    },
+    freeOpdSignup: async (data) => {
+        return (await apiClient.post('/api/public/free-opd-signup', data)).data;
+    },
+    resendWelcomeEmail: async (data) => {
+        return (await apiClient.post('/api/public/free-opd-signup/resend-email', data)).data;
     }
 };
 

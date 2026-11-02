@@ -13,6 +13,8 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const validateFileType = require('../utils/validateFileType');
 const imagekit = require('../utils/imagekit');
 const ClinicPatient = require('../models/clinicPatient.model');
+const doctorOpdCtrl = require('../controllers/doctorOpd.controller');
+const appointmentQuotaService = require('../services/appointmentQuota.service');
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
 const upload = multer({
@@ -106,6 +108,9 @@ router.get('/', async (req, res) => {
 // 1. GET Unique Patients (Optimized Lean Projection)
 router.get('/patients', verifyToken, async (req, res) => {
     try {
+        if (req.query.search || req.query.query || req.query.q || req.query.page || req.query.limit || req.query.all === 'true') {
+            return doctorOpdCtrl.searchPatients(req, res);
+        }
         const doctorUserId = req.user.id || req.user.userId;
         const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
 
@@ -397,9 +402,20 @@ router.post('/session/start', verifyToken, async (req, res) => {
             }
         }
 
+        const sessionHospitalId = req.user.hospitalId || doctor.hospitalId;
+        const quotaResult = await appointmentQuotaService.reserveAppointmentSlot({
+            hospitalId: sessionHospitalId,
+            doctorId: doctor._id,
+            appointmentDate: new Date(),
+            AppointmentModel: Appointment
+        });
+        if (!quotaResult.allowed) {
+            return res.status(403).json({ success: false, message: quotaResult.message || 'Daily appointment quota exceeded' });
+        }
+
         const newSession = new Appointment({
             userId: patientId,
-            hospitalId: req.user.hospitalId || doctor.hospitalId,
+            hospitalId: sessionHospitalId,
             doctorId: doctor._id,
             doctorUserId: doctorUserId,
             doctorName: doctor.name,
@@ -411,7 +427,18 @@ router.post('/session/start', verifyToken, async (req, res) => {
             paymentStatus: 'pending'
         });
 
-        await newSession.save();
+        try {
+            await newSession.save();
+        } catch (saveErr) {
+            if (quotaResult.reserved) {
+                await appointmentQuotaService.releaseAppointmentSlot({
+                    hospitalId: sessionHospitalId,
+                    doctorId: doctor._id,
+                    appointmentDate: new Date()
+                }).catch(() => {});
+            }
+            throw saveErr;
+        }
         res.json({ success: true, appointment: newSession });
     } catch (error) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -473,6 +500,9 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
 // 5. GET Appointments List (for this doctor)
 router.get('/appointments', verifyToken, async (req, res) => {
     try {
+        if (req.query.date || req.query.patientId || req.query.status || req.query.page || req.query.limit) {
+            return doctorOpdCtrl.listDoctorAppointments(req, res);
+        }
         const doctorUserId = req.user.id || req.user.userId;
         const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
         const appointments = await Appointment.find(query)
@@ -602,8 +632,10 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                 appointment.pharmacy = p.map(item => ({
                     medicineName: item.medicineName || item.name,
                     saltName: item.saltName || '',
+                    dosage: item.dosage || '',
                     frequency: item.frequency || '',
-                    duration: item.duration || ''
+                    duration: item.duration || '',
+                    instructions: item.instructions || ''
                 }));
             }
         }
@@ -1001,5 +1033,49 @@ router.get('/clinic-patients/:clinicPatientId/reports', verifyToken, async (req,
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
+
+
+// ============================================================================
+// FREE DOCTOR OPD PLAN (PHASE 3) ROUTES
+// ============================================================================
+
+// Module 1: Patient Monitoring
+router.post('/patients/register', verifyToken, doctorOpdCtrl.registerPatient);
+router.get('/patients/search', verifyToken, doctorOpdCtrl.searchPatients);
+router.get('/patients/:patientId/overview', verifyToken, doctorOpdCtrl.getPatientOverview);
+
+// Module 2: Doctor Patient Tray
+router.get('/tray/today', verifyToken, doctorOpdCtrl.getTodayTray);
+router.get('/tray', verifyToken, doctorOpdCtrl.getTodayTray);
+router.patch('/tray/:appointmentId/start', verifyToken, doctorOpdCtrl.startConsultation);
+router.patch('/tray/:appointmentId/complete', verifyToken, doctorOpdCtrl.completeConsultation);
+router.patch('/tray/:appointmentId/status', verifyToken, doctorOpdCtrl.updateConsultationStatus);
+
+// Module 3: Appointment Management
+router.post('/appointments', verifyToken, doctorOpdCtrl.createDoctorAppointment);
+router.patch('/appointments/:id/reschedule', verifyToken, doctorOpdCtrl.rescheduleDoctorAppointment);
+router.patch('/appointments/:id/cancel', verifyToken, doctorOpdCtrl.cancelDoctorAppointment);
+router.patch('/appointments/:id/start-consultation', verifyToken, doctorOpdCtrl.startConsultation);
+router.patch('/appointments/:id/complete-consultation', verifyToken, doctorOpdCtrl.completeConsultation);
+router.patch('/appointments/:id/status', verifyToken, doctorOpdCtrl.updateConsultationStatus);
+
+// Module 4: Money Tracker
+router.post('/money-tracker/record-fee', verifyToken, doctorOpdCtrl.recordPayment);
+router.post('/appointments/:id/record-payment', verifyToken, doctorOpdCtrl.recordPayment);
+router.get('/money-tracker/summary', verifyToken, doctorOpdCtrl.getMoneySummary);
+router.get('/money-tracker/transactions', verifyToken, doctorOpdCtrl.getTransactions);
+
+// Module 5: Revisit Schedule
+router.post('/revisits/schedule', verifyToken, doctorOpdCtrl.saveFollowUpDate);
+router.patch('/appointments/:id/follow-up', verifyToken, doctorOpdCtrl.saveFollowUpDate);
+router.get('/revisits', verifyToken, doctorOpdCtrl.getRevisits);
+router.post('/revisits/:appointmentId/book-appointment', verifyToken, doctorOpdCtrl.bookRevisitAppointment);
+
+// Module 6: Prescriptions
+router.post('/prescriptions', verifyToken, doctorOpdCtrl.savePrescription);
+router.get('/prescriptions/patient/:patientId', verifyToken, doctorOpdCtrl.getPatientPrescriptions);
+
+// Module 7: Basic OPD Reports
+router.get('/reports/opd-summary', verifyToken, doctorOpdCtrl.getOpdSummaryReport);
 
 module.exports = router;

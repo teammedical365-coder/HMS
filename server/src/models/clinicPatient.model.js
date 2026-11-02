@@ -22,9 +22,9 @@ const clinicPatientSchema = new mongoose.Schema({
     // Core identity
     name:   { type: String, required: true, trim: true, minlength: 2 },
     phone: { type: String, required: true, match: /^\d{10}$/ },
-    email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
+    email: { type: String, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
     age:    { type: Number, required: true, min: 1 },
-    aadhaarNumber: { type: String, required: true, match: /^\d{12}$/ },
+    aadhaarNumber: { type: String, match: /^\d{12}$/ },
     gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
     dob:    { type: Date, default: null },
 

@@ -384,4 +384,14 @@ router.get('/manifest', async (req, res) => {
     }
 });
 
+// =========================================================================
+// Free Doctor OPD Self-Service Signup (Public Registration Flow)
+// =========================================================================
+const freeOpdSignupController = require('../controllers/freeOpdSignup.controller');
+const { signupLimiter } = require('../middleware/rateLimiter');
+
+router.post('/free-opd-signup', signupLimiter, freeOpdSignupController.signup);
+router.post('/free-opd-signup/resend-email', signupLimiter, freeOpdSignupController.resendWelcomeEmail);
+
 module.exports = router;
+
