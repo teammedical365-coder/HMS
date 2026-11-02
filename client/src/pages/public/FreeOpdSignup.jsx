@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { publicAPI } from '../../utils/api';
 import './FreeOpdSignup.css';
 
@@ -19,6 +19,10 @@ const SPECIALTIES = [
 ];
 
 const FreeOpdSignup = () => {
+    useEffect(() => {
+        document.title = 'Signup | Medical365';
+    }, []);
+
     const [formData, setFormData] = useState({
         clinicName: '',
         address: '',
@@ -190,9 +194,9 @@ const FreeOpdSignup = () => {
 
                 <div className="fos-card fos-success-view">
                     <div className="fos-success-badge-icon">✓</div>
-                    <h1 className="fos-success-title">Your Free Doctor OPD Clinic is Ready!</h1>
+                    <h1 className="fos-success-title">Signup Successful!</h1>
                     <p className="fos-success-subtitle">
-                        Congratulations, <strong>{doctor.name}</strong>! Your autonomous digital clinic workspace has been created.
+                        Congratulations, <strong>{doctor.name}</strong>! Your clinic account has been created.
                     </p>
 
                     {/* Clinic Summary */}
@@ -263,7 +267,7 @@ const FreeOpdSignup = () => {
                             href={effectiveLoginUrl}
                             className="fos-primary-btn"
                         >
-                            🚀 Proceed to Clinic Login
+                            🔐 Login Now
                         </a>
                         <button
                             type="button"
@@ -308,7 +312,7 @@ const FreeOpdSignup = () => {
                     <span>100% Free Forever • Zero Subscription Fee • Designed for Solo Doctors</span>
                 </div>
                 <h1 className="fos-title">
-                    Launch Your Free <span>Digital OPD Clinic</span>
+                    Signup
                 </h1>
                 <p className="fos-subtitle">
                     Modern appointment management, patient monitoring, and digital prescriptions built exclusively for solo practitioners and independent clinics.
@@ -581,10 +585,10 @@ const FreeOpdSignup = () => {
                         {submitting ? (
                             <>
                                 <span className="fos-spinner" />
-                                <span>Provisioning Your Free Clinic...</span>
+                                <span>Processing Signup...</span>
                             </>
                         ) : (
-                            <span>Create My Free OPD Clinic 🚀</span>
+                            <span>Signup 🚀</span>
                         )}
                     </button>
 

@@ -526,7 +526,8 @@ const MainRoutes = () => {
                                 {/* Supreme Admin remains outside of hospital slugs */}
                                 <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
                                 <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />
-                                <Route path="/free-opd-signup" element={<FreeOpdSignup />} />
+                                <Route path="/free-opd-signup" element={<Navigate to="/signup" replace />} />
+                                <Route path="/signup" element={<FreeOpdSignup />} />
 
                                 <Route path="*" element={<Navigate to="/my-dashboard" />} />
                             </Routes>
@@ -574,8 +575,8 @@ const MainRoutes = () => {
                             } />
                             
                             {/* Legacy/Signups routing */}
-                            <Route path="/free-opd-signup" element={<FreeOpdSignup />} />
-                            <Route path="/signup" element={<Signup />} />
+                            <Route path="/free-opd-signup" element={<Navigate to="/signup" replace />} />
+                            <Route path="/signup" element={<FreeOpdSignup />} />
                             <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                             <Route path="/admin/signup" element={<AdminSignup />} />
                             
