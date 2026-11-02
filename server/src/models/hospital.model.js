@@ -67,7 +67,12 @@ const hospitalSchema = new mongoose.Schema({
     isWhitelabeled: { type: Boolean, default: false },
     whiteLabelEnabled: { type: Boolean, default: false }, // Added as per White-Label Architecture Phase 1 request
     appConfig: {
-        androidPackageId: { type: String, trim: true, default: '' }, // e.g., com.hospital.crm
+        // Android package identifier (e.g. com.medical365.apollo).
+        // NOTE: Mongoose autoIndex is enabled by default in db.js. To prevent startup crashes (E11000)
+        // on existing empty-string defaults, DO NOT declare unique/sparse indexes here directly.
+        // Production index enforcement is handled via scripts/migrate-package-id-index.js using a
+        // partial filter expression: { 'appConfig.androidPackageId': { $type: 'string', $gt: '' } }.
+        androidPackageId: { type: String, trim: true, default: '' },
         appVersion: { type: String, trim: true, default: '1.0.0' },
         appName: { type: String, trim: true, default: '' },
         buildStatus: { type: String, enum: ['NOT_BUILT', 'BUILDING', 'COMPLETED', 'FAILED'], default: 'NOT_BUILT' },
@@ -84,7 +89,16 @@ const hospitalSchema = new mongoose.Schema({
         rnLastBuiltAt: { type: Date, default: null },
         rnBuildError: { type: String, default: '' },
         rnApkUrl: { type: String, default: '' },
-        rnAabUrl: { type: String, default: '' }
+        rnAabUrl: { type: String, default: '' },
+        rnReleaseId: { type: String, default: '' },
+        rnChecksumSha256: { type: String, default: '' },
+
+        // Automated Native Version Management (Phase 3)
+        versionCode: { type: Number, default: 1, min: 1 },
+        versionName: { type: String, trim: true, default: '1.0.0' },
+        lastAllocatedVersionCode: { type: Number, default: 0 },
+        pendingVersionCode: { type: Number, default: null },
+        pendingVersionName: { type: String, trim: true, default: null }
     },
     // Hospital-managed UPI configurations
     upiIds: [{ label: { type: String, required: true }, upiId: { type: String, required: true } }],

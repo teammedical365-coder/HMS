@@ -96,6 +96,7 @@ function generateApplicationId(hospitalOrName, options = {}) {
     let rawSlug = '';
     let explicitAppId = '';
     let disambiguate = false;
+    let attempt = 1;
 
     if (typeof hospitalOrName === 'string') {
         rawName = hospitalOrName;
@@ -106,6 +107,9 @@ function generateApplicationId(hospitalOrName, options = {}) {
             rawCode = options.hospitalCode || options.clinicCode || '';
             rawSlug = options.slug || '';
             disambiguate = !!options.disambiguate;
+            if (options.attempt && typeof options.attempt === 'number') {
+                attempt = options.attempt;
+            }
         }
     } else if (hospitalOrName && typeof hospitalOrName === 'object') {
         const h = hospitalOrName;
@@ -122,16 +126,23 @@ function generateApplicationId(hospitalOrName, options = {}) {
             if (options.hospitalCode) rawCode = options.hospitalCode;
             if (options.clinicCode) rawCode = options.clinicCode;
             if (options.slug) rawSlug = options.slug;
+            if (options.attempt && typeof options.attempt === 'number') {
+                attempt = options.attempt;
+            }
         }
     }
 
     // 1. If explicit valid androidPackageId was previously saved/locked, reuse it
-    if (explicitAppId && typeof explicitAppId === 'string') {
+    // ONLY when NOT disambiguating. If disambiguate is true, we MUST generate a distinct candidate.
+    if (!disambiguate && explicitAppId && typeof explicitAppId === 'string') {
         const clean = explicitAppId.trim().toLowerCase();
         if (clean.startsWith('com.medical365.')) {
             const seg = clean.replace('com.medical365.', '');
             const normalizedSeg = normalizeSegment(seg, 'app');
-            return `com.medical365.${normalizedSeg}`;
+            const candidate = `com.medical365.${normalizedSeg}`;
+            if (candidate !== 'com.medical365.app') {
+                return candidate;
+            }
         }
     }
 
@@ -143,14 +154,186 @@ function generateApplicationId(hospitalOrName, options = {}) {
     if (disambiguate && rawId) {
         const cleanId = rawId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         const suffix = cleanId.substring(Math.max(0, cleanId.length - 6)) || cleanId.substring(0, 6);
-        baseSeg = `${baseSeg}_${suffix}`;
+        const attemptSuffix = attempt > 1 ? `_${attempt}` : '';
+        baseSeg = `${baseSeg}_${suffix}${attemptSuffix}`;
     }
 
-    return `com.medical365.${baseSeg}`;
+    let candidate = `com.medical365.${baseSeg}`;
+    if (candidate === 'com.medical365.app') {
+        const safeSuffix = rawId ? rawId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toLowerCase() : 'hospital';
+        candidate = `com.medical365.hospital_${safeSuffix}`;
+    }
+
+    return candidate;
+}
+
+/**
+ * Safely reserves an Android packageId for a hospital before build dispatch.
+ *
+ * Truly Atomic Reservation:
+ * - Uses a dedicated PackageReservation collection where `_id` is the package ID.
+ * - MongoDB's built-in primary key uniqueness on `_id` arbitrates concurrent claims
+ *   without requiring custom schema indexes.
+ * - Preserves existing valid packageId when rebuilding the same hospital.
+ * - Checks pre-existing legacy hospital records as well as reservation records.
+ * - If collision occurs, applies bounded deterministic disambiguation with duplicate-key
+ *   (E11000) error handling.
+ * - Guarantees that failure to update Hospital document does not release reservation
+ *   to another hospital.
+ *
+ * @param {Object} hospital - Mongoose hospital document
+ * @param {Object} HospitalModel - Mongoose Hospital model
+ * @param {Object} [PackageReservationModel] - Optional PackageReservation model override (for testing)
+ * @returns {Promise<{ applicationId: string, disambiguated: boolean }>}
+ */
+async function reservePackageIdForHospital(hospital, HospitalModel, PackageReservationModel) {
+    if (!hospital || !hospital._id) {
+        throw new Error('Hospital document with valid _id is required for package ID reservation.');
+    }
+
+    const ResModel = PackageReservationModel || require('../models/packageReservation.model');
+    const tenantIdStr = hospital._id.toString();
+
+    // 1. If hospital already has a valid locked packageId, verify it is uncontested
+    const existingPackageId = hospital.appConfig?.androidPackageId?.trim();
+    let hasExistingUncontestedId = false;
+
+    if (existingPackageId && /^com\.medical365\.[a-z][a-z0-9_]*$/.test(existingPackageId) && existingPackageId !== 'com.medical365.app') {
+        // Check for legacy conflict in hospitals collection
+        const legacyConflict = await HospitalModel.findOne({
+            _id: { $ne: hospital._id },
+            'appConfig.androidPackageId': existingPackageId
+        }).select('_id name').lean();
+
+        // Check for conflict in reservation collection
+        const resConflict = await ResModel.findOne({
+            _id: existingPackageId,
+            hospitalId: { $ne: hospital._id }
+        }).select('_id hospitalId').lean();
+
+        if (!legacyConflict && !resConflict) {
+            hasExistingUncontestedId = true;
+            // Ensure this existing uncontested package ID is atomically locked in PackageReservation collection
+            try {
+                await ResModel.findOneAndUpdate(
+                    { _id: existingPackageId, hospitalId: hospital._id },
+                    {
+                        $set: {
+                            hospitalId: hospital._id,
+                            status: 'COMMITTED',
+                            disambiguated: false,
+                            reservedAt: new Date()
+                        }
+                    },
+                    { upsert: true, new: true }
+                );
+            } catch (upsertErr) {
+                // If collision on upsert, another hospital must have claimed it in a race
+                if (upsertErr.code === 11000 || (upsertErr.message && upsertErr.message.includes('E11000'))) {
+                    hasExistingUncontestedId = false;
+                } else {
+                    throw upsertErr;
+                }
+            }
+
+            if (hasExistingUncontestedId) {
+                return { applicationId: existingPackageId, disambiguated: false };
+            }
+        }
+        // If conflicted with another hospital, fall through to regenerate with disambiguation
+    }
+
+    // 2. Bounded reservation attempt loop with atomic _id insertion
+    const MAX_ATTEMPTS = 5;
+    let reservedCandidate = null;
+    let isDisambiguated = false;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        // If initial existing ID was conflicted, start directly with disambiguation
+        const needsDisambiguation = attempt > 1 || Boolean(existingPackageId && !hasExistingUncontestedId);
+        const candidate = generateApplicationId(hospital, {
+            tenantId: tenantIdStr,
+            disambiguate: needsDisambiguation,
+            attempt
+        });
+
+        // Ensure generic package cannot be assigned
+        if (candidate === 'com.medical365.app') {
+            continue;
+        }
+
+        // Check for pre-existing legacy hospital records in HospitalModel
+        const legacyConflict = await HospitalModel.findOne({
+            _id: { $ne: hospital._id },
+            'appConfig.androidPackageId': candidate
+        }).select('_id name').lean();
+
+        if (legacyConflict) {
+            // Already held by another legacy hospital, advance to next disambiguation attempt
+            continue;
+        }
+
+        // Atomically claim in PackageReservation collection using built-in unique _id constraint
+        try {
+            await ResModel.create([{
+                _id: candidate,
+                hospitalId: hospital._id,
+                status: 'RESERVED',
+                disambiguated: needsDisambiguation,
+                reservedAt: new Date()
+            }]);
+
+            reservedCandidate = candidate;
+            isDisambiguated = needsDisambiguation;
+            break; // Successfully claimed atomically!
+        } catch (err) {
+            if (err.code === 11000 || (err.message && err.message.includes('E11000'))) {
+                // Duplicate key error on _id!
+                // Check if the reservation was previously created by the SAME hospital (idempotency)
+                const existingRes = await ResModel.findById(candidate).lean();
+                if (existingRes && existingRes.hospitalId && existingRes.hospitalId.toString() === tenantIdStr) {
+                    reservedCandidate = candidate;
+                    isDisambiguated = needsDisambiguation;
+                    break;
+                }
+                // Reserved by ANOTHER hospital - loop to next attempt
+                continue;
+            } else {
+                // Unrelated database failure - propagate immediately
+                throw err;
+            }
+        }
+    }
+
+    if (!reservedCandidate) {
+        throw new Error(`Unable to reserve a unique Android package ID for hospital ${hospital._id} (${hospital.name}) after ${MAX_ATTEMPTS} attempts.`);
+    }
+
+    // 3. Atomically persist reservation on hospital document before build dispatch
+    await HospitalModel.findByIdAndUpdate(hospital._id, {
+        $set: {
+            'appConfig.androidPackageId': reservedCandidate
+        }
+    });
+
+    // 4. Mark reservation as COMMITTED
+    try {
+        await ResModel.findByIdAndUpdate(reservedCandidate, {
+            $set: { status: 'COMMITTED' }
+        });
+    } catch (_) {
+        // Non-fatal: reservation is already securely locked with hospitalId
+    }
+
+    if (!hospital.appConfig) hospital.appConfig = {};
+    hospital.appConfig.androidPackageId = reservedCandidate;
+
+    return { applicationId: reservedCandidate, disambiguated: isDisambiguated };
 }
 
 module.exports = {
     normalizeSegment,
     generateApplicationId,
+    reservePackageIdForHospital,
     RESERVED_KEYWORDS
 };

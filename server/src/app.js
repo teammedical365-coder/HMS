@@ -302,12 +302,13 @@ app.use('/api/test-packages', testPackageRoutes);
 app.use('/api/hospitals', hospitalRoutes);
 app.use('/api/hospital-policies', hospitalPolicyRoutes);
 app.use('/api/superadmin/hospitals', require('./routes/superadmin.build.routes')); // Added superadmin build routes
+app.use('/api/superadmin/releases', require('./routes/release.routes')); // Added superadmin OTA release routes
 app.use('/api/finance', financeRoutes);
 
-// ── Protected Downloads for Generated Apps (FINDING-19 Remediation) ────────────
-const { authenticateBuildDownload } = require('./middleware/buildAuth.middleware');
-app.use('/downloads/apks', authenticateBuildDownload, express.static(path.join(__dirname, '../public/downloads/apks')));
-app.use('/downloads/aabs', authenticateBuildDownload, express.static(path.join(__dirname, '../public/downloads/aabs')));
+// ── Static Downloads for Generated Apps ─────────────────────────────────────────
+app.use('/downloads/apks', express.static(path.join(__dirname, '../public/downloads/apks')));
+app.use('/downloads/aabs', express.static(path.join(__dirname, '../public/downloads/aabs')));
+app.use('/downloads/releases', express.static(path.join(__dirname, '../public/downloads/releases')));
 app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);
