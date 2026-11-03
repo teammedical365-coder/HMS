@@ -119,7 +119,8 @@ const FreeOpdSignup = () => {
 
     const handleCopyUrl = () => {
         if (!signupResult) return;
-        const targetUrl = signupResult.clinicUrl || `https://${signupResult.clinic?.slug}.medical365.in`;
+        const slug = signupResult.clinic?.slug || '';
+        const targetUrl = signupResult.clinicUrl || `https://${slug}.medical365.in`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(targetUrl).then(() => {
                 setCopied(true);
@@ -151,16 +152,21 @@ const FreeOpdSignup = () => {
     // REGISTRATION SUCCESS VIEW
     // ─────────────────────────────────────────────────────────────────────────
     if (signupResult) {
-        const { clinic, doctor, clinicUrl } = signupResult;
+        const { clinic, doctor } = signupResult;
+        const slug = clinic?.slug || '';
+        const baseDomain = 'medical365.in';
         const isLocalOrPreview =
             window.location.hostname.includes('localhost') ||
             window.location.hostname === '127.0.0.1' ||
             window.location.hostname.endsWith('.vercel.app');
         
-        // Canonical working login URL with pre-filled email
+        // Exact dedicated clinic URL
+        const displayClinicUrl = signupResult.clinicUrl || `https://${slug}.${baseDomain}`;
+        
+        // Dedicated clinic login URL with pre-filled email
         const effectiveLoginUrl = isLocalOrPreview
-            ? `/login?email=${encodeURIComponent(doctor.email)}`
-            : `https://medical365.in/login?email=${encodeURIComponent(doctor.email)}`;
+            ? `/login?slug=${slug}&email=${encodeURIComponent(doctor.email)}`
+            : (signupResult.loginUrl ? (signupResult.loginUrl.includes('?') ? `${signupResult.loginUrl}&email=${encodeURIComponent(doctor.email)}` : `${signupResult.loginUrl}?email=${encodeURIComponent(doctor.email)}`) : `https://${slug}.${baseDomain}/login?email=${encodeURIComponent(doctor.email)}`);
 
         return (
             <div className="fos-onboarding-body px-4 sm:px-6 py-8">
@@ -212,7 +218,7 @@ const FreeOpdSignup = () => {
                             <input
                                 type="text"
                                 className="input-premium flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-mono text-slate-800 bg-slate-50"
-                                value={clinicUrl}
+                                value={displayClinicUrl}
                                 readOnly
                                 onClick={(e) => e.target.select()}
                             />
@@ -249,7 +255,7 @@ const FreeOpdSignup = () => {
                             <span>Login Now</span>
                         </a>
                         <a
-                            href={clinicUrl}
+                            href={displayClinicUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all text-sm flex items-center justify-center gap-2"
