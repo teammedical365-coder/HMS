@@ -85,8 +85,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
         if (user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd') {
             return [
-                { label: 'Doctor Patient Tray', path: '/opd/tray', icon: <FiActivity />, prefetchKey: 'opd_tray', prefetchFn: () => import('../../pages/opd/DoctorPatientTray') },
                 { label: 'Appointment Management', path: '/opd/appointments', icon: <FiCalendar />, prefetchKey: 'opd_appts', prefetchFn: () => import('../../pages/opd/AppointmentManagement') },
+                { label: 'Doctor Patient Tray', path: '/opd/tray', icon: <FiActivity />, prefetchKey: 'opd_tray', prefetchFn: () => import('../../pages/opd/DoctorPatientTray') },
                 { label: 'Payment & History', path: '/opd/money-tracker', icon: <FiDollarSign />, prefetchKey: 'opd_money', prefetchFn: () => import('../../pages/opd/MoneyTracker') },
                 { label: 'Revisit Schedule', path: '/opd/revisits', icon: <FiClock />, prefetchKey: 'opd_revisits', prefetchFn: () => import('../../pages/opd/RevisitSchedule') },
             ];

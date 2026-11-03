@@ -19,16 +19,16 @@ import './FreeOpdLayout.css';
 
 const OPD_NAV_ITEMS = [
     {
-        label: 'Doctor Patient Tray',
-        path: '/opd/tray',
-        icon: <FiActivity className="opd-nav-icon" />,
-        desc: "Today's queue: Waiting, In Consultation & Completed"
-    },
-    {
         label: 'Appointment Management',
         path: '/opd/appointments',
         icon: <FiCalendar className="opd-nav-icon" />,
         desc: 'Book, reschedule, cancel, manage patient profiles & quota tracker'
+    },
+    {
+        label: 'Doctor Patient Tray',
+        path: '/opd/tray',
+        icon: <FiActivity className="opd-nav-icon" />,
+        desc: "Today's queue: Waiting, In Consultation & Completed"
     },
     {
         label: 'Payment & History',

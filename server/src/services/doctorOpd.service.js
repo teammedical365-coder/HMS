@@ -792,6 +792,20 @@ async function getMoneySummary({ hospitalId, doctorId, doctorUserId }) {
         end: todayRange.end
     };
 
+    // IST Week range: Monday of current week to end of today
+    const nowUtc = Date.now();
+    const istOffset = (5 * 60 + 30) * 60 * 1000;
+    const nowIst = new Date(nowUtc + istOffset);
+    const dayOfWeek = (nowIst.getUTCDay() + 6) % 7; // 0 = Mon, 6 = Sun
+    const startOfWeekIst = new Date(nowIst);
+    startOfWeekIst.setUTCDate(nowIst.getUTCDate() - dayOfWeek);
+    startOfWeekIst.setUTCHours(0, 0, 0, 0);
+    const startOfWeekUtc = new Date(startOfWeekIst.getTime() - istOffset);
+    const weekRange = {
+        start: startOfWeekUtc,
+        end: todayRange.end
+    };
+
     const baseFilter = {
         hospitalId,
         paymentStatus: { $in: ['Paid', 'paid'] },
@@ -806,6 +820,10 @@ async function getMoneySummary({ hospitalId, doctorId, doctorUserId }) {
     // Fetch daily paid appointments
     const dailyFilter = { ...baseFilter, appointmentDate: { $gte: todayRange.start, $lte: todayRange.end } };
     const dailyAppts = await Appointment.find(dailyFilter).select('amount paymentMethod splitPayments').lean();
+
+    // Fetch weekly paid appointments
+    const weeklyFilter = { ...baseFilter, appointmentDate: { $gte: weekRange.start, $lte: weekRange.end } };
+    const weeklyAppts = await Appointment.find(weeklyFilter).select('amount paymentMethod splitPayments').lean();
 
     // Fetch monthly paid appointments
     const monthlyFilter = { ...baseFilter, appointmentDate: { $gte: monthRange.start, $lte: monthRange.end } };
@@ -827,11 +845,13 @@ async function getMoneySummary({ hospitalId, doctorId, doctorUserId }) {
     const pendingAmount = pendingAppts.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
     const dailyBreakdown = calculateCollectionBreakdown(dailyAppts);
+    const weeklyBreakdown = calculateCollectionBreakdown(weeklyAppts);
     const monthlyBreakdown = calculateCollectionBreakdown(monthlyAppts);
     const totalBreakdown = calculateCollectionBreakdown(totalAppts);
 
     return {
         daily: dailyBreakdown,
+        weekly: weeklyBreakdown,
         monthly: monthlyBreakdown,
         total: totalBreakdown,
         pending: {
@@ -898,8 +918,8 @@ async function getTransactionsList({
 
     const total = await Appointment.countDocuments(filter);
     const transactions = await Appointment.find(filter)
-        .populate('userId', 'name phone patientId mrn')
-        .populate('clinicPatientId', 'name phone patientUid')
+        .populate('userId', 'name phone email patientId mrn')
+        .populate('clinicPatientId', 'name phone email patientUid')
         .populate('doctorId', 'name specialty')
         .sort({ appointmentDate: -1, createdAt: -1 })
         .skip(skip)
@@ -907,8 +927,9 @@ async function getTransactionsList({
         .lean();
 
     const formatted = transactions.map(t => {
-        const patientName = t.userId?.name || t.clinicPatientId?.name || 'Walk-in';
-        const patientPhone = t.userId?.phone || t.clinicPatientId?.phone || '';
+        const patientName = t.userId?.name || t.clinicPatientId?.name || t.patientName || 'Walk-in';
+        const patientPhone = t.userId?.phone || t.clinicPatientId?.phone || t.patientPhone || '';
+        const patientEmail = t.userId?.email || t.clinicPatientId?.email || '';
         const patientCode = t.userId?.patientId || t.userId?.mrn || t.clinicPatientId?.patientUid || t.patientId || 'N/A';
         return {
             _id: t._id,
@@ -920,8 +941,11 @@ async function getTransactionsList({
             splitPayments: t.splitPayments || [],
             patientName,
             patientPhone,
+            patientEmail,
             patientCode,
             doctorName: t.doctorName || t.doctorId?.name || 'Doctor',
+            receiptUrl: t.receiptUrl || '',
+            transactionId: t.transactionId || '',
             createdAt: t.createdAt
         };
     });

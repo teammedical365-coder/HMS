@@ -546,143 +546,289 @@ const PatientMonitoring = () => {
                ───────────────────────────────────────────────────────────── */}
             {selectedPatientId && (
                 <div className="pm-modal-overlay">
-                    <div className="pm-modal-card pm-modal-large" role="dialog" aria-modal="true" data-scrollable="true">
-                        <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Patient Profile & Clinical Record</h3>
+                    <div className="pm-modal-card pm-modal-fullscreen" role="dialog" aria-modal="true" data-scrollable="true">
+                        <div className="pm-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#e6fffa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                                    <FiUser />
+                                </div>
+                                <div>
+                                    <h3 className="pm-modal-title" style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                                        Patient Profile & Comprehensive Clinical Record
+                                    </h3>
+                                    <div style={{ fontSize: '12.5px', color: '#64748b' }}>
+                                        Complete demographics, contact info, clinical alerts, and historical visits
+                                    </div>
+                                </div>
+                            </div>
                             <button
                                 type="button"
                                 className="pm-modal-close-btn"
                                 onClick={closeProfileModal}
+                                title="Close Profile (Esc)"
+                                style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', cursor: 'pointer' }}
                             >
-                                <FiX />
+                                <FiX style={{ fontSize: '22px' }} />
                             </button>
                         </div>
 
-                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
+                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true" style={{ padding: '24px 28px', background: '#f8fafc', flex: 1, overflowY: 'auto' }}>
                             {loadingDetails || !patientDetails ? (
-                                <div className="pm-empty-state">Loading patient records...</div>
+                                <div className="pm-empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
+                                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Loading patient profile...</div>
+                                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Fetching demographics, contact info, and medical history</div>
+                                </div>
                             ) : (
                                 <>
-                                    {/* Patient Demographics Strip */}
-                                    <div className="pm-profile-header-strip">
-                                        <div>
-                                            <div className="pm-profile-patient-name">
-                                                {patientDetails.patient.name}
+                                    {/* Patient Hero Banner */}
+                                    <div className="pm-profile-hero">
+                                        <div className="pm-profile-avatar-row">
+                                            <div className="pm-profile-avatar">
+                                                {(patientDetails.patient?.name || 'P').charAt(0).toUpperCase()}
                                             </div>
-                                            <div className="pm-profile-meta">
-                                                <span>UID: <strong>{patientDetails.patient.patientId || patientDetails.patient.patientUid}</strong></span>
-                                                <span> • Phone: {patientDetails.patient.phone || 'N/A'}</span>
-                                                {patientDetails.patient.age && <span> • Age: {patientDetails.patient.age} Yrs</span>}
-                                                {patientDetails.patient.gender && <span> ({patientDetails.patient.gender})</span>}
-                                                {patientDetails.patient.bloodGroup && <span> • Blood: {patientDetails.patient.bloodGroup}</span>}
+                                            <div>
+                                                <div className="pm-profile-name">
+                                                    {patientDetails.patient?.name || 'Patient'}
+                                                </div>
+                                                <div className="pm-profile-chips">
+                                                    <span className="pm-chip uid-chip">
+                                                        🆔 UID: {patientDetails.patient?.patientId || patientDetails.patient?.patientUid || 'N/A'}
+                                                    </span>
+                                                    <span className="pm-chip">
+                                                        📞 {patientDetails.patient?.phone || 'No phone'}
+                                                    </span>
+                                                    <span className="pm-chip email-chip" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534', fontWeight: 600 }}>
+                                                        <FiMail style={{ marginRight: '4px' }} />
+                                                        {patientDetails.patient?.email || 'No email provided'}
+                                                    </span>
+                                                    {patientDetails.patient?.age && (
+                                                        <span className="pm-chip">
+                                                            🎂 {patientDetails.patient.age} Yrs {patientDetails.patient?.gender ? `(${patientDetails.patient.gender})` : ''}
+                                                        </span>
+                                                    )}
+                                                    {patientDetails.patient?.bloodGroup && (
+                                                        <span className="pm-chip" style={{ color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' }}>
+                                                            🩸 {patientDetails.patient.bloodGroup}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-
-                                        <button
-                                            type="button"
-                                            className="pm-action-btn-primary"
-                                            style={{ padding: '8px 14px', fontSize: '12.5px' }}
-                                            onClick={() => setProfileTab('prescribe')}
-                                        >
-                                            <FiPlus />
-                                            <span>Write Prescription</span>
-                                        </button>
                                     </div>
 
-                                    {/* Tabs */}
-                                    <div className="pm-tabs-bar">
+                                    {/* Tabs Bar: Overview vs Prescriptions (Removed Prescribe Now) */}
+                                    <div className="pm-tabs-bar" style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px' }}>
                                         <button
                                             type="button"
                                             className={`pm-tab-btn ${profileTab === 'overview' ? 'active' : ''}`}
                                             onClick={() => setProfileTab('overview')}
+                                            style={{ padding: '10px 18px', fontWeight: 700, fontSize: '13.5px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: profileTab === 'overview' ? '3px solid #0d9488' : '3px solid transparent', color: profileTab === 'overview' ? '#0d9488' : '#64748b' }}
                                         >
-                                            Overview & History
+                                            Overview & Clinical Information
                                         </button>
                                         <button
                                             type="button"
                                             className={`pm-tab-btn ${profileTab === 'prescriptions' ? 'active' : ''}`}
                                             onClick={() => setProfileTab('prescriptions')}
+                                            style={{ padding: '10px 18px', fontWeight: 700, fontSize: '13.5px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: profileTab === 'prescriptions' ? '3px solid #0d9488' : '3px solid transparent', color: profileTab === 'prescriptions' ? '#0d9488' : '#64748b' }}
                                         >
-                                            Prescriptions ({patientDetails.prescriptions?.length || 0})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={`pm-tab-btn ${profileTab === 'prescribe' ? 'active' : ''}`}
-                                            onClick={() => setProfileTab('prescribe')}
-                                        >
-                                            ✍️ Prescribe Now
+                                            Prescriptions History ({patientDetails.prescriptions?.length || 0})
                                         </button>
                                     </div>
 
-                                    {/* TAB 1: OVERVIEW & HISTORY */}
+                                    {/* TAB 1: OVERVIEW & CLINICAL DETAILS */}
                                     {profileTab === 'overview' && (
                                         <div>
-                                            <div className="pm-form-grid" style={{ marginBottom: '20px' }}>
-                                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>KNOWN ALLERGIES</span>
-                                                    <p style={{ margin: '4px 0 0', fontWeight: 600, color: patientDetails.patient.allergies ? '#dc2626' : '#1e293b' }}>
-                                                        {patientDetails.patient.allergies || 'None reported'}
-                                                    </p>
+                                            {/* 3-Card Detailed Information Grid */}
+                                            <div className="pm-profile-grid">
+                                                {/* Card 1: Personal & Contact Information */}
+                                                <div className="pm-info-card">
+                                                    <div className="pm-info-card-header">
+                                                        <span>👤 Personal & Contact Info</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Full Name</span>
+                                                        <span className="pm-info-value">{patientDetails.patient?.name || 'N/A'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Patient UID</span>
+                                                        <span className="pm-info-value" style={{ color: '#0d9488' }}>
+                                                            {patientDetails.patient?.patientId || patientDetails.patient?.patientUid || 'N/A'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Mobile Phone</span>
+                                                        <span className="pm-info-value">{patientDetails.patient?.phone || 'N/A'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Email Address</span>
+                                                        <span className="pm-info-value" style={{ color: patientDetails.patient?.email ? '#0284c7' : '#94a3b8', wordBreak: 'break-all', fontWeight: 700 }}>
+                                                            {patientDetails.patient?.email || 'Not provided'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Age & Gender</span>
+                                                        <span className="pm-info-value">
+                                                            {patientDetails.patient?.age ? `${patientDetails.patient.age} Yrs` : 'N/A'} {patientDetails.patient?.gender ? `(${patientDetails.patient.gender})` : ''}
+                                                        </span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Blood Group</span>
+                                                        <span className="pm-info-value" style={{ color: '#dc2626' }}>
+                                                            {patientDetails.patient?.bloodGroup || 'Not specified'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Address</span>
+                                                        <span className="pm-info-value" style={{ fontSize: '12px' }}>
+                                                            {[patientDetails.patient?.address, patientDetails.patient?.city, patientDetails.patient?.state, patientDetails.patient?.pincode].filter(Boolean).join(', ') || 'Not provided'}
+                                                        </span>
+                                                    </div>
                                                 </div>
 
-                                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>CHRONIC CONDITIONS</span>
-                                                    <p style={{ margin: '4px 0 0', fontWeight: 600, color: '#1e293b' }}>
-                                                        {patientDetails.patient.chronicConditions || 'None reported'}
-                                                    </p>
+                                                {/* Card 2: Medical & Clinical Alerts */}
+                                                <div className="pm-info-card">
+                                                    <div className="pm-info-card-header">
+                                                        <span>⚠️ Medical Alerts & Conditions</span>
+                                                    </div>
+                                                    <div style={{ marginBottom: '14px' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Known Allergies</span>
+                                                        <div style={{ marginTop: '4px', padding: '8px 12px', background: patientDetails.patient?.allergies ? '#fef2f2' : '#f8fafc', border: `1px solid ${patientDetails.patient?.allergies ? '#fecaca' : '#e2e8f0'}`, borderRadius: '8px', fontWeight: 600, color: patientDetails.patient?.allergies ? '#dc2626' : '#475569', fontSize: '13px' }}>
+                                                            {patientDetails.patient?.allergies || 'None reported'}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ marginBottom: '14px' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Chronic Conditions</span>
+                                                        <div style={{ marginTop: '4px', padding: '8px 12px', background: patientDetails.patient?.chronicConditions ? '#fffbeb' : '#f8fafc', border: `1px solid ${patientDetails.patient?.chronicConditions ? '#fde68a' : '#e2e8f0'}`, borderRadius: '8px', fontWeight: 600, color: patientDetails.patient?.chronicConditions ? '#b45309' : '#475569', fontSize: '13px' }}>
+                                                            {patientDetails.patient?.chronicConditions || 'None reported'}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Medical Notes</span>
+                                                        <div style={{ marginTop: '4px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', fontSize: '12.5px', lineHeight: 1.4 }}>
+                                                            {patientDetails.patient?.medicalNotes || 'No specific clinical notes on record.'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 3: Latest Recorded Vitals */}
+                                                <div className="pm-info-card">
+                                                    <div className="pm-info-card-header">
+                                                        <span>💓 Latest Vitals & Stats</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Blood Pressure (BP)</span>
+                                                        <span className="pm-info-value">{patientDetails.vitals?.bp || 'Not recorded'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Pulse Rate</span>
+                                                        <span className="pm-info-value">{patientDetails.vitals?.pulse ? `${patientDetails.vitals.pulse} bpm` : 'Not recorded'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Body Temperature</span>
+                                                        <span className="pm-info-value">{patientDetails.vitals?.temp ? `${patientDetails.vitals.temp} °F` : 'Not recorded'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Oxygen SpO2</span>
+                                                        <span className="pm-info-value">{patientDetails.vitals?.spo2 ? `${patientDetails.vitals.spo2} %` : 'Not recorded'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Weight</span>
+                                                        <span className="pm-info-value">{patientDetails.vitals?.weight ? `${patientDetails.vitals.weight} kg` : 'Not recorded'}</span>
+                                                    </div>
+                                                    <div className="pm-info-row">
+                                                        <span className="pm-info-label">Total Recorded Visits</span>
+                                                        <span className="pm-info-value" style={{ color: '#0d9488' }}>
+                                                            {patientDetails.appointments?.length || 0} Consultations
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
 
-                                            <h4 style={{ fontSize: '14px', fontWeight: 800, margin: '0 0 12px', color: '#0f172a' }}>
-                                                Consultation History ({patientDetails.appointments?.length || 0} Visits)
-                                            </h4>
+                                            {/* Consultation Visits History */}
+                                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                                <h4 style={{ fontSize: '14.5px', fontWeight: 800, color: '#0f172a', marginBottom: '14px' }}>
+                                                    Consultation History ({patientDetails.appointments?.length || 0} Visits)
+                                                </h4>
 
-                                            {patientDetails.appointments?.length === 0 ? (
-                                                <p style={{ color: '#64748b', fontSize: '13px' }}>No previous consultations on record.</p>
-                                            ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    {patientDetails.appointments.map((appt) => (
-                                                        <div key={appt._id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '12px 16px', borderRadius: '10px' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                                                                    {new Date(appt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                                </span>
-                                                                <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                                                                    {appt.status?.toUpperCase() || 'COMPLETED'}
+                                                {(!patientDetails.appointments || patientDetails.appointments.length === 0) ? (
+                                                    <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                                                        No consultation visits recorded for this patient yet.
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                        {patientDetails.appointments.map((appt) => (
+                                                            <div
+                                                                key={appt._id}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    justifyContent: 'space-between',
+                                                                    alignItems: 'center',
+                                                                    padding: '12px 16px',
+                                                                    background: '#f8fafc',
+                                                                    border: '1px solid #e2e8f0',
+                                                                    borderRadius: '10px',
+                                                                    flexWrap: 'wrap',
+                                                                    gap: '8px'
+                                                                }}
+                                                            >
+                                                                <div>
+                                                                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>
+                                                                        📅 {new Date(appt.appointmentDate || appt.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
+                                                                        {appt.doctorName || appt.doctorId?.name ? `Doctor: ${appt.doctorName || appt.doctorId?.name}` : 'General Consultation'}
+                                                                        {appt.diagnosis && ` • Diagnosis: ${appt.diagnosis}`}
+                                                                        {appt.chiefComplaint && ` • Complaint: ${appt.chiefComplaint}`}
+                                                                    </div>
+                                                                </div>
+                                                                <span
+                                                                    style={{
+                                                                        padding: '4px 10px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '11.5px',
+                                                                        fontWeight: 700,
+                                                                        textTransform: 'uppercase',
+                                                                        background: appt.status === 'completed' ? '#dcfce7' : appt.status === 'in-consultation' ? '#dbeafe' : '#f1f5f9',
+                                                                        color: appt.status === 'completed' ? '#15803d' : appt.status === 'in-consultation' ? '#1d4ed8' : '#475569'
+                                                                    }}
+                                                                >
+                                                                    {appt.status}
                                                                 </span>
                                                             </div>
-                                                            {appt.diagnosis && (
-                                                                <p style={{ margin: '6px 0 2px', fontSize: '12.5px', color: '#334155' }}>
-                                                                    <strong>Diagnosis:</strong> {appt.diagnosis}
-                                                                </p>
-                                                            )}
-                                                            {appt.doctorNotes && (
-                                                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                                                    <strong>Notes:</strong> {appt.doctorNotes}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* TAB 2: PRESCRIPTIONS LIST & DOWNLOAD */}
+                                    {/* TAB 2: PRESCRIPTIONS HISTORY */}
                                     {profileTab === 'prescriptions' && (
-                                        <div>
-                                            {patientDetails.prescriptions?.length === 0 ? (
-                                                <p style={{ color: '#64748b', fontSize: '13px' }}>No prescriptions issued yet.</p>
+                                        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px 22px' }}>
+                                            <h4 style={{ fontSize: '14.5px', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>
+                                                Issued Prescriptions & Medication Logs
+                                            </h4>
+
+                                            {(!patientDetails.prescriptions || patientDetails.prescriptions.length === 0) ? (
+                                                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '13.5px' }}>
+                                                    No prescriptions have been issued to this patient yet.
+                                                </div>
                                             ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                                     {patientDetails.prescriptions.map((rx, idx) => (
-                                                        <div key={idx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '16px', borderRadius: '12px' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                        <div key={idx} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '18px 20px', borderRadius: '14px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
                                                                 <div>
-                                                                    <strong style={{ fontSize: '13.5px', color: '#0f172a' }}>
-                                                                        Prescription Date: {new Date(rx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                    <strong style={{ fontSize: '14px', color: '#0f172a' }}>
+                                                                        📄 Prescription Date: {new Date(rx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                                     </strong>
-                                                                    {rx.diagnosis && <span style={{ marginLeft: '12px', color: '#0d9488', fontWeight: 600 }}>• {rx.diagnosis}</span>}
+                                                                    {rx.diagnosis && (
+                                                                        <span style={{ marginLeft: '12px', color: '#0d9488', fontWeight: 700, fontSize: '13px' }}>
+                                                                            • {rx.diagnosis}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
 
                                                                 <button
@@ -715,229 +861,35 @@ const PatientMonitoring = () => {
                                                             </div>
 
                                                             {rx.medicines?.length > 0 && (
-                                                                <table className="pm-meds-table">
-                                                                    <thead>
-                                                                        <tr>
-                                                                            <th>Medicine Name</th>
-                                                                            <th>Dosage</th>
-                                                                            <th>Frequency</th>
-                                                                            <th>Duration</th>
-                                                                            <th>Instructions</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {rx.medicines.map((m, mIdx) => (
-                                                                            <tr key={mIdx}>
-                                                                                <td><strong>{m.medicineName || m.name}</strong></td>
-                                                                                <td>{m.dosage}</td>
-                                                                                <td>{m.frequency}</td>
-                                                                                <td>{m.duration}</td>
-                                                                                <td>{m.instructions}</td>
+                                                                <div style={{ overflowX: 'auto' }}>
+                                                                    <table className="pm-meds-table" style={{ width: '100%', marginTop: '6px' }}>
+                                                                        <thead>
+                                                                            <tr>
+                                                                                <th>Medicine Name</th>
+                                                                                <th>Dosage</th>
+                                                                                <th>Frequency</th>
+                                                                                <th>Duration</th>
+                                                                                <th>Instructions</th>
                                                                             </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {rx.medicines.map((m, mIdx) => (
+                                                                                <tr key={mIdx}>
+                                                                                    <td><strong>{m.medicineName || m.name}</strong></td>
+                                                                                    <td>{m.dosage}</td>
+                                                                                    <td>{m.frequency}</td>
+                                                                                    <td>{m.duration}</td>
+                                                                                    <td>{m.instructions}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     ))}
                                                 </div>
                                             )}
-                                        </div>
-                                    )}
-
-                                    {/* TAB 3: WRITE PRESCRIPTION */}
-                                    {profileTab === 'prescribe' && (
-                                        <div>
-                                            {rxNotice && (
-                                                <div style={{ background: rxNotice.includes('✓') ? '#ecfdf5' : '#fef2f2', color: rxNotice.includes('✓') ? '#047857' : '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
-                                                    {rxNotice}
-                                                </div>
-                                            )}
-
-                                            <div className="pm-form-grid" style={{ marginBottom: '16px' }}>
-                                                <div className="pm-form-group full-width">
-                                                    <label className="pm-label">Clinical Diagnosis *</label>
-                                                    <input
-                                                        type="text"
-                                                        className="pm-input"
-                                                        placeholder="e.g. Acute Bronchitis / Viral Pharyngitis"
-                                                        value={rxForm.diagnosis}
-                                                        onChange={(e) => setRxForm({ ...rxForm, diagnosis: e.target.value })}
-                                                    />
-                                                </div>
-
-                                                <div className="pm-form-group">
-                                                    <label className="pm-label">Blood Pressure (BP)</label>
-                                                    <input
-                                                        type="text"
-                                                        className="pm-input"
-                                                        placeholder="e.g. 120/80"
-                                                        value={rxForm.vitals.bp}
-                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, bp: e.target.value } })}
-                                                    />
-                                                </div>
-
-                                                <div className="pm-form-group">
-                                                    <label className="pm-label">Pulse (bpm)</label>
-                                                    <input
-                                                        type="text"
-                                                        className="pm-input"
-                                                        placeholder="e.g. 74"
-                                                        value={rxForm.vitals.pulse}
-                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, pulse: e.target.value } })}
-                                                    />
-                                                </div>
-
-                                                <div className="pm-form-group">
-                                                    <label className="pm-label">Temperature (°F)</label>
-                                                    <input
-                                                        type="text"
-                                                        className="pm-input"
-                                                        placeholder="e.g. 98.6"
-                                                        value={rxForm.vitals.temp}
-                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, temp: e.target.value } })}
-                                                    />
-                                                </div>
-
-                                                <div className="pm-form-group">
-                                                    <label className="pm-label">Weight (kg)</label>
-                                                    <input
-                                                        type="text"
-                                                        className="pm-input"
-                                                        placeholder="e.g. 68"
-                                                        value={rxForm.vitals.weight}
-                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, weight: e.target.value } })}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <label className="pm-label">Prescribed Medicines</label>
-                                            <table className="pm-meds-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Medicine Name</th>
-                                                        <th>Dosage</th>
-                                                        <th>Frequency</th>
-                                                        <th>Duration</th>
-                                                        <th>Instructions</th>
-                                                        <th style={{ width: '40px' }}></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {rxForm.medicines.map((m, idx) => (
-                                                        <tr key={idx}>
-                                                            <td>
-                                                                <input
-                                                                    type="text"
-                                                                    className="pm-input"
-                                                                    placeholder="e.g. Tab Paracetamol 650mg"
-                                                                    value={m.medicineName}
-                                                                    onChange={(e) => handleMedChange(idx, 'medicineName', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                <input
-                                                                    type="text"
-                                                                    className="pm-input"
-                                                                    placeholder="1 tab"
-                                                                    value={m.dosage}
-                                                                    onChange={(e) => handleMedChange(idx, 'dosage', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                <input
-                                                                    type="text"
-                                                                    className="pm-input"
-                                                                    placeholder="1-0-1"
-                                                                    value={m.frequency}
-                                                                    onChange={(e) => handleMedChange(idx, 'frequency', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                <input
-                                                                    type="text"
-                                                                    className="pm-input"
-                                                                    placeholder="5 days"
-                                                                    value={m.duration}
-                                                                    onChange={(e) => handleMedChange(idx, 'duration', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                <input
-                                                                    type="text"
-                                                                    className="pm-input"
-                                                                    placeholder="After food"
-                                                                    value={m.instructions}
-                                                                    onChange={(e) => handleMedChange(idx, 'instructions', e.target.value)}
-                                                                />
-                                                            </td>
-                                                            <td>
-                                                                {rxForm.medicines.length > 1 && (
-                                                                    <button
-                                                                        type="button"
-                                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '15px' }}
-                                                                        onClick={() => handleRemoveMedicine(idx)}
-                                                                    >
-                                                                        <FiTrash2 />
-                                                                    </button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-
-                                            <button
-                                                type="button"
-                                                className="pm-add-med-btn"
-                                                onClick={handleAddMedicine}
-                                            >
-                                                + Add Another Medicine
-                                            </button>
-
-                                            <div className="pm-form-grid">
-                                                <div className="pm-form-group full-width">
-                                                    <label className="pm-label">Doctor Advice / Diet Instructions</label>
-                                                    <textarea
-                                                        className="pm-textarea"
-                                                        rows="2"
-                                                        placeholder="e.g. Drink plenty of warm fluids, rest for 3 days."
-                                                        value={rxForm.doctorNotes}
-                                                        onChange={(e) => setRxForm({ ...rxForm, doctorNotes: e.target.value })}
-                                                    />
-                                                </div>
-
-                                                <div className="pm-form-group">
-                                                    <label className="pm-label">Follow-Up Revisit Date (Optional)</label>
-                                                    <input
-                                                        type="date"
-                                                        className="pm-input"
-                                                        value={rxForm.followUpDate}
-                                                        onChange={(e) => setRxForm({ ...rxForm, followUpDate: e.target.value })}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                                                <button
-                                                    type="button"
-                                                    className="pm-btn-primary"
-                                                    disabled={savingRx}
-                                                    onClick={() => handleSavePrescription(false)}
-                                                >
-                                                    {savingRx ? 'Saving...' : 'Save Prescription'}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="pm-btn-primary"
-                                                    style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
-                                                    disabled={savingRx}
-                                                    onClick={() => handleSavePrescription(true)}
-                                                >
-                                                    <FiDownload style={{ marginRight: '6px' }} />
-                                                    {savingRx ? 'Saving...' : 'Save & Download PDF 📄'}
-                                                </button>
-                                            </div>
                                         </div>
                                     )}
                                 </>
