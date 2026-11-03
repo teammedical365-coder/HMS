@@ -136,7 +136,7 @@ const FreeOpdLayout = ({ children }) => {
                             {clinicDisplayName}
                         </div>
                         <div className="opd-plan-badge">
-                            🎁 Free Doctor OPD Plan
+                            🩺 Doctor OPD
                         </div>
                     </div>
                 </div>
@@ -195,7 +195,7 @@ const FreeOpdLayout = ({ children }) => {
                         {/* Daily 20 Appointment Quota Meter */}
                         <div 
                             className={`opd-quota-badge ${quotaClass}`}
-                            title="Daily quota is strictly 20 appointments per IST calendar day for the Free Doctor OPD Plan"
+                            title="Daily quota is 20 appointments per day for Doctor OPD"
                         >
                             <span className="opd-quota-dot" />
                             <span>{todayCount} / 20 Appointments Today</span>

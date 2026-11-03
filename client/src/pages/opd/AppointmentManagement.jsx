@@ -199,15 +199,14 @@ const AppointmentManagement = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [todayCount, setTodayCount] = useState(0);
 
-    // Book Modal State
+    // Book Modal State (Single Unified Direct Patient Registration & Profile Matching)
     const [showBookModal, setShowBookModal] = useState(false);
-    const [bookingType, setBookingType] = useState('existing'); // 'existing' or 'new'
     const [bookForm, setBookForm] = useState({
-        patientId: '',
-        newPatientName: '',
-        newPatientPhone: '',
-        newPatientGender: 'Male',
-        newPatientAge: '',
+        patientName: '',
+        patientPhone: '',
+        patientEmail: '',
+        gender: 'Male',
+        age: '',
         appointmentDate: todayStr,
         appointmentTime: '10:00',
         amount: 300,
@@ -215,9 +214,44 @@ const AppointmentManagement = () => {
         notes: '',
         visitType: 'New Consultation'
     });
-    const [patientsList, setPatientsList] = useState([]);
+    const [detectedPatient, setDetectedPatient] = useState(null);
     const [submittingBook, setSubmittingBook] = useState(false);
     const [bookError, setBookError] = useState('');
+    const patientDetectTimeoutRef = useRef(null);
+
+    const handlePatientLookup = (field, val) => {
+        const updated = { ...bookForm, [field]: val };
+        setBookForm(updated);
+
+        if (patientDetectTimeoutRef.current) clearTimeout(patientDetectTimeoutRef.current);
+        patientDetectTimeoutRef.current = setTimeout(async () => {
+            const cleanP = (updated.patientPhone || '').replace(/\D/g, '').slice(-10);
+            const cleanE = (updated.patientEmail || '').trim().toLowerCase();
+            if (cleanP.length === 10 || (cleanE && cleanE.includes('@') && cleanE.includes('.'))) {
+                try {
+                    const query = cleanE || cleanP;
+                    const res = await freeOpdAPI.searchPatients({ query, limit: 1 });
+                    if (res.success && res.patients?.length > 0) {
+                        const matched = res.patients.find(p => 
+                            (cleanE && p.email?.toLowerCase() === cleanE) ||
+                            (cleanP.length === 10 && p.phone === cleanP)
+                        ) || res.patients[0];
+                        if (matched) {
+                            setDetectedPatient(matched);
+                            setBookForm(prev => ({
+                                ...prev,
+                                patientName: prev.patientName || matched.name,
+                                gender: matched.gender || prev.gender,
+                                age: prev.age || (matched.age ? String(matched.age) : '')
+                            }));
+                            return;
+                        }
+                    }
+                } catch (_) {}
+            }
+            setDetectedPatient(null);
+        }, 300);
+    };
 
     // Reschedule Modal State
     const [rescheduleModal, setRescheduleModal] = useState({ open: false, apptId: null, date: todayStr, time: '10:00' });
@@ -261,61 +295,67 @@ const AppointmentManagement = () => {
         loadQuota();
     }, [loadAppointments, loadQuota]);
 
-    // Fetch Patients for Dropdown when opening booking modal
-    const handleOpenBookModal = async () => {
+    const handleOpenBookModal = () => {
         setBookError('');
+        setDetectedPatient(null);
         setShowBookModal(true);
-        try {
-            const res = await freeOpdAPI.searchPatients({ limit: 100 });
-            if (res.success) {
-                setPatientsList(res.patients || []);
-            }
-        } catch (_) {}
     };
 
-    // Handle Book Submit
+    // Handle Book Submit (Catches existing patient by Email/Phone or registers new)
     const handleBookSubmit = async (e) => {
         e.preventDefault();
         setBookError('');
         setSubmittingBook(true);
 
         try {
-            let patientIdToUse = bookForm.patientId;
-
-            // If new patient, register them first!
-            if (bookingType === 'new') {
-                if (!bookForm.newPatientName.trim()) {
-                    setBookError('Patient name is required');
-                    setSubmittingBook(false);
-                    return;
-                }
-                const cleanPhone = bookForm.newPatientPhone.replace(/\D/g, '').slice(-10);
-                if (cleanPhone.length !== 10) {
-                    setBookError('Valid 10-digit phone number is required');
-                    setSubmittingBook(false);
-                    return;
-                }
-
-                const regRes = await freeOpdAPI.registerPatient({
-                    name: bookForm.newPatientName.trim(),
-                    phone: cleanPhone,
-                    gender: bookForm.newPatientGender,
-                    age: bookForm.newPatientAge ? Number(bookForm.newPatientAge) : undefined
-                });
-
-                if (!regRes.success) {
-                    setBookError(regRes.message || 'Could not register patient');
-                    setSubmittingBook(false);
-                    return;
-                }
-                patientIdToUse = regRes.patient._id;
-            }
-
-            if (!patientIdToUse) {
-                setBookError('Please select or register a patient');
+            if (!bookForm.patientName.trim()) {
+                setBookError('Patient full name is required');
                 setSubmittingBook(false);
                 return;
             }
+            const cleanPhone = bookForm.patientPhone.replace(/\D/g, '').slice(-10);
+            if (cleanPhone.length !== 10) {
+                setBookError('Valid 10-digit mobile number is required');
+                setSubmittingBook(false);
+                return;
+            }
+
+            const cleanEmail = bookForm.patientEmail && bookForm.patientEmail.trim()
+                ? bookForm.patientEmail.trim().toLowerCase()
+                : undefined;
+
+            if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+                setBookError('Please enter a valid email address');
+                setSubmittingBook(false);
+                return;
+            }
+
+            let ageNum = undefined;
+            if (bookForm.age !== '' && bookForm.age !== null && bookForm.age !== undefined) {
+                ageNum = Number(bookForm.age);
+                if (isNaN(ageNum) || ageNum < 1 || ageNum > 125) {
+                    setBookError('Please enter a valid age between 1 and 125');
+                    setSubmittingBook(false);
+                    return;
+                }
+            }
+
+            // Register or automatically catch existing patient by Email or Phone
+            const regRes = await freeOpdAPI.registerPatient({
+                name: bookForm.patientName.trim(),
+                phone: cleanPhone,
+                email: cleanEmail,
+                gender: bookForm.gender,
+                age: ageNum
+            });
+
+            if (!regRes.success) {
+                setBookError(regRes.message || 'Could not process patient registration');
+                setSubmittingBook(false);
+                return;
+            }
+
+            const patientIdToUse = regRes.patient._id;
 
             const payload = {
                 patientId: patientIdToUse,
@@ -330,12 +370,13 @@ const AppointmentManagement = () => {
             const res = await freeOpdAPI.createAppointment(payload);
             if (res.success) {
                 setShowBookModal(false);
+                setDetectedPatient(null);
                 setBookForm({
-                    patientId: '',
-                    newPatientName: '',
-                    newPatientPhone: '',
-                    newPatientGender: 'Male',
-                    newPatientAge: '',
+                    patientName: '',
+                    patientPhone: '',
+                    patientEmail: '',
+                    gender: 'Male',
+                    age: '',
                     appointmentDate: todayStr,
                     appointmentTime: '10:00',
                     amount: 300,
@@ -404,8 +445,8 @@ const AppointmentManagement = () => {
             {/* Daily Quota Progress Banner */}
             <div className="am-quota-banner">
                 <div className="am-quota-info">
-                    <h4>Daily Appointment Quota (20 Max / IST Calendar Day)</h4>
-                    <p>Free Doctor OPD Plan automatically renews 20 appointment slots at 00:00 IST every night.</p>
+                    <h4>Daily Appointment Quota (20 Max/Day)</h4>
+                    <p>Doctor OPD plan allows up to 20 appointments per day.</p>
                 </div>
 
                 <div className="am-quota-bar-wrap">
@@ -670,13 +711,18 @@ const AppointmentManagement = () => {
             </div>
 
             {/* ─────────────────────────────────────────────────────────────
-               BOOK APPOINTMENT MODAL (Existing or New Patient)
+               BOOK OPD APPOINTMENT MODAL (Direct Patient Registration & Profile Matching)
                ───────────────────────────────────────────────────────────── */}
             {showBookModal && (
                 <div className="pm-modal-overlay">
-                    <div className="pm-modal-card">
+                    <div className="pm-modal-card" style={{ maxWidth: '640px' }} role="dialog" aria-modal="true" data-scrollable="true">
                         <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Book OPD Appointment</h3>
+                            <div>
+                                <h3 className="pm-modal-title" style={{ margin: 0 }}>Book OPD Appointment</h3>
+                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                                    Register patient and schedule appointment in one seamless step
+                                </p>
+                            </div>
                             <button
                                 type="button"
                                 className="pm-modal-close-btn"
@@ -687,148 +733,174 @@ const AppointmentManagement = () => {
                         </div>
 
                         <form onSubmit={handleBookSubmit}>
-                            <div className="pm-modal-body">
+                            <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
                                 {bookError && (
-                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
-                                        ⚠ {bookError}
+                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span>⚠</span>
+                                        <span>{bookError}</span>
                                     </div>
                                 )}
 
-                                {/* Patient Selection Mode Switcher */}
-                                <div style={{ display: 'flex', gap: '16px', background: '#f1f5f9', padding: '8px 14px', borderRadius: '10px', marginBottom: '16px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                                        <input
-                                            type="radio"
-                                            name="bookingType"
-                                            value="existing"
-                                            checked={bookingType === 'existing'}
-                                            onChange={() => setBookingType('existing')}
-                                        />
-                                        <span>Select Registered Patient</span>
-                                    </label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                                        <input
-                                            type="radio"
-                                            name="bookingType"
-                                            value="new"
-                                            checked={bookingType === 'new'}
-                                            onChange={() => setBookingType('new')}
-                                        />
-                                        <span>➕ Register New Patient Inline</span>
-                                    </label>
-                                </div>
+                                {/* Returning Patient Auto-Catch Notice */}
+                                {detectedPatient && (
+                                    <div style={{
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        color: '#065f46',
+                                        padding: '10px 14px',
+                                        borderRadius: '8px',
+                                        marginBottom: '16px',
+                                        fontSize: '12.5px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        <FiCheckCircle style={{ color: '#059669', fontSize: '16px', flexShrink: 0 }} />
+                                        <div>
+                                            <strong>Returning Patient Detected:</strong> {detectedPatient.name} ({detectedPatient.patientUid || detectedPatient.patientId || 'UID'})
+                                            <div style={{ fontSize: '11.5px', color: '#047857', marginTop: '2px' }}>
+                                                Appointment will be attached to this patient's existing profile.
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
-                                <div className="pm-form-grid">
-                                    {bookingType === 'existing' ? (
+                                {/* Section 1: Patient Information */}
+                                <div style={{ marginBottom: '18px' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '10px' }}>
+                                        1. Patient Details
+                                    </div>
+
+                                    <div className="pm-form-grid">
                                         <div className="pm-form-group full-width">
-                                            <label className="pm-label">Select Patient *</label>
+                                            <label className="pm-label">Patient Full Name *</label>
+                                            <input
+                                                type="text"
+                                                className="pm-input"
+                                                placeholder="e.g. Meena Devi"
+                                                value={bookForm.patientName}
+                                                onChange={(e) => setBookForm({ ...bookForm, patientName: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Mobile Number (10 digits) *</label>
+                                            <input
+                                                type="tel"
+                                                className="pm-input"
+                                                placeholder="9876543210"
+                                                maxLength="10"
+                                                value={bookForm.patientPhone}
+                                                onChange={(e) => handlePatientLookup('patientPhone', e.target.value)}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">
+                                                Email Address <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>(Links existing profile)</span>
+                                            </label>
+                                            <input
+                                                type="email"
+                                                className="pm-input"
+                                                placeholder="patient@example.com"
+                                                value={bookForm.patientEmail}
+                                                onChange={(e) => handlePatientLookup('patientEmail', e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Gender</label>
                                             <select
                                                 className="pm-select"
-                                                value={bookForm.patientId}
-                                                onChange={(e) => setBookForm({ ...bookForm, patientId: e.target.value })}
-                                                required
+                                                value={bookForm.gender}
+                                                onChange={(e) => setBookForm({ ...bookForm, gender: e.target.value })}
                                             >
-                                                <option value="">-- Choose Patient --</option>
-                                                {patientsList.map(p => (
-                                                    <option key={p._id} value={p._id}>
-                                                        {p.name} ({p.patientId || p.patientUid || 'UID'} • {p.phone || 'No phone'})
-                                                    </option>
-                                                ))}
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                                <option value="Other">Other</option>
                                             </select>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="pm-form-group full-width">
-                                                <label className="pm-label">New Patient Full Name *</label>
-                                                <input
-                                                    type="text"
-                                                    className="pm-input"
-                                                    placeholder="e.g. Meena Devi"
-                                                    value={bookForm.newPatientName}
-                                                    onChange={(e) => setBookForm({ ...bookForm, newPatientName: e.target.value })}
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="pm-form-group">
-                                                <label className="pm-label">Mobile Number (10 digits) *</label>
-                                                <input
-                                                    type="tel"
-                                                    className="pm-input"
-                                                    placeholder="9876543210"
-                                                    maxLength="10"
-                                                    value={bookForm.newPatientPhone}
-                                                    onChange={(e) => setBookForm({ ...bookForm, newPatientPhone: e.target.value })}
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="pm-form-group">
-                                                <label className="pm-label">Age (Years)</label>
-                                                <input
-                                                    type="number"
-                                                    className="pm-input"
-                                                    placeholder="30"
-                                                    value={bookForm.newPatientAge}
-                                                    onChange={(e) => setBookForm({ ...bookForm, newPatientAge: e.target.value })}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
 
-                                    <div className="pm-form-group">
-                                        <label className="pm-label">Appointment Date *</label>
-                                        <input
-                                            type="date"
-                                            className="pm-input"
-                                            value={bookForm.appointmentDate}
-                                            onChange={(e) => setBookForm({ ...bookForm, appointmentDate: e.target.value })}
-                                            required
-                                        />
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Age (Years)</label>
+                                            <input
+                                                type="number"
+                                                className="pm-input"
+                                                placeholder="e.g. 30"
+                                                min="1"
+                                                max="125"
+                                                value={bookForm.age}
+                                                onChange={(e) => setBookForm({ ...bookForm, age: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Appointment & Consultation Details */}
+                                <div>
+                                    <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '10px' }}>
+                                        2. Appointment & Consultation Details
                                     </div>
 
-                                    <div className="pm-form-group">
-                                        <label className="pm-label">Appointment Time</label>
-                                        <input
-                                            type="time"
-                                            className="pm-input"
-                                            value={bookForm.appointmentTime}
-                                            onChange={(e) => setBookForm({ ...bookForm, appointmentTime: e.target.value })}
-                                        />
-                                    </div>
+                                    <div className="pm-form-grid">
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Appointment Date *</label>
+                                            <input
+                                                type="date"
+                                                className="pm-input"
+                                                value={bookForm.appointmentDate}
+                                                onChange={(e) => setBookForm({ ...bookForm, appointmentDate: e.target.value })}
+                                                required
+                                            />
+                                        </div>
 
-                                    <div className="pm-form-group">
-                                        <label className="pm-label">Consultation Fee (₹)</label>
-                                        <input
-                                            type="number"
-                                            className="pm-input"
-                                            min="0"
-                                            value={bookForm.amount}
-                                            onChange={(e) => setBookForm({ ...bookForm, amount: e.target.value })}
-                                        />
-                                    </div>
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Appointment Time</label>
+                                            <input
+                                                type="time"
+                                                className="pm-input"
+                                                value={bookForm.appointmentTime}
+                                                onChange={(e) => setBookForm({ ...bookForm, appointmentTime: e.target.value })}
+                                            />
+                                        </div>
 
-                                    <div className="pm-form-group">
-                                        <label className="pm-label">Payment Mode</label>
-                                        <select
-                                            className="pm-select"
-                                            value={bookForm.paymentMethod}
-                                            onChange={(e) => setBookForm({ ...bookForm, paymentMethod: e.target.value })}
-                                        >
-                                            <option value="Cash">Cash</option>
-                                            <option value="UPI">UPI / QR Code</option>
-                                            <option value="Card">Debit / Credit Card</option>
-                                            <option value="Online">Online Transfer</option>
-                                        </select>
-                                    </div>
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Consultation Fee (₹)</label>
+                                            <input
+                                                type="number"
+                                                className="pm-input"
+                                                placeholder="300"
+                                                value={bookForm.amount}
+                                                onChange={(e) => setBookForm({ ...bookForm, amount: e.target.value })}
+                                            />
+                                        </div>
 
-                                    <div className="pm-form-group full-width">
-                                        <label className="pm-label">Clinical Notes / Purpose of Visit</label>
-                                        <input
-                                            type="text"
-                                            className="pm-input"
-                                            placeholder="e.g. Mild fever and sore throat"
-                                            value={bookForm.notes}
-                                            onChange={(e) => setBookForm({ ...bookForm, notes: e.target.value })}
-                                        />
+                                        <div className="pm-form-group">
+                                            <label className="pm-label">Payment Mode</label>
+                                            <select
+                                                className="pm-select"
+                                                value={bookForm.paymentMethod}
+                                                onChange={(e) => setBookForm({ ...bookForm, paymentMethod: e.target.value })}
+                                            >
+                                                <option value="Cash">Cash</option>
+                                                <option value="UPI">UPI</option>
+                                                <option value="Card">Card</option>
+                                                <option value="Pending">Pay Later (Pending)</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="pm-form-group full-width">
+                                            <label className="pm-label">Clinical Notes / Purpose of Visit</label>
+                                            <input
+                                                type="text"
+                                                className="pm-input"
+                                                placeholder="e.g. Mild fever and sore throat"
+                                                value={bookForm.notes}
+                                                onChange={(e) => setBookForm({ ...bookForm, notes: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -847,7 +919,7 @@ const AppointmentManagement = () => {
                                     className="pm-btn-primary"
                                     disabled={submittingBook}
                                 >
-                                    {submittingBook ? 'Booking...' : 'Confirm Appointment'}
+                                    {submittingBook ? 'Confirming...' : 'Confirm Appointment'}
                                 </button>
                             </div>
                         </form>

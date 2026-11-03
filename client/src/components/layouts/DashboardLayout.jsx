@@ -436,7 +436,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         </span>
                         <span className="path-slash">/</span>
                         <span className="path-user-role" style={isFreeDoctorOpd ? { color: '#0d9488', fontWeight: 700 } : undefined}>
-                            {isFreeDoctorOpd ? 'Free Doctor OPD' : user?.role}
+                            {isFreeDoctorOpd ? 'Doctor OPD' : user?.role}
                         </span>
                     </div>
                 )}
