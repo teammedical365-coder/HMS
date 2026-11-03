@@ -112,7 +112,7 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
     // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
     (async () => {
         try {
-            let loginUrl = 'https://medical365.in/login';
+            let loginUrl = 'https://admin.medical365.in/supremeadmin';
             let hName = 'Medical 365';
             const emailHospId = getHospitalId(req);
             if (emailHospId) {
@@ -451,7 +451,7 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
     // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
     (async () => {
         try {
-            let loginUrl = 'https://medical365.in/login';
+            let loginUrl = 'https://admin.medical365.in/supremeadmin';
             let hName = 'Medical 365';
             const emailHospId = getHospitalId(req);
             if (emailHospId) {
@@ -614,7 +614,7 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
     // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
     (async () => {
         try {
-            let loginUrl = 'https://medical365.in/login';
+            let loginUrl = 'https://admin.medical365.in/supremeadmin';
             let hName = 'Medical 365';
             const emailHospId = getHospitalId(req);
             if (emailHospId) {
@@ -777,7 +777,7 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
     // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
     (async () => {
         try {
-            let loginUrl = 'https://medical365.in/login';
+            let loginUrl = 'https://admin.medical365.in/supremeadmin';
             let hName = 'Medical 365';
             const emailHospId = getHospitalId(req);
             if (emailHospId) {

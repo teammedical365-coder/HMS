@@ -86,8 +86,19 @@ apiClient.interceptors.response.use(
                     sessionStorage.setItem('sessionExpiredMessage', error.response?.data?.message || 'Your account has been logged in from another device. Please login again.');
                 }
 
-                if (!window.location.pathname.includes('/login')) {
-                    window.location.href = '/login';
+                const currentHost = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
+                const isMainSite = currentHost === 'medical365.in' || currentHost === 'www.medical365.in';
+                const isSignupSite = currentHost.startsWith('signup.');
+                const isAdminSite = currentHost.startsWith('admin.');
+
+                if (!isMainSite && !isSignupSite) {
+                    if (isAdminSite) {
+                        if (!window.location.pathname.includes('/supremeadmin')) {
+                            window.location.href = '/supremeadmin';
+                        }
+                    } else if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
+                    }
                 }
             }
         }

@@ -363,8 +363,8 @@ const MainRoutes = () => {
                                 window.location.href = "https://" + slug + "." + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
                                 return null;
                             }
-                            window.location.href = "https://" + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
-                            return null;
+                            // On signup portal without a specific clinic slug, redirect to signup home (never to medical365.in/login)
+                            return <Navigate to="/" replace />;
                         })()} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

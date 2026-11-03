@@ -236,7 +236,9 @@ export const BrandingProvider = ({ children }) => {
                                 backgroundColor: customTheme.background || DEFAULT_BRANDING.backgroundColor
                             };
                             setBranding(merged);
-                            setHospitalName(res.branding.appName || 'Medical 365');
+                            const effectiveName = res.hospitalName || res.branding.appName || 'Medical 365';
+                            setHospitalName(effectiveName);
+                            try { localStorage.setItem('hospitalBrandingName', effectiveName); } catch {}
                             setIsCustomBranded(true);
                             applyBrandingToCSS(merged);
                             fetchedFromDomain = true;

@@ -119,8 +119,16 @@ const FreeOpdSignup = () => {
 
     const handleCopyUrl = () => {
         if (!signupResult) return;
-        const slug = signupResult.clinic?.slug || '';
-        const targetUrl = signupResult.clinicUrl || `https://${slug}.medical365.in`;
+        const clinic = signupResult.clinic;
+        const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'medical365.in';
+        const rawSlug = clinic?.slug || (clinic?.name ? clinic.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') : '');
+        const slug = rawSlug || 'clinic';
+        const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const targetUrl = isLocalDev
+            ? `http://${slug}.localhost:${window.location.port || '5173'}`
+            : (signupResult.clinicUrl && signupResult.clinicUrl.includes(`://${slug}.`)
+                ? signupResult.clinicUrl
+                : `https://${slug}.${baseDomain}`);
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(targetUrl).then(() => {
                 setCopied(true);
@@ -153,19 +161,22 @@ const FreeOpdSignup = () => {
     // ─────────────────────────────────────────────────────────────────────────
     if (signupResult) {
         const { clinic, doctor } = signupResult;
-        const slug = clinic?.slug || '';
-        const baseDomain = 'medical365.in';
+        const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'medical365.in';
+        const rawSlug = clinic?.slug || (clinic?.name ? clinic.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') : '');
+        const slug = rawSlug || 'clinic';
         const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         
-        // Exact dedicated clinic URL (always absolute across subdomains)
-        const displayClinicUrl = signupResult.clinicUrl || (isLocalDev
+        // Exact dedicated clinic URL (strictly contains dedicated subdomain)
+        const displayClinicUrl = isLocalDev
             ? `http://${slug}.localhost:${window.location.port || '5173'}`
-            : `https://${slug}.${baseDomain}`);
+            : (signupResult.clinicUrl && signupResult.clinicUrl.includes(`://${slug}.`)
+                ? signupResult.clinicUrl
+                : `https://${slug}.${baseDomain}`);
         
         // Dedicated clinic login URL with pre-filled email
         const effectiveLoginUrl = isLocalDev
-            ? `http://${slug}.localhost:${window.location.port || '5173'}/login?email=${encodeURIComponent(doctor.email)}`
-            : `https://${slug}.${baseDomain}/login?email=${encodeURIComponent(doctor.email)}`;
+            ? `http://${slug}.localhost:${window.location.port || '5173'}/login?email=${encodeURIComponent(doctor?.email || '')}`
+            : `https://${slug}.${baseDomain}/login?email=${encodeURIComponent(doctor?.email || '')}`;
 
         return (
             <div className="fos-onboarding-body px-4 sm:px-6 py-8">

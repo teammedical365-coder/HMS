@@ -435,7 +435,7 @@ router.post('/session/start', verifyToken, async (req, res) => {
                     hospitalId: sessionHospitalId,
                     doctorId: doctor._id,
                     appointmentDate: new Date()
-                }).catch(() => {});
+                }).catch(() => { });
             }
             throw saveErr;
         }
@@ -457,7 +457,7 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
             .lean();
 
         if (!appointment) return res.status(404).json({ success: false, message: 'Not found or unauthorized' });
-        
+
         // Fetch doctor's specific departments, fallback to hospital departments
         const doctorUser = await User.findById(req.user.id || req.user.userId).populate('hospitalId');
         let departments = [];
@@ -488,7 +488,7 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
                 targetLabel: `Doctor reviewing assistant prep for Appt #${appointment._id}`,
                 ip: req.ip || '',
                 userAgent: req.headers['user-agent'] || ''
-            }).save().catch(() => {});
+            }).save().catch(() => { });
         }
 
         res.json({ success: true, appointment, departments, assistantPreparation });
@@ -674,7 +674,7 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                 }
 
                 let reportId;
-                
+
                 // Dynamically calculate total amount for these lab tests
                 const LabTest = require('../models/labTest.model');
                 const allTests = await LabTest.find();
@@ -748,23 +748,23 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                         actualName = actualName.toLowerCase().trim();
                         // Replace multiple spaces with flexible whitespace regex
                         const flexNamePattern = actualName.replace(/\s+/g, '\\s*');
-                        
+
                         const invQuery = { name: { $regex: new RegExp(`^${flexNamePattern}$`, 'i') } };
                         if (req.user.hospitalId || appointment.hospitalId) invQuery.hospitalId = req.user.hospitalId || appointment.hospitalId;
-                        
+
                         let invItem = await Inventory.findOne(invQuery);
                         if (!invItem) {
                             const fallbackQuery = { name: { $regex: new RegExp(flexNamePattern, 'i') } };
                             if (req.user.hospitalId || appointment.hospitalId) fallbackQuery.hospitalId = req.user.hospitalId || appointment.hospitalId;
                             invItem = await Inventory.findOne(fallbackQuery);
                         }
-                        
+
                         if (invItem) {
                             const s2b = invItem.unitConfig?.saleToBaseMultiplier || 1;
                             const sp = invItem.pricingConfig?.sellingPrice || invItem.sellingPrice || 0;
                             baseUnitPrice = sp / s2b;
                         }
-                        
+
                         return {
                             medicineName: p.medicineName,
                             frequency: p.frequency,
@@ -804,7 +804,7 @@ router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
             ]
         };
         if (req.user.hospitalId) histQuery.hospitalId = req.user.hospitalId;
-        
+
         const department = req.query.department;
         if (department && department !== 'Unassigned') {
             histQuery.$and = [{
@@ -841,7 +841,7 @@ router.get('/medicines-list', verifyToken, async (req, res) => {
         let medicines = [];
         const Hospital = require('../models/hospital.model');
         const h = await Hospital.findById(req.user.hospitalId).select('clinicType').lean();
-        
+
         const mapInventory = (m) => ({
             _id: m._id,
             name: m.name,
@@ -857,7 +857,7 @@ router.get('/medicines-list', verifyToken, async (req, res) => {
             const medQuery = {};
             if (req.user.hospitalId) medQuery.hospitalId = req.user.hospitalId;
             const list = await Inventory.find(medQuery).sort({ name: 1 }).lean();
-            
+
             if (list.length > 0) {
                 medicines = list.map(mapInventory);
             } else {

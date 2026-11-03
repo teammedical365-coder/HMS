@@ -494,7 +494,7 @@ async function sendFreeOpdWelcomeEmail({ email, doctorName, clinicName, clinicUr
         const cName = clinicName || 'Your OPD Clinic';
         const dName = doctorName || 'Doctor';
         const fromEmail = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@medical365.in';
-        const targetLoginUrl = loginUrl || clinicUrl || 'https://medical365.in/login';
+        const targetLoginUrl = loginUrl || (clinicUrl ? `${clinicUrl}/login` : 'https://admin.medical365.in/supremeadmin');
 
         const htmlBody = `
 <!DOCTYPE html>

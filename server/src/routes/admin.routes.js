@@ -824,7 +824,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         // Dynamic URL Logic for Welcome Email (dispatched in background so HTTP response returns instantly)
         (async () => {
             try {
-                let loginUrl = 'https://medical365.in/login';
+                let loginUrl = 'https://admin.medical365.in/supremeadmin';
                 let hName = 'Medical 365';
                 if (assignedHospitalId) {
                     const emailHosp = await Hospital.findById(assignedHospitalId).select('name slug customDomain').lean();
