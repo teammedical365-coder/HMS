@@ -155,7 +155,7 @@ const DoctorAssistantQuestionLibrary = lazy(() => import('../pages/assistant/Doc
 const DoctorAssistantPreparation = lazy(() => import('../pages/assistant/DoctorAssistantPreparation'));
 
 // Subdomains reserved for the platform itself — NOT hospital slugs
-const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
+const RESERVED_SUBDOMAINS = ['admin', 'www', 'api', 'signup'];
 
 const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
@@ -353,6 +353,18 @@ const MainRoutes = () => {
                         <Route path="/" element={<FreeOpdSignup />} />
                         <Route path="/signup" element={<FreeOpdSignup />} />
                         <Route path="/free-opd-signup" element={<Navigate to="/" replace />} />
+                        <Route path="/login" element={(() => {
+                            const params = new URLSearchParams(window.location.search);
+                            const slug = params.get('slug');
+                            const email = params.get('email');
+                            const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'medical365.in';
+                            if (slug) {
+                                window.location.href = "https://" + slug + "." + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
+                                return null;
+                            }
+                            window.location.href = "https://" + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
+                            return null;
+                        })()} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </Suspense>

@@ -155,18 +155,17 @@ const FreeOpdSignup = () => {
         const { clinic, doctor } = signupResult;
         const slug = clinic?.slug || '';
         const baseDomain = 'medical365.in';
-        const isLocalOrPreview =
-            window.location.hostname.includes('localhost') ||
-            window.location.hostname === '127.0.0.1' ||
-            window.location.hostname.endsWith('.vercel.app');
+        const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         
-        // Exact dedicated clinic URL
-        const displayClinicUrl = signupResult.clinicUrl || `https://${slug}.${baseDomain}`;
+        // Exact dedicated clinic URL (always absolute across subdomains)
+        const displayClinicUrl = signupResult.clinicUrl || (isLocalDev
+            ? `http://${slug}.localhost:${window.location.port || '5173'}`
+            : `https://${slug}.${baseDomain}`);
         
         // Dedicated clinic login URL with pre-filled email
-        const effectiveLoginUrl = isLocalOrPreview
-            ? `/login?slug=${slug}&email=${encodeURIComponent(doctor.email)}`
-            : (signupResult.loginUrl ? (signupResult.loginUrl.includes('?') ? `${signupResult.loginUrl}&email=${encodeURIComponent(doctor.email)}` : `${signupResult.loginUrl}?email=${encodeURIComponent(doctor.email)}`) : `https://${slug}.${baseDomain}/login?email=${encodeURIComponent(doctor.email)}`);
+        const effectiveLoginUrl = isLocalDev
+            ? `http://${slug}.localhost:${window.location.port || '5173'}/login?email=${encodeURIComponent(doctor.email)}`
+            : `https://${slug}.${baseDomain}/login?email=${encodeURIComponent(doctor.email)}`;
 
         return (
             <div className="fos-onboarding-body px-4 sm:px-6 py-8">
@@ -249,6 +248,12 @@ const FreeOpdSignup = () => {
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                         <a
                             href={effectiveLoginUrl}
+                            onClick={(e) => {
+                                if (effectiveLoginUrl.startsWith('http')) {
+                                    e.preventDefault();
+                                    window.location.href = effectiveLoginUrl;
+                                }
+                            }}
                             className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-extrabold text-white bg-gradient-to-r from-brand-blue to-brand-teal hover:from-blue-800 hover:to-teal-600 transition-all shadow-md text-sm sm:text-base flex items-center justify-center gap-2"
                         >
                             <span>🔐</span>

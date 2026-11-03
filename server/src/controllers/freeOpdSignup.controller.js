@@ -8,15 +8,17 @@ const { sendFreeOpdWelcomeEmail } = require('../services/email.service');
 const { getTenantConnection } = require('../db/tenantDb');
 const validatePassword = require('../utils/validatePassword');
 
+const RESERVED_SLUGS = new Set(['admin', 'signup', 'api', 'www', 'app', 'mail', 'portal', 'static', 'assets', 'root']);
+
 /**
  * Generate a unique URL slug from clinic name.
- * If collisions occur, increments with -1, -2, etc.
+ * If collisions occur or matches reserved system names, increments with -1, -2, etc.
  */
 const generateUniqueSlug = async (name) => {
     const raw = (name || 'clinic').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'clinic';
     let candidate = raw;
     let counter = 1;
-    while (await Hospital.findOne({ slug: candidate })) {
+    while (RESERVED_SLUGS.has(candidate) || await Hospital.findOne({ slug: candidate })) {
         candidate = `${raw}-${counter++}`;
     }
     return candidate;

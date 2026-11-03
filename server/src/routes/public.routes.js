@@ -62,7 +62,7 @@ router.get('/tenant-config', async (req, res) => {
             }
 
             // Platform base domains (medical365.in, www.medical365.in) are NOT tenants
-            if (cleanDomain === BASE_DOMAIN || cleanDomain === `www.${BASE_DOMAIN}` || cleanDomain === `api.${BASE_DOMAIN}`) {
+            if (cleanDomain === BASE_DOMAIN || cleanDomain === `www.${BASE_DOMAIN}` || cleanDomain === `api.${BASE_DOMAIN}` || cleanDomain === `signup.${BASE_DOMAIN}`) {
                 return res.status(404).json({ success: false, message: 'Platform domain — not a tenant' });
             }
             

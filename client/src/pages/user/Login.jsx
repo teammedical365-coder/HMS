@@ -161,6 +161,7 @@ const Login = () => {
             passkeyLabel="Password"
             passkeyPlaceholder="••••••••"
             branding={branding}
+            initialId={formData.email}
             onLoginSubmit={({ id, password }) => {
                 setFormData({ email: id, password });
                 let slug = null;

@@ -31,7 +31,8 @@ export const getSubdomain = () => {
         // It is a live domain. If it's a subdomain of medical365.in:
         if (hostname.endsWith(`.${baseDomain}`)) {
             const subdomain = hostname.replace(`.${baseDomain}`, '');
-            return subdomain === 'www' ? null : subdomain;
+            const reserved = ['www', 'admin', 'api', 'signup'];
+            return reserved.includes(subdomain) ? null : subdomain;
         }
 
         // Otherwise, it is a custom domain (like portal.hospitalA.com or hospitalA.com)

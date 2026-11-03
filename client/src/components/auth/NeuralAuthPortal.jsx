@@ -40,12 +40,19 @@ const NeuralAuthPortal = ({
   successMsg = null,
   sessionBanner = null,
   extraFooter = null,
+  initialId = '',
 }) => {
   // Super Admin portal heading must remain exactly as it is (no underline)
   const isSuperAdminPortal = portalType === 'admin' && (title === 'Supreme Portal' || title === 'Super Admin Portal');
   const shouldShowUnderline = !isSuperAdminPortal && (showUnderline || title === 'Sign In');
 
-  const [credentials, setCredentials] = useState({ id: '', password: '' });
+  const [credentials, setCredentials] = useState({ id: initialId || '', password: '' });
+
+  useEffect(() => {
+    if (initialId && !credentials.id) {
+      setCredentials(prev => ({ ...prev, id: initialId }));
+    }
+  }, [initialId]);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
