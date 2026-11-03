@@ -261,6 +261,89 @@ const isAdminPortal = (portalType) =>
 const isHospitalPortal = (portalType) =>
     portalType === PORTAL_TYPES.HOSPITAL || portalType === PORTAL_TYPES.DEVELOPMENT;
 
+/**
+ * ExternalRedirect — Safely redirects to an external URL on route mount,
+ * avoiding eager side-effect execution during React Router JSX definition.
+ */
+const ExternalRedirect = ({ to, replace = true }) => {
+    useEffect(() => {
+        if (typeof window !== 'undefined' && to) {
+            if (replace) {
+                window.location.replace(to);
+            } else {
+                window.location.href = to;
+            }
+        }
+    }, [to, replace]);
+    return null;
+};
+
+/**
+ * SignupPortalLoginHandler — Handles /login on the dedicated signup portal.
+ * If a hospital slug query param is provided, redirects to that hospital's login;
+ * otherwise redirects to the signup home page.
+ */
+const SignupPortalLoginHandler = () => {
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const slug = params.get('slug');
+        const email = params.get('email');
+        const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'medical365.in';
+        if (slug) {
+            window.location.href = "https://" + slug + "." + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
+        }
+    }, []);
+
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const slug = params ? params.get('slug') : null;
+
+    if (slug) return null;
+    return <Navigate to="/" replace />;
+};
+
+/**
+ * FreeOpdSignupRoute — Renders FreeOpdSignup in local development, or safely
+ * redirects to the dedicated signup portal when explicitly navigated to on web domains.
+ */
+const FreeOpdSignupRoute = () => {
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !isDevEnvironment()) {
+            window.location.replace('https://signup.medical365.in');
+        }
+    }, []);
+
+    if (isDevEnvironment()) {
+        return <FreeOpdSignup />;
+    }
+    return null;
+};
+
+/**
+ * UnauthenticatedRoot — Routes unauthenticated visits to '/' based on portal type.
+ */
+const UnauthenticatedRoot = ({ portalType }) => {
+    if (isAdminPortal(portalType)) {
+        return <Navigate to="/supremeadmin" replace />;
+    }
+    if (isHospitalPortal(portalType)) {
+        return <Navigate to="/login" replace />;
+    }
+    return <InvalidPortalPage />;
+};
+
+/**
+ * UnauthenticatedLogin — Routes unauthenticated visits to '/login' based on portal type.
+ */
+const UnauthenticatedLogin = ({ portalType }) => {
+    if (isAdminPortal(portalType)) {
+        return <Navigate to="/supremeadmin" replace />;
+    }
+    if (isHospitalPortal(portalType)) {
+        return <Login />;
+    }
+    return <InvalidPortalPage />;
+};
+
 const MainRoutes = () => {
     const { isAuthenticated, user } = useAuth();
     const { portalType, isResolving } = useHostnameResolver();
@@ -354,18 +437,7 @@ const MainRoutes = () => {
                         <Route path="/" element={<FreeOpdSignup />} />
                         <Route path="/signup" element={<FreeOpdSignup />} />
                         <Route path="/free-opd-signup" element={<Navigate to="/" replace />} />
-                        <Route path="/login" element={(() => {
-                            const params = new URLSearchParams(window.location.search);
-                            const slug = params.get('slug');
-                            const email = params.get('email');
-                            const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'medical365.in';
-                            if (slug) {
-                                window.location.href = "https://" + slug + "." + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
-                                return null;
-                            }
-                            // On signup portal without a specific clinic slug, redirect to signup home (never to medical365.in/login)
-                            return <Navigate to="/" replace />;
-                        })()} />
+                        <Route path="/login" element={<SignupPortalLoginHandler />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </Suspense>
@@ -391,20 +463,8 @@ const MainRoutes = () => {
                         <Route path="/pharmacy" element={<Pharmacy />} />
                         {/* CRITICAL: medical365.in/login must NOT render HMS login and must NOT redirect to admin portal */}
                         <Route path="/login" element={<Navigate to="/" replace />} />
-                        <Route path="/free-opd-signup" element={(() => {
-                            if (typeof window !== 'undefined') {
-                                window.location.href = 'https://signup.medical365.in';
-                                return null;
-                            }
-                            return null;
-                        })()} />
-                        <Route path="/signup" element={(() => {
-                            if (typeof window !== 'undefined') {
-                                window.location.href = 'https://signup.medical365.in';
-                                return null;
-                            }
-                            return null;
-                        })()} />
+                        <Route path="/free-opd-signup" element={<ExternalRedirect to="https://signup.medical365.in" />} />
+                        <Route path="/signup" element={<ExternalRedirect to="https://signup.medical365.in" />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </Suspense>
@@ -597,8 +657,8 @@ const MainRoutes = () => {
                                 {/* Supreme Admin remains outside of hospital slugs */}
                                 <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
                                 <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />
-                                <Route path="/free-opd-signup" element={<Navigate to="/signup" replace />} />
-                                <Route path="/signup" element={<FreeOpdSignup />} />
+                                <Route path="/free-opd-signup" element={<Navigate to="/my-dashboard" replace />} />
+                                <Route path="/signup" element={<Navigate to="/my-dashboard" replace />} />
 
                                 <Route path="*" element={<Navigate to="/my-dashboard" />} />
                             </Routes>
@@ -611,27 +671,10 @@ const MainRoutes = () => {
                                 ═══════════════════════════════════════════════════════════════ */}
 
                             {/* Root route — redirect based on portal type */}
-                            <Route path="/" element={(() => {
-                                if (isAdminPortal(portalType)) {
-                                    return <Navigate to="/supremeadmin" replace />;
-                                }
-                                if (isHospitalPortal(portalType)) {
-                                    return <Navigate to="/login" replace />;
-                                }
-                                // Should never reach here (INVALID/NETWORK_ERROR handled above)
-                                return <InvalidPortalPage />;
-                            })()} />
+                            <Route path="/" element={<UnauthenticatedRoot portalType={portalType} />} />
 
                             {/* Staff Login — only on hospital portals (or dev) */}
-                            <Route path="/login" element={(() => {
-                                if (isAdminPortal(portalType)) {
-                                    return <Navigate to="/supremeadmin" replace />;
-                                }
-                                if (isHospitalPortal(portalType)) {
-                                    return <Login />;
-                                }
-                                return <InvalidPortalPage />;
-                            })()} />
+                            <Route path="/login" element={<UnauthenticatedLogin portalType={portalType} />} />
                             
                             {/* Supreme Admin Isolated Login Route — only on admin portal (or dev) */}
                             <Route path="/supremeadmin" element={
@@ -646,20 +689,8 @@ const MainRoutes = () => {
                             } />
                             
                             {/* Legacy/Signups routing */}
-                            <Route path="/free-opd-signup" element={(() => {
-                                if (typeof window !== 'undefined' && !isDevEnvironment()) {
-                                    window.location.replace('https://signup.medical365.in');
-                                    return null;
-                                }
-                                return <FreeOpdSignup />;
-                            })()} />
-                            <Route path="/signup" element={(() => {
-                                if (typeof window !== 'undefined' && !isDevEnvironment()) {
-                                    window.location.replace('https://signup.medical365.in');
-                                    return null;
-                                }
-                                return <FreeOpdSignup />;
-                            })()} />
+                            <Route path="/free-opd-signup" element={<FreeOpdSignupRoute />} />
+                            <Route path="/signup" element={<Signup />} />
                             <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                             <Route path="/admin/signup" element={<AdminSignup />} />
                             
@@ -676,15 +707,7 @@ const MainRoutes = () => {
                             <Route path="/patient/book-appointment" element={<PatientProtectedRoute><ReceptionDashboard isPatientPortal={true} /></PatientProtectedRoute>} />
                             
                             {/* Wildcard: hostname-aware fallback */}
-                            <Route path="*" element={(() => {
-                                if (isAdminPortal(portalType)) {
-                                    return <Navigate to="/supremeadmin" replace />;
-                                }
-                                if (isHospitalPortal(portalType)) {
-                                    return <Navigate to="/login" replace />;
-                                }
-                                return <InvalidPortalPage />;
-                            })()} />
+                            <Route path="*" element={<UnauthenticatedRoot portalType={portalType} />} />
                         </Routes>
                     )}
                 </Suspense>
