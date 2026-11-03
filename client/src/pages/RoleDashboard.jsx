@@ -96,7 +96,7 @@ const RoleDashboard = () => {
 
     useEffect(() => {
         if (user.subscriptionPlan === 'free_doctor_opd') {
-            navigate('/opd/patients', { replace: true });
+            navigate('/opd/tray', { replace: true });
             return;
         }
         const cleanRole = (roleName || '').toLowerCase().replace(/\s+/g, '');

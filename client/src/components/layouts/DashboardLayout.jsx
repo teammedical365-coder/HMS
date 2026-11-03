@@ -85,10 +85,9 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
         if (user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd') {
             return [
-                { label: 'Patient Monitoring', path: '/opd/patients', icon: <FiUsers />, prefetchKey: 'opd_patients', prefetchFn: () => import('../../pages/opd/PatientMonitoring') },
                 { label: 'Doctor Patient Tray', path: '/opd/tray', icon: <FiActivity />, prefetchKey: 'opd_tray', prefetchFn: () => import('../../pages/opd/DoctorPatientTray') },
                 { label: 'Appointment Management', path: '/opd/appointments', icon: <FiCalendar />, prefetchKey: 'opd_appts', prefetchFn: () => import('../../pages/opd/AppointmentManagement') },
-                { label: 'Money Tracker', path: '/opd/money-tracker', icon: <FiDollarSign />, prefetchKey: 'opd_money', prefetchFn: () => import('../../pages/opd/MoneyTracker') },
+                { label: 'Payment & History', path: '/opd/money-tracker', icon: <FiDollarSign />, prefetchKey: 'opd_money', prefetchFn: () => import('../../pages/opd/MoneyTracker') },
                 { label: 'Revisit Schedule', path: '/opd/revisits', icon: <FiClock />, prefetchKey: 'opd_revisits', prefetchFn: () => import('../../pages/opd/RevisitSchedule') },
             ];
         }
@@ -392,10 +391,9 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     };
 
     const getPageTitle = (pathname) => {
-        if (pathname === '/opd/patients') return 'Patient Monitoring';
         if (pathname === '/opd/tray') return 'Doctor Patient Tray';
         if (pathname === '/opd/appointments') return 'Appointment Management';
-        if (pathname === '/opd/money-tracker') return 'Money Tracker';
+        if (pathname === '/opd/money-tracker') return 'Payment & History';
         if (pathname === '/opd/revisits') return 'Revisit Schedule';
         if (pathname.includes('real-time-monitoring')) return 'Real-Time Monitoring';
         if (pathname === '/nurse/dashboard') return 'Nurse IPD Care';

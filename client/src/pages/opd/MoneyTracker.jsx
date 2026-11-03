@@ -153,7 +153,7 @@ const MoneyTracker = () => {
 
                 {/* Card 3: All-Time Collection */}
                 <div className="mt-metric-card">
-                    <div className="mt-metric-title">All-Time OPD Revenue</div>
+                    <div className="mt-metric-title">All-Time Payment History</div>
                     <div className="mt-metric-amount">
                         ₹{summary.total?.total?.toLocaleString('en-IN') || 0}
                     </div>
@@ -168,7 +168,7 @@ const MoneyTracker = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <FiTrendingUp style={{ color: '#0d9488', fontSize: '18px' }} />
                     <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                        OPD Consultation Fee Ledger
+                        OPD Payment & Fee History Ledger
                     </span>
                 </div>
 
@@ -178,7 +178,7 @@ const MoneyTracker = () => {
                     onClick={handleOpenRecordModal}
                 >
                     <FiPlus />
-                    <span>Record Consultation Fee</span>
+                    <span>Record Payment / Fee</span>
                 </button>
             </div>
 

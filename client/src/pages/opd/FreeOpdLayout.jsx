@@ -19,12 +19,6 @@ import './FreeOpdLayout.css';
 
 const OPD_NAV_ITEMS = [
     {
-        label: 'Patient Monitoring',
-        path: '/opd/patients',
-        icon: <FiUsers className="opd-nav-icon" />,
-        desc: 'Register & manage patients, history and prescriptions'
-    },
-    {
         label: 'Doctor Patient Tray',
         path: '/opd/tray',
         icon: <FiActivity className="opd-nav-icon" />,
@@ -34,13 +28,13 @@ const OPD_NAV_ITEMS = [
         label: 'Appointment Management',
         path: '/opd/appointments',
         icon: <FiCalendar className="opd-nav-icon" />,
-        desc: 'Book, reschedule, cancel & 20/day quota tracker'
+        desc: 'Book, reschedule, cancel, manage patient profiles & quota tracker'
     },
     {
-        label: 'Money Tracker',
+        label: 'Payment & History',
         path: '/opd/money-tracker',
         icon: <FiDollarSign className="opd-nav-icon" />,
-        desc: 'Record fees, cash/UPI collections & ledger'
+        desc: 'Record fees, cash/UPI collections & payment ledger'
     },
     {
         label: 'Revisit Schedule',

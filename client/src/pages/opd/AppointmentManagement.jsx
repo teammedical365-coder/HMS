@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { freeOpdAPI } from '../../utils/api';
+import { useAuth } from '../../store/hooks';
+import { useBranding } from '../../context/BrandingContext';
+import { downloadPrescriptionPdf } from '../../utils/prescriptionPdf';
 import {
     FiCalendar,
     FiPlus,
@@ -9,12 +12,186 @@ import {
     FiXCircle,
     FiCheckCircle,
     FiX,
-    FiUserPlus
+    FiUserPlus,
+    FiFileText,
+    FiDownload,
+    FiTrash2,
+    FiUser,
 } from 'react-icons/fi';
 import './AppointmentManagement.css';
+import './PatientMonitoring.css';
 
 const AppointmentManagement = () => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const { user } = useAuth();
+    const { hospitalName } = useBranding();
+
+    // Patient Profile Modal State (Integrated from Patient Monitoring)
+    const [selectedPatientId, setSelectedPatientId] = useState(null);
+    const [patientDetails, setPatientDetails] = useState(null);
+    const [loadingDetails, setLoadingDetails] = useState(false);
+    const [profileTab, setProfileTab] = useState('overview'); // 'overview' | 'prescriptions' | 'prescribe'
+    const [rxForm, setRxForm] = useState({
+        diagnosis: '',
+        vitals: { bp: '', pulse: '', temp: '', weight: '', spo2: '' },
+        medicines: [
+            { medicineName: '', dosage: '1 tab', frequency: '1-0-1', duration: '5 days', instructions: 'After meals' }
+        ],
+        doctorNotes: '',
+        followUpDate: ''
+    });
+    const [savingRx, setSavingRx] = useState(false);
+    const [rxNotice, setRxNotice] = useState('');
+
+    // Patient Quick Search to Open Profile
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searchingPatients, setSearchingPatients] = useState(false);
+    const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+    const searchTimeoutRef = useRef(null);
+
+    const handleSearchChange = (e) => {
+        const val = e.target.value;
+        setSearchQuery(val);
+        if (!val.trim()) {
+            setSearchResults([]);
+            setShowSearchDropdown(false);
+            return;
+        }
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(async () => {
+            setSearchingPatients(true);
+            try {
+                const res = await freeOpdAPI.searchPatients({ query: val.trim(), limit: 8 });
+                if (res.success) {
+                    setSearchResults(res.patients || []);
+                    setShowSearchDropdown(true);
+                }
+            } catch (_) {}
+            finally {
+                setSearchingPatients(false);
+            }
+        }, 300);
+    };
+
+    const openPatientProfile = async (patientId) => {
+        if (!patientId) return;
+        setSelectedPatientId(patientId);
+        setLoadingDetails(true);
+        setProfileTab('overview');
+        setRxNotice('');
+        setShowSearchDropdown(false);
+        try {
+            const res = await freeOpdAPI.getPatientOverview(patientId);
+            if (res.success) {
+                setPatientDetails(res);
+                if (res.vitals) {
+                    setRxForm(prev => ({ ...prev, vitals: { ...prev.vitals, ...res.vitals } }));
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching patient profile:', err);
+        } finally {
+            setLoadingDetails(false);
+        }
+    };
+
+    const closeProfileModal = () => {
+        setSelectedPatientId(null);
+        setPatientDetails(null);
+        setRxNotice('');
+    };
+
+    const handleAddRxMedicine = () => {
+        setRxForm(prev => ({
+            ...prev,
+            medicines: [
+                ...prev.medicines,
+                { medicineName: '', dosage: '1 tab', frequency: '1-0-1', duration: '5 days', instructions: 'After meals' }
+            ]
+        }));
+    };
+
+    const handleRemoveRxMedicine = (index) => {
+        setRxForm(prev => ({
+            ...prev,
+            medicines: prev.medicines.filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleRxMedChange = (index, field, value) => {
+        setRxForm(prev => {
+            const updated = [...prev.medicines];
+            updated[index] = { ...updated[index], [field]: value };
+            return { ...prev, medicines: updated };
+        });
+    };
+
+    const handleSavePrescription = async (triggerDownload = false) => {
+        setRxNotice('');
+        if (!rxForm.diagnosis.trim()) {
+            setRxNotice('⚠ Diagnosis is required before saving prescription');
+            return;
+        }
+
+        const validMeds = rxForm.medicines.filter(m => m.medicineName && m.medicineName.trim().length > 0);
+        if (validMeds.length === 0) {
+            setRxNotice('⚠ Please prescribe at least one medicine');
+            return;
+        }
+
+        setSavingRx(true);
+        try {
+            const payload = {
+                patientId: patientDetails.patient._id,
+                diagnosis: rxForm.diagnosis.trim(),
+                vitals: rxForm.vitals,
+                medicines: validMeds,
+                doctorNotes: rxForm.doctorNotes.trim(),
+                followUpDate: rxForm.followUpDate || undefined
+            };
+
+            const res = await freeOpdAPI.savePrescription(payload);
+            if (res.success) {
+                setRxNotice('✓ Prescription recorded successfully');
+
+                if (triggerDownload) {
+                    downloadPrescriptionPdf({
+                        clinic: {
+                            name: hospitalName || user?.hospitalName || 'Doctor OPD Clinic',
+                            address: user?.address || '',
+                            city: user?.city || '',
+                            phone: user?.phone || ''
+                        },
+                        doctor: {
+                            name: user?.name || 'Doctor',
+                            specialty: user?.specialty || user?.services?.[0] || 'OPD Practitioner',
+                            qualification: user?.education || user?.qualification || 'MBBS',
+                            phone: user?.phone || ''
+                        },
+                        patient: patientDetails.patient,
+                        prescription: {
+                            medicines: validMeds,
+                            diagnosis: rxForm.diagnosis,
+                            doctorNotes: rxForm.doctorNotes,
+                            vitals: rxForm.vitals,
+                            followUpDate: rxForm.followUpDate
+                        },
+                        diagnosis: rxForm.diagnosis,
+                        notes: rxForm.doctorNotes,
+                        followUpDate: rxForm.followUpDate,
+                        date: new Date()
+                    });
+                }
+
+                openPatientProfile(patientDetails.patient._id);
+            }
+        } catch (err) {
+            setRxNotice('Failed to save prescription: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setSavingRx(false);
+        }
+    };
 
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -256,6 +433,71 @@ const AppointmentManagement = () => {
 
             {/* Filter Toolbar */}
             <div className="am-controls">
+                {/* Quick Search & Open Patient Profile */}
+                <div className="am-filter-group" style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
+                    <div className="pm-search-box" style={{ width: '100%', maxWidth: '380px' }}>
+                        <FiSearch style={{ color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            className="pm-search-input"
+                            placeholder="Search patient by Name, Phone, UID to open profile..."
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            onFocus={() => { if (searchResults.length > 0) setShowSearchDropdown(true); }}
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                                onClick={() => { setSearchQuery(''); setSearchResults([]); setShowSearchDropdown(false); }}
+                            >
+                                <FiX />
+                            </button>
+                        )}
+                    </div>
+
+                    {showSearchDropdown && searchResults.length > 0 && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            zIndex: 40,
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                            width: '380px',
+                            maxHeight: '260px',
+                            overflowY: 'auto',
+                            marginTop: '4px'
+                        }}>
+                            {searchResults.map((p) => (
+                                <div
+                                    key={p._id}
+                                    style={{
+                                        padding: '10px 14px',
+                                        borderBottom: '1px solid #f1f5f9',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}
+                                    onClick={() => openPatientProfile(p._id)}
+                                >
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{p.name}</div>
+                                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                                            {p.patientUid || p.patientId || 'UID'} • {p.phone || 'No phone'}
+                                        </div>
+                                    </div>
+                                    <span style={{ fontSize: '11.5px', color: '#0d9488', fontWeight: 700 }}>
+                                        Open Profile →
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <div className="am-filter-group">
                     <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Filter Date:</label>
                     <input
@@ -341,9 +583,30 @@ const AppointmentManagement = () => {
                                                 <strong>{apptDateStr}</strong>
                                                 <div style={{ fontSize: '11.5px', color: '#64748b' }}>{appt.appointmentTime || '10:00 AM'}</div>
                                             </td>
-                                            <td><strong>{pName}</strong></td>
                                             <td>
-                                                <span className="pm-patient-id-badge">{pUid}</span>
+                                                <strong
+                                                    style={{ color: '#0f172a', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cbd5e1' }}
+                                                    title="Click to open patient profile"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    {pName}
+                                                </strong>
+                                            </td>
+                                            <td>
+                                                <span
+                                                    className="pm-patient-id-badge"
+                                                    style={{ cursor: 'pointer' }}
+                                                    title="Click to open patient profile"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    {pUid}
+                                                </span>
                                                 <div style={{ fontSize: '11.5px', color: '#64748b' }}>{pPhone}</div>
                                             </td>
                                             <td>{appt.visitType || 'OPD Consult'}</td>
@@ -353,7 +616,19 @@ const AppointmentManagement = () => {
                                                     {appt.status?.toUpperCase() || 'CONFIRMED'}
                                                 </span>
                                             </td>
-                                            <td style={{ textAlign: 'center' }}>
+                                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                <button
+                                                    type="button"
+                                                    className="am-action-btn"
+                                                    style={{ color: '#0d9488', borderColor: '#99f6e4', fontWeight: 700 }}
+                                                    title="Open Patient Profile, Medical History & Prescriptions"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    <FiFileText style={{ marginRight: '4px' }} /> Profile
+                                                </button>
                                                 {appt.status !== 'completed' && appt.status !== 'cancelled' && (
                                                     <>
                                                         <button
@@ -690,6 +965,411 @@ const AppointmentManagement = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {/* ─────────────────────────────────────────────────────────────
+               INDIVIDUAL PATIENT PROFILE & DIRECT PRESCRIBE (Integrated from Patient Monitoring)
+               ───────────────────────────────────────────────────────────── */}
+            {selectedPatientId && (
+                <div className="pm-modal-overlay">
+                    <div className="pm-modal-card pm-modal-large" role="dialog" aria-modal="true" data-scrollable="true">
+                        <div className="pm-modal-header">
+                            <h3 className="pm-modal-title">Patient Profile & Clinical Record</h3>
+                            <button
+                                type="button"
+                                className="pm-modal-close-btn"
+                                onClick={closeProfileModal}
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+
+                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
+                            {loadingDetails || !patientDetails ? (
+                                <div className="pm-empty-state">Loading patient records...</div>
+                            ) : (
+                                <>
+                                    {/* Patient Demographics Strip */}
+                                    <div className="pm-profile-header-strip">
+                                        <div>
+                                            <div className="pm-profile-patient-name">
+                                                {patientDetails.patient?.name || 'Patient'}
+                                            </div>
+                                            <div className="pm-profile-meta">
+                                                <span>UID: <strong>{patientDetails.patient?.patientId || patientDetails.patient?.patientUid || 'N/A'}</strong></span>
+                                                <span> • Phone: {patientDetails.patient?.phone || 'N/A'}</span>
+                                                {patientDetails.patient?.age && <span> • Age: {patientDetails.patient.age} Yrs</span>}
+                                                {patientDetails.patient?.gender && <span> ({patientDetails.patient.gender})</span>}
+                                                {patientDetails.patient?.bloodGroup && <span> • Blood: {patientDetails.patient.bloodGroup}</span>}
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="pm-action-btn-primary"
+                                            style={{ padding: '8px 14px', fontSize: '12.5px' }}
+                                            onClick={() => setProfileTab('prescribe')}
+                                        >
+                                            <FiPlus />
+                                            <span>Write Prescription</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Tabs */}
+                                    <div className="pm-tabs-bar">
+                                        <button
+                                            type="button"
+                                            className={`pm-tab-btn ${profileTab === 'overview' ? 'active' : ''}`}
+                                            onClick={() => setProfileTab('overview')}
+                                        >
+                                            Overview & History
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`pm-tab-btn ${profileTab === 'prescriptions' ? 'active' : ''}`}
+                                            onClick={() => setProfileTab('prescriptions')}
+                                        >
+                                            Prescriptions ({patientDetails.prescriptions?.length || 0})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`pm-tab-btn ${profileTab === 'prescribe' ? 'active' : ''}`}
+                                            onClick={() => setProfileTab('prescribe')}
+                                        >
+                                            ✍️ Prescribe Now
+                                        </button>
+                                    </div>
+
+                                    {/* TAB 1: OVERVIEW & HISTORY */}
+                                    {profileTab === 'overview' && (
+                                        <div>
+                                            <div className="pm-form-grid" style={{ marginBottom: '20px' }}>
+                                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>KNOWN ALLERGIES</span>
+                                                    <p style={{ margin: '4px 0 0', fontWeight: 600, color: patientDetails.patient?.allergies ? '#dc2626' : '#1e293b' }}>
+                                                        {patientDetails.patient?.allergies || 'None reported'}
+                                                    </p>
+                                                </div>
+
+                                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>CHRONIC CONDITIONS</span>
+                                                    <p style={{ margin: '4px 0 0', fontWeight: 600, color: '#1e293b' }}>
+                                                        {patientDetails.patient?.chronicConditions || 'None reported'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <h4 style={{ fontSize: '14px', fontWeight: 800, margin: '0 0 12px', color: '#0f172a' }}>
+                                                Consultation History ({patientDetails.appointments?.length || 0} Visits)
+                                            </h4>
+
+                                            {(!patientDetails.appointments || patientDetails.appointments.length === 0) ? (
+                                                <p style={{ color: '#64748b', fontSize: '13px' }}>No previous consultations on record.</p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {patientDetails.appointments.map((appt) => (
+                                                        <div key={appt._id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '12px 16px', borderRadius: '10px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                                                                    {new Date(appt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                </span>
+                                                                <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                                                                    {appt.status?.toUpperCase() || 'COMPLETED'}
+                                                                </span>
+                                                            </div>
+                                                            {appt.diagnosis && (
+                                                                <p style={{ margin: '6px 0 2px', fontSize: '12.5px', color: '#334155' }}>
+                                                                    <strong>Diagnosis:</strong> {appt.diagnosis}
+                                                                </p>
+                                                            )}
+                                                            {appt.doctorNotes && (
+                                                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                                                                    <strong>Notes:</strong> {appt.doctorNotes}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* TAB 2: PRESCRIPTIONS LIST & DOWNLOAD */}
+                                    {profileTab === 'prescriptions' && (
+                                        <div>
+                                            {(!patientDetails.prescriptions || patientDetails.prescriptions.length === 0) ? (
+                                                <p style={{ color: '#64748b', fontSize: '13px' }}>No prescriptions issued yet.</p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                    {patientDetails.prescriptions.map((rx, idx) => (
+                                                        <div key={idx} style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '16px', borderRadius: '12px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                                <div>
+                                                                    <strong style={{ fontSize: '13.5px', color: '#0f172a' }}>
+                                                                        Prescription Date: {new Date(rx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                    </strong>
+                                                                    {rx.diagnosis && <span style={{ marginLeft: '12px', color: '#0d9488', fontWeight: 600 }}>• {rx.diagnosis}</span>}
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="pm-view-btn"
+                                                                    onClick={() => {
+                                                                        downloadPrescriptionPdf({
+                                                                            clinic: {
+                                                                                name: hospitalName || user?.hospitalName || 'Doctor OPD Clinic',
+                                                                                address: user?.address || '',
+                                                                                city: user?.city || '',
+                                                                                phone: user?.phone || ''
+                                                                            },
+                                                                            doctor: {
+                                                                                name: user?.name || 'Doctor',
+                                                                                specialty: user?.specialty || user?.services?.[0] || 'OPD Practitioner',
+                                                                                qualification: user?.education || user?.qualification || 'MBBS',
+                                                                                phone: user?.phone || ''
+                                                                            },
+                                                                            patient: patientDetails.patient,
+                                                                            prescription: rx,
+                                                                            diagnosis: rx.diagnosis,
+                                                                            date: rx.date
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    <FiDownload />
+                                                                    <span>Download PDF</span>
+                                                                </button>
+                                                            </div>
+
+                                                            {rx.medicines?.length > 0 && (
+                                                                <table className="pm-meds-table">
+                                                                    <thead>
+                                                                        <tr>
+                                                                            <th>Medicine Name</th>
+                                                                            <th>Dosage</th>
+                                                                            <th>Frequency</th>
+                                                                            <th>Duration</th>
+                                                                            <th>Instructions</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {rx.medicines.map((m, mIdx) => (
+                                                                            <tr key={mIdx}>
+                                                                                <td><strong>{m.medicineName || m.name}</strong></td>
+                                                                                <td>{m.dosage}</td>
+                                                                                <td>{m.frequency}</td>
+                                                                                <td>{m.duration}</td>
+                                                                                <td>{m.instructions}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* TAB 3: WRITE PRESCRIPTION */}
+                                    {profileTab === 'prescribe' && (
+                                        <div>
+                                            {rxNotice && (
+                                                <div style={{ background: rxNotice.includes('✓') ? '#ecfdf5' : '#fef2f2', color: rxNotice.includes('✓') ? '#047857' : '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
+                                                    {rxNotice}
+                                                </div>
+                                            )}
+
+                                            <div className="pm-form-grid" style={{ marginBottom: '16px' }}>
+                                                <div className="pm-form-group full-width">
+                                                    <label className="pm-label">Clinical Diagnosis *</label>
+                                                    <input
+                                                        type="text"
+                                                        className="pm-input"
+                                                        placeholder="e.g. Acute Bronchitis / Viral Pharyngitis"
+                                                        value={rxForm.diagnosis}
+                                                        onChange={(e) => setRxForm({ ...rxForm, diagnosis: e.target.value })}
+                                                    />
+                                                </div>
+
+                                                <div className="pm-form-group">
+                                                    <label className="pm-label">Blood Pressure (BP)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="pm-input"
+                                                        placeholder="e.g. 120/80"
+                                                        value={rxForm.vitals.bp}
+                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, bp: e.target.value } })}
+                                                    />
+                                                </div>
+
+                                                <div className="pm-form-group">
+                                                    <label className="pm-label">Pulse (bpm)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="pm-input"
+                                                        placeholder="e.g. 74"
+                                                        value={rxForm.vitals.pulse}
+                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, pulse: e.target.value } })}
+                                                    />
+                                                </div>
+
+                                                <div className="pm-form-group">
+                                                    <label className="pm-label">Temperature (°F)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="pm-input"
+                                                        placeholder="e.g. 98.6"
+                                                        value={rxForm.vitals.temp}
+                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, temp: e.target.value } })}
+                                                    />
+                                                </div>
+
+                                                <div className="pm-form-group">
+                                                    <label className="pm-label">Weight (kg)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="pm-input"
+                                                        placeholder="e.g. 68"
+                                                        value={rxForm.vitals.weight}
+                                                        onChange={(e) => setRxForm({ ...rxForm, vitals: { ...rxForm.vitals, weight: e.target.value } })}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <label className="pm-label">Prescribed Medicines</label>
+                                            <table className="pm-meds-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Medicine Name</th>
+                                                        <th>Dosage</th>
+                                                        <th>Frequency</th>
+                                                        <th>Duration</th>
+                                                        <th>Instructions</th>
+                                                        <th style={{ width: '40px' }}></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {rxForm.medicines.map((m, idx) => (
+                                                        <tr key={idx}>
+                                                            <td>
+                                                                <input
+                                                                    type="text"
+                                                                    className="pm-input"
+                                                                    placeholder="e.g. Tab Paracetamol 650mg"
+                                                                    value={m.medicineName}
+                                                                    onChange={(e) => handleRxMedChange(idx, 'medicineName', e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <input
+                                                                    type="text"
+                                                                    className="pm-input"
+                                                                    placeholder="1 tab"
+                                                                    value={m.dosage}
+                                                                    onChange={(e) => handleRxMedChange(idx, 'dosage', e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <input
+                                                                    type="text"
+                                                                    className="pm-input"
+                                                                    placeholder="1-0-1"
+                                                                    value={m.frequency}
+                                                                    onChange={(e) => handleRxMedChange(idx, 'frequency', e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <input
+                                                                    type="text"
+                                                                    className="pm-input"
+                                                                    placeholder="5 days"
+                                                                    value={m.duration}
+                                                                    onChange={(e) => handleRxMedChange(idx, 'duration', e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <input
+                                                                    type="text"
+                                                                    className="pm-input"
+                                                                    placeholder="After food"
+                                                                    value={m.instructions}
+                                                                    onChange={(e) => handleRxMedChange(idx, 'instructions', e.target.value)}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                {rxForm.medicines.length > 1 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '15px' }}
+                                                                        onClick={() => handleRemoveRxMedicine(idx)}
+                                                                    >
+                                                                        <FiTrash2 />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+
+                                            <button
+                                                type="button"
+                                                className="pm-add-med-btn"
+                                                onClick={handleAddRxMedicine}
+                                            >
+                                                + Add Another Medicine
+                                            </button>
+
+                                            <div className="pm-form-grid">
+                                                <div className="pm-form-group full-width">
+                                                    <label className="pm-label">Doctor Advice / Diet Instructions</label>
+                                                    <textarea
+                                                        className="pm-textarea"
+                                                        rows="2"
+                                                        placeholder="e.g. Drink plenty of warm fluids, rest for 3 days."
+                                                        value={rxForm.doctorNotes}
+                                                        onChange={(e) => setRxForm({ ...rxForm, doctorNotes: e.target.value })}
+                                                    />
+                                                </div>
+
+                                                <div className="pm-form-group">
+                                                    <label className="pm-label">Follow-Up Revisit Date (Optional)</label>
+                                                    <input
+                                                        type="date"
+                                                        className="pm-input"
+                                                        value={rxForm.followUpDate}
+                                                        onChange={(e) => setRxForm({ ...rxForm, followUpDate: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                                                <button
+                                                    type="button"
+                                                    className="pm-btn-primary"
+                                                    disabled={savingRx}
+                                                    onClick={() => handleSavePrescription(false)}
+                                                >
+                                                    {savingRx ? 'Saving...' : 'Save Prescription'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="pm-btn-primary"
+                                                    style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+                                                    disabled={savingRx}
+                                                    onClick={() => handleSavePrescription(true)}
+                                                >
+                                                    <FiDownload style={{ marginRight: '6px' }} />
+                                                    {savingRx ? 'Saving...' : 'Save & Download PDF 📄'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
