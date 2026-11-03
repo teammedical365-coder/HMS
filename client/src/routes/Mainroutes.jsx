@@ -11,7 +11,7 @@ import RouteErrorBoundary from '../components/common/RouteErrorBoundary';
 import { useAuth } from '../store/hooks';
 import { getSubdomain } from '../utils/subdomain';
 import { prefetchRoutes } from '../utils/prefetch';
-import { useHostnameResolver, PORTAL_TYPES, isDevEnvironment, isSignupPortal } from '../utils/hostnameResolver';
+import { useHostnameResolver, PORTAL_TYPES, isDevEnvironment, isSignupPortal, isWebsitePortal } from '../utils/hostnameResolver';
 import InvalidPortalPage from '../pages/InvalidPortalPage';
 
 // ============================================================
@@ -32,6 +32,7 @@ const Pharmacy = lazy(() => import('../pages/user/Pharmacy'));
 const Login = lazy(() => import('../pages/user/Login'));
 const Signup = lazy(() => import('../pages/user/Signup'));
 const FreeOpdSignup = lazy(() => import('../pages/public/FreeOpdSignup'));
+const Home = lazy(() => import('../pages/Home'));
 
 // Dedicated Free Doctor OPD Pages
 const PatientMonitoring = lazy(() => import('../pages/opd/PatientMonitoring'));
@@ -363,6 +364,45 @@ const MainRoutes = () => {
                                 return null;
                             }
                             window.location.href = "https://" + baseDomain + "/login" + (email ? "?email=" + encodeURIComponent(email) : "");
+                            return null;
+                        })()} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </Suspense>
+            </RouteErrorBoundary>
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MAIN WEBSITE PORTAL — medical365.in and www.medical365.in
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (portalType === PORTAL_TYPES.WEBSITE) {
+        return (
+            <RouteErrorBoundary>
+                <Suspense fallback={<RouteLoadingFallback />}>
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/home" element={<Home />} />
+                        <Route path="/services" element={<Services />} />
+                        <Route path="/doctors" element={<Doctors />} />
+                        <Route path="/appointment" element={<Appointment />} />
+                        <Route path="/appointment/success" element={<AppointmentSuccess />} />
+                        <Route path="/lab-reports" element={<LabReports />} />
+                        <Route path="/pharmacy" element={<Pharmacy />} />
+                        {/* CRITICAL: medical365.in/login must NOT render HMS login and must NOT redirect to admin portal */}
+                        <Route path="/login" element={<Navigate to="/" replace />} />
+                        <Route path="/free-opd-signup" element={(() => {
+                            if (typeof window !== 'undefined') {
+                                window.location.href = 'https://signup.medical365.in';
+                                return null;
+                            }
+                            return null;
+                        })()} />
+                        <Route path="/signup" element={(() => {
+                            if (typeof window !== 'undefined') {
+                                window.location.href = 'https://signup.medical365.in';
+                                return null;
+                            }
                             return null;
                         })()} />
                         <Route path="*" element={<Navigate to="/" replace />} />

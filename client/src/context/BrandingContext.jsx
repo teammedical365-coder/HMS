@@ -197,7 +197,7 @@ export const BrandingProvider = ({ children }) => {
             const portalType = syncResult?.type;
             
             // ADMIN portals use default Medical365 branding — no hospital branding
-            if (portalType === PORTAL_TYPES.ADMIN) {
+            if (portalType === PORTAL_TYPES.ADMIN || portalType === PORTAL_TYPES.SIGNUP || portalType === PORTAL_TYPES.WEBSITE) {
                 applyBrandingToCSS(DEFAULT_BRANDING);
                 return;
             }

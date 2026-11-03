@@ -23,6 +23,7 @@ import { baseURL } from './api';
 export const PORTAL_TYPES = Object.freeze({
     ADMIN: 'ADMIN',
     SIGNUP: 'SIGNUP',
+    WEBSITE: 'WEBSITE',
     HOSPITAL: 'HOSPITAL',
     CUSTOM_DOMAIN: 'CUSTOM_DOMAIN',
     DEVELOPMENT: 'DEVELOPMENT',
@@ -99,9 +100,9 @@ export function resolveHostnameSync(hostname) {
         return { type: PORTAL_TYPES.SIGNUP, tenantData: null };
     }
 
-    // 3. Platform base domains (medical365.in, www.medical365.in)
-    if (PLATFORM_HOSTS.has(h)) {
-        return { type: PORTAL_TYPES.ADMIN, tenantData: null };
+    // 3. Platform main website domains (medical365.in, www.medical365.in)
+    if (h === BASE_DOMAIN || h === `www.${BASE_DOMAIN}`) {
+        return { type: PORTAL_TYPES.WEBSITE, tenantData: null };
     }
 
     // 4. Check cache
@@ -275,4 +276,11 @@ export function clearResolutionCache() {
  */
 export function isSignupPortal(portalType) {
     return portalType === PORTAL_TYPES.SIGNUP;
+}
+
+/**
+ * Check if the portal is the main public website (medical365.in, www.medical365.in)
+ */
+export function isWebsitePortal(portalType) {
+    return portalType === PORTAL_TYPES.WEBSITE;
 }
