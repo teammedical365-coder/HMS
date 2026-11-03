@@ -16,8 +16,13 @@ const Login = () => {
     const dispatch = useAppDispatch();
     const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg, tenant } = useAuth();
     
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [formData, setFormData] = useState({ email: searchParams.get('email') || '', password: '' });
     const [nativeSlug, setNativeSlug] = useState(null);
+
+    useEffect(() => {
+        const qEmail = searchParams.get('email');
+        if (qEmail) setFormData(prev => ({ ...prev, email: qEmail }));
+    }, [searchParams]);
 
     useEffect(() => {
         dispatch(clearError());
@@ -52,7 +57,10 @@ const Login = () => {
                 if (tenantRaw) parsedTenant = JSON.parse(tenantRaw);
             } catch (e) { }
 
-            if (parsedTenant && parsedTenant.subdomain) {
+            const isLocal = window.location.hostname.includes('localhost') || window.location.hostname === '127.0.0.1' || window.location.hostname.endsWith('.vercel.app');
+            const isFreeOpd = user.subscriptionPlan === 'free_doctor_opd' || parsedTenant?.subscriptionPlan === 'free_doctor_opd' || (user.role || '').toLowerCase().includes('opd');
+
+            if (!isLocal && !isFreeOpd && parsedTenant && parsedTenant.subdomain && !window.location.hostname.includes(parsedTenant.slug)) {
                 // UNIVERSAL LOGIN SSO HANDOVER:
                 // Pass the token securely via query string to their isolated portal and redirect.
                 const token = localStorage.getItem('token');
@@ -92,7 +100,9 @@ const Login = () => {
             };
             const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
             let targetPath = redirectMap[role] || redirectMap[(user.role || '').toLowerCase()] || searchParams.get('redirect') || '/my-dashboard';
-            if (role === 'doctor' && user.clinicType === 'clinic') {
+            if (isFreeOpd || user.subscriptionPlan === 'free_doctor_opd') {
+                targetPath = '/opd/tray';
+            } else if (role === 'doctor' && user.clinicType === 'clinic') {
                 targetPath = '/hospitaladmin';
             }
             navigate(targetPath, { replace: true });

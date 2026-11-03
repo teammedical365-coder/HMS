@@ -203,11 +203,11 @@ exports.signup = async (req, res) => {
         });
         await doctorDoc.save();
 
-        // ── 8. CONSTRUCT CLINIC URLS ─────────────────────────────────────────
+        // ── 8. CONSTRUCT CLINIC & LOGIN URLS ────────────────────────────────
         const baseDomain = process.env.BASE_DOMAIN || 'medical365.in';
-        const clinicUrl = `https://${slug}.${baseDomain}`;
-        const loginUrl = `https://${slug}.${baseDomain}/login`;
-        const devLoginUrl = `/login?slug=${slug}`;
+        const clinicUrl = `https://${baseDomain}`;
+        const loginUrl = `https://${baseDomain}/login?email=${encodeURIComponent(normalizedEmail)}`;
+        const devLoginUrl = `/login?email=${encodeURIComponent(normalizedEmail)}`;
 
         // ── 9. DISPATCH WELCOME EMAIL (Asynchronous Background Task) ─────────
         sendFreeOpdWelcomeEmail({
@@ -288,8 +288,8 @@ exports.resendWelcomeEmail = async (req, res) => {
         }
 
         const baseDomain = process.env.BASE_DOMAIN || 'medical365.in';
-        const clinicUrl = `https://${clinic.slug}.${baseDomain}`;
-        const loginUrl = `https://${clinic.slug}.${baseDomain}/login`;
+        const clinicUrl = `https://${baseDomain}`;
+        const loginUrl = `https://${baseDomain}/login?email=${encodeURIComponent(normalizedEmail)}`;
 
         await sendFreeOpdWelcomeEmail({
             email: normalizedEmail,

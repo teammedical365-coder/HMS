@@ -1,633 +1,86 @@
-/* FreeOpdSignup.css — Medical365 Clean Light Theme */
+/* FreeOpdSignup.css — Exact Medical365 Doctor Onboarding Styles */
 
-.fos-page-wrapper {
-    min-height: 100vh;
-    background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 240px, #ffffff 100%);
-    color: #1e293b;
+.fos-onboarding-body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    padding: 24px 16px 64px;
+    background-color: #F8FAFC;
+    background-image: 
+        radial-gradient(at 0% 0%, hsla(214, 100%, 96%, 1) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, hsla(171, 100%, 95%, 1) 0px, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-}
-
-/* Platform Brand Header */
-.fos-brand-bar {
-    max-width: 860px;
+    padding-bottom: 64px;
+    color: #1e293b;
+    box-sizing: border-box;
     width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding: 0 4px;
 }
 
-.fos-logo-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
+/* Custom select dropdown styling */
+.fos-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748B'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 9l4-4 4 4m0 6l-4 4-4-4'/%3E%3C/svg%3E");
+    background-position: right 1rem center;
+    background-size: 1.2em;
+    background-repeat: no-repeat;
 }
 
-.fos-logo-symbol {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ffffff;
-    font-size: 20px;
-    font-weight: 800;
-    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
-}
-
-.fos-logo-text {
-    font-size: 20px;
-    font-weight: 800;
-    color: #0a2647;
-    letter-spacing: -0.5px;
-}
-
-.fos-logo-text span {
-    color: #14b8a6;
-}
-
-.fos-nav-link {
-    font-size: 14px;
-    font-weight: 600;
-    color: #475569;
-    text-decoration: none;
-    transition: color 0.2s;
-    padding: 8px 16px;
-    border-radius: 8px;
-}
-
-.fos-nav-link:hover {
-    color: #14b8a6;
-    background: #f1f5f9;
-}
-
-/* Hero Section */
-.fos-hero {
-    max-width: 860px;
-    text-align: center;
-    margin-bottom: 28px;
-}
-
-.fos-trust-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #e6fffa;
-    color: #0d9488;
-    border: 1px solid #99f6e4;
-    padding: 6px 16px;
-    border-radius: 9999px;
-    font-size: 13px;
-    font-weight: 700;
-    margin-bottom: 16px;
-    letter-spacing: 0.3px;
-}
-
-.fos-title {
-    font-size: 38px;
-    font-weight: 800;
-    color: #0f172a;
-    margin: 0 0 12px;
-    line-height: 1.25;
-    letter-spacing: -0.6px;
-}
-
-.fos-title span {
-    background: linear-gradient(135deg, #14b8a6 0%, #0284c7 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.fos-subtitle {
-    font-size: 16px;
-    color: #64748b;
-    max-width: 680px;
-    margin: 0 auto;
-    line-height: 1.6;
-}
-
-/* Feature Pillars */
-.fos-features-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    max-width: 860px;
-    width: 100%;
-    margin-bottom: 32px;
-}
-
-@media (max-width: 768px) {
-    .fos-features-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    .fos-title {
-        font-size: 28px;
-    }
-}
-
-@media (max-width: 480px) {
-    .fos-features-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.fos-feature-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 18px 14px;
-    text-align: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.fos-feature-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
-    border-color: #cbd5e1;
-}
-
-.fos-feature-icon {
-    font-size: 26px;
-    margin-bottom: 8px;
-    display: inline-block;
-}
-
-.fos-feature-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 4px;
-}
-
-.fos-feature-desc {
-    font-size: 12px;
-    color: #64748b;
-    line-height: 1.4;
-}
-
-/* Main Form Card */
-.fos-card {
-    max-width: 860px;
-    width: 100%;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 36px 40px;
-    box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.03);
-}
-
-@media (max-width: 640px) {
-    .fos-card {
-        padding: 24px 20px;
-    }
-}
-
-.fos-section {
-    margin-bottom: 32px;
-}
-
-.fos-section:last-of-type {
-    margin-bottom: 24px;
-}
-
-.fos-section-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1.5px solid #f1f5f9;
-}
-
-.fos-section-icon-badge {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: #f0fdfa;
-    color: #14b8a6;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-}
-
-.fos-section-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: #0a2647;
-    margin: 0;
-}
-
-.fos-section-desc {
-    font-size: 13px;
-    color: #64748b;
-    margin: 0;
-}
-
-.fos-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 18px;
-}
-
-@media (max-width: 640px) {
-    .fos-form-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.fos-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.fos-form-group.full-width {
-    grid-column: 1 / -1;
-}
-
-.fos-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #334155;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.fos-label span.req {
-    color: #ef4444;
-}
-
-.fos-input, .fos-select {
-    width: 100%;
-    background: #ffffff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 11px 14px;
-    color: #0f172a;
-    font-size: 14px;
-    outline: none;
-    transition: all 0.2s;
+/* Premium Bordered Inputs */
+.input-premium {
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1; /* Clear slate-300 border */
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    transition: all 0.2s ease-in-out;
     box-sizing: border-box;
 }
 
-.fos-input:hover, .fos-select:hover {
-    border-color: #cbd5e1;
+.input-premium:focus {
+    border-color: #1E40AF !important; /* Brand Blue on focus */
+    box-shadow: 0 0 0 4px rgba(30, 64, 175, 0.1) !important; /* Soft blue ring */
 }
 
-.fos-input:focus, .fos-select:focus {
-    border-color: #14b8a6;
-    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+/* Remove default number arrows */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
 }
 
-.fos-input::placeholder {
-    color: #94a3b8;
-}
+/* Brand Color Utilities */
+.text-brand-blue { color: #1E40AF; }
+.bg-brand-blue { background-color: #1E40AF; }
+.border-brand-blue { border-color: #1E40AF; }
 
-.fos-input.error {
-    border-color: #ef4444;
-    background: #fffbfa;
-}
+.text-brand-teal { color: #14B8A6; }
+.bg-brand-teal { background-color: #14B8A6; }
+.border-brand-teal { border-color: #14B8A6; }
 
-.fos-input.error:focus {
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
-}
-
-.fos-error-text {
-    font-size: 12px;
-    color: #dc2626;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.fos-hint-text {
-    font-size: 11px;
-    color: #64748b;
-}
-
-/* Alert Banners */
-.fos-alert {
-    padding: 14px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    margin-bottom: 24px;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.fos-alert-error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #991b1b;
-}
-
-.fos-alert-success {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    color: #166534;
-}
-
-/* Submit Button & Double-Click Protection */
-.fos-submit-btn {
+/* Success Card Styles */
+.fos-success-card {
+    background: #ffffff;
+    border-radius: 1.5rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+    padding: 32px;
+    max-width: 680px;
     width: 100%;
-    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-    color: #ffffff;
-    border: none;
-    padding: 16px;
-    border-radius: 10px;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
+    margin-top: 20px;
+    box-sizing: border-box;
 }
 
-.fos-submit-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-    box-shadow: 0 6px 20px rgba(20, 184, 166, 0.45);
-    transform: translateY(-1px);
-}
-
-.fos-submit-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.fos-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2.5px solid rgba(255, 255, 255, 0.3);
-    border-top-color: #ffffff;
-    border-radius: 50%;
-    animation: fos-spin 0.7s linear infinite;
-    display: inline-block;
-}
-
-@keyframes fos-spin {
-    to { transform: rotate(360deg); }
-}
-
-.fos-privacy-note {
-    font-size: 12px;
-    color: #64748b;
-    text-align: center;
-    margin-top: 14px;
-}
-
-/* =========================================================================
-   SUCCESS VIEW STYLING (Clean Light Theme)
-   ========================================================================= */
-
-.fos-success-view {
-    text-align: center;
-}
-
-.fos-success-badge-icon {
-    width: 64px;
-    height: 64px;
+.fos-badge-check {
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: #ecfdf5;
     border: 2px solid #a7f3d0;
-    color: #10b981;
-    font-size: 32px;
+    color: #059669;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 26px;
     margin: 0 auto 16px;
-    animation: fos-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-@keyframes fos-pop {
-    0% { transform: scale(0.5); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-.fos-success-title {
-    font-size: 28px;
-    font-weight: 800;
-    color: #0f172a;
-    margin: 0 0 8px;
-    letter-spacing: -0.4px;
-}
-
-.fos-success-subtitle {
-    font-size: 15px;
-    color: #475569;
-    margin: 0 0 28px;
-}
-
-/* Detail Table */
-.fos-result-box {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 20px;
-    text-align: left;
-    margin-bottom: 24px;
-}
-
-.fos-result-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid #edf2f7;
-    font-size: 14px;
-}
-
-.fos-result-row:last-child {
-    border-bottom: none;
-}
-
-.fos-result-label {
-    color: #64748b;
-    font-weight: 500;
-}
-
-.fos-result-val {
-    color: #0f172a;
-    font-weight: 700;
-    text-align: right;
-}
-
-/* Dedicated Clinic URL Card */
-.fos-url-card {
-    background: #f0fdfa;
-    border: 1.5px solid #99f6e4;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 24px;
-    text-align: left;
-}
-
-.fos-url-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    font-weight: 700;
-    color: #0f766e;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 10px;
-}
-
-.fos-url-display-wrap {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.fos-url-input {
-    flex: 1;
-    background: #ffffff;
-    border: 1.5px solid #ccfbf1;
-    border-radius: 8px;
-    padding: 11px 14px;
-    color: #0369a1;
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 14px;
-    font-weight: 700;
-    outline: none;
-    user-select: all;
-}
-
-.fos-copy-btn {
-    background: #14b8a6;
-    color: #ffffff;
-    border: none;
-    border-radius: 8px;
-    padding: 11px 20px;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 2px 8px rgba(20, 184, 166, 0.25);
-}
-
-.fos-copy-btn:hover {
-    background: #0d9488;
-}
-
-.fos-copy-btn.copied {
-    background: #10b981;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
-}
-
-/* How to Sign In Guide */
-.fos-login-steps-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 20px 24px;
-    margin-bottom: 28px;
-    text-align: left;
-}
-
-.fos-steps-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 15px;
-    font-weight: 700;
-    color: #0a2647;
-    margin-bottom: 14px;
-}
-
-.fos-steps-list {
-    margin: 0;
-    padding-left: 20px;
-    font-size: 13.5px;
-    color: #334155;
-    line-height: 1.8;
-}
-
-.fos-steps-list li strong {
-    color: #0f172a;
-}
-
-/* Action Buttons */
-.fos-success-actions {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.fos-primary-btn {
-    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-    color: #ffffff;
-    border: none;
-    padding: 14px 32px;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
-    transition: all 0.2s;
-}
-
-.fos-primary-btn:hover {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-    box-shadow: 0 6px 18px rgba(20, 184, 166, 0.45);
-    transform: translateY(-1px);
-}
-
-.fos-secondary-btn {
-    background: #ffffff;
-    color: #334155;
-    border: 1.5px solid #cbd5e1;
-    padding: 14px 24px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.fos-secondary-btn:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #94a3b8;
-    color: #0f172a;
-}
-
-.fos-secondary-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.fos-resend-status {
-    margin-top: 14px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #0d9488;
 }
