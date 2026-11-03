@@ -71,12 +71,12 @@ apiClient.interceptors.response.use(
 
             // ONLY force logout on genuine session expiration or explicitly revoked/invalidated token
             // NEVER logout on transient 'No token provided' or sub-resource auth errors
-            const shouldLogout = isSessionExpired || 
-                                 errMsg.includes('session') || 
-                                 errMsg.includes('revoked') || 
-                                 errMsg.includes('invalidated') || 
-                                 errMsg.includes('jwt expired') ||
-                                 errMsg.includes('invalid token');
+            const shouldLogout = isSessionExpired ||
+                errMsg.includes('session') ||
+                errMsg.includes('revoked') ||
+                errMsg.includes('invalidated') ||
+                errMsg.includes('jwt expired') ||
+                errMsg.includes('invalid token');
 
             if (shouldLogout) {
                 localStorage.removeItem('token');
@@ -226,7 +226,7 @@ function isOfflineWritable(method, url) {
     if (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')) {
         try {
             normalizedUrl = new URL(normalizedUrl).pathname;
-        } catch {}
+        } catch { }
     }
     // Remove query parameters
     normalizedUrl = normalizedUrl.split('?')[0];
@@ -237,7 +237,7 @@ function isOfflineWritable(method, url) {
     return OFFLINE_WRITABLE_OPS.some((pattern) => {
         const [patternMethod, patternPath] = pattern.split(' ');
         if (patternMethod !== '*' && patternMethod !== normalizedMethod) return false;
-        
+
         // Escape regex characters except our placeholders
         const regexStr = '^' + patternPath
             .replace(/\*\*/g, '___DOUBLE_STAR___')
@@ -333,7 +333,7 @@ apiClient.interceptors.response.use(
                 try {
                     let requestData = config.data;
                     if (typeof requestData === 'string') {
-                        try { requestData = JSON.parse(requestData); } catch {}
+                        try { requestData = JSON.parse(requestData); } catch { }
                     }
                     if (!requestData || typeof requestData !== 'object') {
                         requestData = {};
@@ -1809,7 +1809,7 @@ export const migrationAPI = {
     saveTemplate: async (migrationId, data) => (await apiClient.post(`/api/migrations/${migrationId}/save-template`, data)).data,
     listTemplates: async () => (await apiClient.get('/api/migrations/templates')).data,
     getCanonicalSchema: async (entity = '') => (await apiClient.get(`/api/migrations/canonical-schema${entity ? '?entity=' + entity : ''}`)).data,
-    
+
     // Phase 2: Transformation, Validation, Duplicate Review & Preview
     prepareAndValidate: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/prepare`)).data,
     getPreview: async (migrationId) => (await apiClient.get(`/api/migrations/${migrationId}/preview`)).data,
