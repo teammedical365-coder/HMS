@@ -20,6 +20,65 @@ const RevisitSchedule = () => {
 
     // Book Revisit Modal State
     const [bookModal, setBookModal] = useState({ open: false, appt: null, date: todayStr, time: '10:00', notes: '' });
+
+    // Quick Schedule Follow-up Revisit Modal State
+    const [newScheduleModal, setNewScheduleModal] = useState({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
+    const [patientSearchResults, setPatientSearchResults] = useState([]);
+    const [schedulingRevisit, setSchedulingRevisit] = useState(false);
+    const [scheduleError, setScheduleError] = useState('');
+
+    const handlePatientSearch = async (q) => {
+        setNewScheduleModal(prev => ({ ...prev, query: q }));
+        if (q.trim().length >= 2) {
+            try {
+                const res = await freeOpdAPI.searchPatients({ query: q.trim(), limit: 5 });
+                if (res.success) {
+                    setPatientSearchResults(res.patients || []);
+                }
+            } catch (_) {}
+        } else {
+            setPatientSearchResults([]);
+        }
+    };
+
+    const handleCreateRevisitSchedule = async (e) => {
+        e.preventDefault();
+        setScheduleError('');
+        if (!newScheduleModal.patientId) {
+            setScheduleError('Please search and select a patient');
+            return;
+        }
+        if (newScheduleModal.date < todayStr) {
+            setScheduleError('Revisit date cannot be in the past');
+            return;
+        }
+
+        setSchedulingRevisit(true);
+        try {
+            const res = await freeOpdAPI.createAppointment({
+                patientId: newScheduleModal.patientId,
+                appointmentDate: newScheduleModal.date,
+                appointmentTime: '10:00',
+                visitType: 'Follow-up',
+                notes: newScheduleModal.notes || 'Scheduled follow-up consultation',
+                amount: 0,
+                paymentMethod: 'Cash'
+            });
+
+            if (res.success) {
+                setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
+                setPatientSearchResults([]);
+                loadRevisits();
+                alert('✓ Revisit scheduled successfully!');
+            } else {
+                setScheduleError(res.message || 'Failed to schedule revisit');
+            }
+        } catch (err) {
+            setScheduleError(err.response?.data?.message || err.message || 'Error scheduling revisit');
+        } finally {
+            setSchedulingRevisit(false);
+        }
+    };
     const [booking, setBooking] = useState(false);
     const [bookError, setBookError] = useState('');
 
@@ -56,6 +115,24 @@ const RevisitSchedule = () => {
     const handleBookSubmit = async (e) => {
         e.preventDefault();
         setBookError('');
+
+        // Strict Validation: disallow past date
+        if (bookModal.date < todayStr) {
+            setBookError('Revisit date cannot be in the past');
+            return;
+        }
+
+        // Strict Validation: disallow past time if today
+        if (bookModal.date === todayStr && bookModal.time) {
+            const [h, m] = bookModal.time.split(':').map(Number);
+            const now = new Date();
+            if (h < now.getHours() || (h === now.getHours() && m < now.getMinutes())) {
+                const curStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                setBookError(`Revisit time cannot be in the past for today. Current time is ${curStr}`);
+                return;
+            }
+        }
+
         setBooking(true);
         try {
             const res = await freeOpdAPI.bookRevisitAppointment(bookModal.appt.originalAppointmentId || bookModal.appt._id, {
@@ -81,7 +158,7 @@ const RevisitSchedule = () => {
     return (
         <div className="am-container">
             {/* Header Toolbar & Tabs */}
-            <div className="am-controls" style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <div className="am-controls" style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button
                         type="button"
@@ -112,6 +189,18 @@ const RevisitSchedule = () => {
                         Overdue Revisits
                     </button>
                 </div>
+
+                <button
+                    type="button"
+                    className="pm-action-btn-primary"
+                    onClick={() => {
+                        setScheduleError('');
+                        setNewScheduleModal({ open: true, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
+                    }}
+                >
+                    <FiPlus />
+                    <span>+ Schedule New Revisit</span>
+                </button>
             </div>
 
             {/* Revisits Master Table */}
@@ -228,12 +317,22 @@ const RevisitSchedule = () => {
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                                     <div>
-                                        <label className="pm-label">Appointment Date *</label>
+                                        <label className="pm-label">Appointment Date * <span style={{ fontSize: '11px', color: '#0d9488' }}>(Today or Future)</span></label>
                                         <input
                                             type="date"
                                             className="pm-input"
+                                            min={todayStr}
                                             value={bookModal.date}
-                                            onChange={(e) => setBookModal({ ...bookModal, date: e.target.value })}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                if (v < todayStr) {
+                                                    setBookError('Revisit date cannot be in the past');
+                                                    setBookModal({ ...bookModal, date: todayStr });
+                                                } else {
+                                                    setBookError('');
+                                                    setBookModal({ ...bookModal, date: v });
+                                                }
+                                            }}
                                             required
                                         />
                                     </div>
@@ -274,6 +373,173 @@ const RevisitSchedule = () => {
                                     disabled={booking}
                                 >
                                     {booking ? 'Booking...' : 'Confirm Revisit Slot'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+            {/* ─────────────────────────────────────────────────────────────
+               SCHEDULE NEW REVISIT MODAL
+               ───────────────────────────────────────────────────────────── */}
+            {newScheduleModal.open && (
+                <div className="pm-modal-overlay">
+                    <div className="pm-modal-card" style={{ maxWidth: '540px' }}>
+                        <div className="pm-modal-header">
+                            <div>
+                                <h3 className="pm-modal-title" style={{ margin: 0 }}>Schedule Patient Revisit</h3>
+                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                                    Set an upcoming follow-up visit for an existing patient
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="pm-modal-close-btn"
+                                onClick={() => setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' })}
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleCreateRevisitSchedule}>
+                            <div className="pm-modal-body">
+                                {scheduleError && (
+                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
+                                        ⚠ {scheduleError}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    {/* Patient Search */}
+                                    <div style={{ position: 'relative' }}>
+                                        <label className="pm-label">Search Patient (Name, Mobile or UID) *</label>
+                                        <input
+                                            type="text"
+                                            className="pm-input"
+                                            placeholder="Type patient name, phone or UID..."
+                                            value={newScheduleModal.query}
+                                            onChange={(e) => handlePatientSearch(e.target.value)}
+                                            required
+                                        />
+
+                                        {newScheduleModal.patientName && (
+                                            <div style={{ marginTop: '6px', fontSize: '12px', color: '#0d9488', fontWeight: 700 }}>
+                                                ✓ Selected: {newScheduleModal.patientName}
+                                            </div>
+                                        )}
+
+                                        {patientSearchResults.length > 0 && !newScheduleModal.patientName && (
+                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', boxShadow: '0 4px 14px rgba(0,0,0,0.1)', zIndex: 50, maxHeight: '180px', overflowY: 'auto' }}>
+                                                {patientSearchResults.map(p => (
+                                                    <div
+                                                        key={p._id}
+                                                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '12.5px' }}
+                                                        onMouseDown={() => {
+                                                            setNewScheduleModal(prev => ({
+                                                                ...prev,
+                                                                patientId: p._id,
+                                                                patientName: `${p.name} (${p.patientId || p.patientUid || 'UID'} • ${p.phone})`,
+                                                                query: p.name
+                                                            }));
+                                                            setPatientSearchResults([]);
+                                                        }}
+                                                    >
+                                                        <strong>{p.name}</strong> • {p.patientId || p.patientUid} • {p.phone}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Revisit Date with Quick Buttons */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                            <label className="pm-label" style={{ margin: 0 }}>
+                                                Revisit Follow-up Date *
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                <button
+                                                    type="button"
+                                                    style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                    onClick={() => {
+                                                        const d = new Date();
+                                                        d.setDate(d.getDate() + 3);
+                                                        setNewScheduleModal(prev => ({ ...prev, date: d.toISOString().split('T')[0] }));
+                                                    }}
+                                                >
+                                                    +3 Days
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                    onClick={() => {
+                                                        const d = new Date();
+                                                        d.setDate(d.getDate() + 7);
+                                                        setNewScheduleModal(prev => ({ ...prev, date: d.toISOString().split('T')[0] }));
+                                                    }}
+                                                >
+                                                    +1 Wk
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                    onClick={() => {
+                                                        const d = new Date();
+                                                        d.setDate(d.getDate() + 14);
+                                                        setNewScheduleModal(prev => ({ ...prev, date: d.toISOString().split('T')[0] }));
+                                                    }}
+                                                >
+                                                    +2 Wks
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="date"
+                                            className="pm-input"
+                                            min={todayStr}
+                                            value={newScheduleModal.date}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                if (v < todayStr) {
+                                                    setScheduleError('Revisit date cannot be in the past');
+                                                    setNewScheduleModal(prev => ({ ...prev, date: todayStr }));
+                                                } else {
+                                                    setScheduleError('');
+                                                    setNewScheduleModal(prev => ({ ...prev, date: v }));
+                                                }
+                                            }}
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Clinical Advice / Purpose */}
+                                    <div>
+                                        <label className="pm-label">Follow-up Clinical Advice / Purpose</label>
+                                        <input
+                                            type="text"
+                                            className="pm-input"
+                                            placeholder="e.g. Review blood pressure, check test reports"
+                                            value={newScheduleModal.notes}
+                                            onChange={(e) => setNewScheduleModal(prev => ({ ...prev, notes: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pm-modal-footer">
+                                <button
+                                    type="button"
+                                    className="pm-btn-secondary"
+                                    onClick={() => setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' })}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="pm-btn-primary"
+                                    disabled={schedulingRevisit}
+                                >
+                                    {schedulingRevisit ? 'Scheduling...' : 'Save Revisit Schedule'}
                                 </button>
                             </div>
                         </form>

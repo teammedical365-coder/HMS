@@ -423,7 +423,7 @@ const DoctorPatientTray = () => {
                             </button>
 
                             {/* Advice & Revisit Date */}
-                            <div style={{ marginBottom: '14px' }}>
+                            <div style={{ marginBottom: '10px' }}>
                                 <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                                     Clinical Advice / Notes
                                 </label>
@@ -433,6 +433,57 @@ const DoctorPatientTray = () => {
                                     placeholder="e.g. Adequate hydration, avoid fried foods."
                                     value={consultForm.doctorNotes}
                                     onChange={(e) => setConsultForm({ ...consultForm, doctorNotes: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Next Revisit / Follow-up Date */}
+                            <div style={{ marginBottom: '14px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155' }}>
+                                        Next Revisit / Follow-up Date
+                                    </label>
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <button
+                                            type="button"
+                                            style={{ fontSize: '10.5px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                            onClick={() => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + 3);
+                                                setConsultForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                            }}
+                                        >
+                                            +3 Days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            style={{ fontSize: '10.5px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                            onClick={() => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + 7);
+                                                setConsultForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                            }}
+                                        >
+                                            +1 Week
+                                        </button>
+                                        <button
+                                            type="button"
+                                            style={{ fontSize: '10.5px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                            onClick={() => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + 14);
+                                                setConsultForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                            }}
+                                        >
+                                            +2 Weeks
+                                        </button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="date"
+                                    min={todayStr}
+                                    style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
+                                    value={consultForm.followUpDate}
+                                    onChange={(e) => setConsultForm({ ...consultForm, followUpDate: e.target.value })}
                                 />
                             </div>
 

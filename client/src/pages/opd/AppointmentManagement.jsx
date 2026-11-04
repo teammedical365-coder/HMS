@@ -27,6 +27,18 @@ import {
 import './AppointmentManagement.css';
 import './PatientMonitoring.css';
 
+const getInitialSlotTime = () => {
+    const now = new Date();
+    let hours = now.getHours();
+    let minutes = Math.ceil(now.getMinutes() / 15) * 15;
+    if (minutes >= 60) {
+        hours += 1;
+        minutes = 0;
+    }
+    if (hours >= 24) hours = 23;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
 const AppointmentManagement = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     const { user } = useAuth();
@@ -738,12 +750,12 @@ const AppointmentManagement = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleBookSubmit}>
-                            <div className="pm-modal-body" data-lenis-prevent data-scrollable="true">
+                        <form onSubmit={handleBookSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                            <div className="pm-modal-body" data-lenis-prevent data-scrollable="true" style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
                                 {bookError && (
-                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span>⚠</span>
-                                        <span>{bookError}</span>
+                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '12px 16px', borderRadius: '10px', marginBottom: '20px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #fecaca' }}>
+                                        <span style={{ fontSize: '18px' }}>⚠️</span>
+                                        <span style={{ fontWeight: 600 }}>{bookError}</span>
                                     </div>
                                 )}
 
@@ -753,159 +765,253 @@ const AppointmentManagement = () => {
                                         background: '#ecfdf5',
                                         border: '1px solid #a7f3d0',
                                         color: '#065f46',
-                                        padding: '10px 14px',
-                                        borderRadius: '8px',
-                                        marginBottom: '16px',
-                                        fontSize: '12.5px',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        marginBottom: '20px',
+                                        fontSize: '13px',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '8px'
+                                        gap: '10px'
                                     }}>
-                                        <FiCheckCircle style={{ color: '#059669', fontSize: '16px', flexShrink: 0 }} />
+                                        <FiCheckCircle style={{ color: '#059669', fontSize: '18px', flexShrink: 0 }} />
                                         <div>
                                             <strong>Returning Patient Detected:</strong> {detectedPatient.name} ({detectedPatient.patientUid || detectedPatient.patientId || 'UID'})
-                                            <div style={{ fontSize: '11.5px', color: '#047857', marginTop: '2px' }}>
-                                                Appointment will be attached to this patient's existing profile.
+                                            <div style={{ fontSize: '12px', color: '#047857', marginTop: '2px' }}>
+                                                Appointment will be attached to this patient's existing records automatically.
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Section 1: Patient Information */}
-                                <div style={{ marginBottom: '18px' }}>
-                                    <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '10px' }}>
-                                        1. Patient Details
+                                {/* 2-Column Responsive Form Layout */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
+                                    {/* Left Column: Patient Demographics */}
+                                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span>👤</span>
+                                            <span>1. Patient Details</span>
+                                        </div>
+
+                                        <div className="pm-form-grid">
+                                            <div className="pm-form-group full-width">
+                                                <label className="pm-label">Patient Full Name *</label>
+                                                <input
+                                                    type="text"
+                                                    className="pm-input"
+                                                    placeholder="e.g. Meena Devi"
+                                                    value={bookForm.patientName}
+                                                    onChange={(e) => setBookForm({ ...bookForm, patientName: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Mobile Number (10 digits) *</label>
+                                                <input
+                                                    type="tel"
+                                                    className="pm-input"
+                                                    placeholder="9876543210"
+                                                    maxLength="10"
+                                                    value={bookForm.patientPhone}
+                                                    onChange={(e) => handlePatientLookup('patientPhone', e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">
+                                                    Email Address <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>(Auto-links profile)</span>
+                                                </label>
+                                                <input
+                                                    type="email"
+                                                    className="pm-input"
+                                                    placeholder="patient@example.com"
+                                                    value={bookForm.patientEmail}
+                                                    onChange={(e) => handlePatientLookup('patientEmail', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Gender</label>
+                                                <select
+                                                    className="pm-select"
+                                                    value={bookForm.gender}
+                                                    onChange={(e) => setBookForm({ ...bookForm, gender: e.target.value })}
+                                                >
+                                                    <option value="Male">Male</option>
+                                                    <option value="Female">Female</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                            </div>
+
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Age (Years)</label>
+                                                <input
+                                                    type="number"
+                                                    className="pm-input"
+                                                    placeholder="e.g. 30"
+                                                    min="1"
+                                                    max="125"
+                                                    value={bookForm.age}
+                                                    onChange={(e) => setBookForm({ ...bookForm, age: e.target.value })}
+                                                />
+                                            </div>
+
+                                            <div className="pm-form-group full-width">
+                                                <label className="pm-label">Visit Type</label>
+                                                <select
+                                                    className="pm-select"
+                                                    value={bookForm.visitType}
+                                                    onChange={(e) => setBookForm({ ...bookForm, visitType: e.target.value })}
+                                                >
+                                                    <option value="New Consultation">New Consultation</option>
+                                                    <option value="Follow-up">Follow-up / Revisit</option>
+                                                    <option value="Emergency">Emergency</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="pm-form-grid">
-                                        <div className="pm-form-group full-width">
-                                            <label className="pm-label">Patient Full Name *</label>
-                                            <input
-                                                type="text"
-                                                className="pm-input"
-                                                placeholder="e.g. Meena Devi"
-                                                value={bookForm.patientName}
-                                                onChange={(e) => setBookForm({ ...bookForm, patientName: e.target.value })}
-                                                required
-                                            />
+                                    {/* Right Column: Appointment Schedule & Payment */}
+                                    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span>📅</span>
+                                            <span>2. Appointment & Consultation Details</span>
                                         </div>
 
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Mobile Number (10 digits) *</label>
-                                            <input
-                                                type="tel"
-                                                className="pm-input"
-                                                placeholder="9876543210"
-                                                maxLength="10"
-                                                value={bookForm.patientPhone}
-                                                onChange={(e) => handlePatientLookup('patientPhone', e.target.value)}
-                                                required
-                                            />
-                                        </div>
+                                        <div className="pm-form-grid">
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Appointment Date * <span style={{ fontSize: '11px', color: '#0d9488' }}>(Today or Future)</span></label>
+                                                <input
+                                                    type="date"
+                                                    className="pm-input"
+                                                    min={todayStr}
+                                                    value={bookForm.appointmentDate}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val < todayStr) {
+                                                            setBookError('Appointment date cannot be in the past');
+                                                            setBookForm({ ...bookForm, appointmentDate: todayStr, appointmentTime: getInitialSlotTime() });
+                                                        } else {
+                                                            setBookError('');
+                                                            setBookForm({ ...bookForm, appointmentDate: val });
+                                                        }
+                                                    }}
+                                                    required
+                                                />
+                                            </div>
 
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">
-                                                Email Address <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>(Links existing profile)</span>
-                                            </label>
-                                            <input
-                                                type="email"
-                                                className="pm-input"
-                                                placeholder="patient@example.com"
-                                                value={bookForm.patientEmail}
-                                                onChange={(e) => handlePatientLookup('patientEmail', e.target.value)}
-                                            />
-                                        </div>
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Appointment Time *</label>
+                                                <input
+                                                    type="time"
+                                                    className="pm-input"
+                                                    value={bookForm.appointmentTime}
+                                                    onChange={(e) => {
+                                                        const tVal = e.target.value;
+                                                        setBookForm({ ...bookForm, appointmentTime: tVal });
+                                                        if (bookForm.appointmentDate === todayStr && tVal) {
+                                                            const [h, m] = tVal.split(':').map(Number);
+                                                            const now = new Date();
+                                                            if (h < now.getHours() || (h === now.getHours() && m < now.getMinutes())) {
+                                                                const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                                                                setBookError(`Appointment time cannot be in the past. Current time is ${curTimeStr}`);
+                                                            } else {
+                                                                setBookError('');
+                                                            }
+                                                        }
+                                                    }}
+                                                    required
+                                                />
+                                            </div>
 
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Gender</label>
-                                            <select
-                                                className="pm-select"
-                                                value={bookForm.gender}
-                                                onChange={(e) => setBookForm({ ...bookForm, gender: e.target.value })}
-                                            >
-                                                <option value="Male">Male</option>
-                                                <option value="Female">Female</option>
-                                                <option value="Other">Other</option>
-                                            </select>
-                                        </div>
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Consultation Fee (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    className="pm-input"
+                                                    placeholder="300"
+                                                    min="0"
+                                                    value={bookForm.amount}
+                                                    onChange={(e) => setBookForm({ ...bookForm, amount: e.target.value })}
+                                                />
+                                            </div>
 
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Age (Years)</label>
-                                            <input
-                                                type="number"
-                                                className="pm-input"
-                                                placeholder="e.g. 30"
-                                                min="1"
-                                                max="125"
-                                                value={bookForm.age}
-                                                onChange={(e) => setBookForm({ ...bookForm, age: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
+                                            <div className="pm-form-group">
+                                                <label className="pm-label">Payment Mode</label>
+                                                <select
+                                                    className="pm-select"
+                                                    value={bookForm.paymentMethod}
+                                                    onChange={(e) => setBookForm({ ...bookForm, paymentMethod: e.target.value })}
+                                                >
+                                                    <option value="Cash">Cash (Directly Paid)</option>
+                                                    <option value="UPI">UPI / QR (Directly Paid)</option>
+                                                    <option value="Card">Debit / Credit Card</option>
+                                                    <option value="Pending">Pay Later (Pending)</option>
+                                                </select>
+                                            </div>
 
-                                {/* Section 2: Appointment & Consultation Details */}
-                                <div>
-                                    <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', marginBottom: '10px' }}>
-                                        2. Appointment & Consultation Details
-                                    </div>
+                                            {/* Optional Next Follow-up Revisit Date */}
+                                            <div className="pm-form-group full-width">
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <label className="pm-label" style={{ margin: 0 }}>
+                                                        Scheduled Follow-up Revisit (Optional)
+                                                    </label>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <button
+                                                            type="button"
+                                                            style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                            onClick={() => {
+                                                                const d = new Date();
+                                                                d.setDate(d.getDate() + 3);
+                                                                setBookForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                                            }}
+                                                        >
+                                                            +3 Days
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                            onClick={() => {
+                                                                const d = new Date();
+                                                                d.setDate(d.getDate() + 7);
+                                                                setBookForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                                            }}
+                                                        >
+                                                            +1 Wk
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+                                                            onClick={() => {
+                                                                const d = new Date();
+                                                                d.setDate(d.getDate() + 14);
+                                                                setBookForm(prev => ({ ...prev, followUpDate: d.toISOString().split('T')[0] }));
+                                                            }}
+                                                        >
+                                                            +2 Wks
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    type="date"
+                                                    className="pm-input"
+                                                    min={todayStr}
+                                                    value={bookForm.followUpDate}
+                                                    onChange={(e) => setBookForm({ ...bookForm, followUpDate: e.target.value })}
+                                                />
+                                            </div>
 
-                                    <div className="pm-form-grid">
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Appointment Date *</label>
-                                            <input
-                                                type="date"
-                                                className="pm-input"
-                                                value={bookForm.appointmentDate}
-                                                onChange={(e) => setBookForm({ ...bookForm, appointmentDate: e.target.value })}
-                                                required
-                                            />
-                                        </div>
-
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Appointment Time</label>
-                                            <input
-                                                type="time"
-                                                className="pm-input"
-                                                value={bookForm.appointmentTime}
-                                                onChange={(e) => setBookForm({ ...bookForm, appointmentTime: e.target.value })}
-                                            />
-                                        </div>
-
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Consultation Fee (₹)</label>
-                                            <input
-                                                type="number"
-                                                className="pm-input"
-                                                placeholder="300"
-                                                value={bookForm.amount}
-                                                onChange={(e) => setBookForm({ ...bookForm, amount: e.target.value })}
-                                            />
-                                        </div>
-
-                                        <div className="pm-form-group">
-                                            <label className="pm-label">Payment Mode</label>
-                                            <select
-                                                className="pm-select"
-                                                value={bookForm.paymentMethod}
-                                                onChange={(e) => setBookForm({ ...bookForm, paymentMethod: e.target.value })}
-                                            >
-                                                <option value="Cash">Cash</option>
-                                                <option value="UPI">UPI</option>
-                                                <option value="Card">Card</option>
-                                                <option value="Pending">Pay Later (Pending)</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="pm-form-group full-width">
-                                            <label className="pm-label">Clinical Notes / Purpose of Visit</label>
-                                            <input
-                                                type="text"
-                                                className="pm-input"
-                                                placeholder="e.g. Mild fever and sore throat"
-                                                value={bookForm.notes}
-                                                onChange={(e) => setBookForm({ ...bookForm, notes: e.target.value })}
-                                            />
+                                            <div className="pm-form-group full-width">
+                                                <label className="pm-label">Clinical Notes / Chief Complaint</label>
+                                                <input
+                                                    type="text"
+                                                    className="pm-input"
+                                                    placeholder="e.g. Mild fever, persistent cough for 2 days"
+                                                    value={bookForm.notes}
+                                                    onChange={(e) => setBookForm({ ...bookForm, notes: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -924,8 +1030,9 @@ const AppointmentManagement = () => {
                                     type="submit"
                                     className="pm-btn-primary"
                                     disabled={submittingBook}
+                                    style={{ minWidth: '180px' }}
                                 >
-                                    {submittingBook ? 'Confirming...' : 'Confirm Appointment'}
+                                    {submittingBook ? 'Confirming...' : 'Confirm & Book Appointment'}
                                 </button>
                             </div>
                         </form>

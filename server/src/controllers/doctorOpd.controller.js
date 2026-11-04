@@ -504,7 +504,7 @@ exports.savePrescription = async (req, res) => {
         const { hospitalId, doctorId, doctorUserId } = await getContext(req);
         const appointmentId = req.params.appointmentId || req.params.id || req.body.appointmentId;
         const patientId = req.body.patientId || req.params.patientId;
-        const { medicines, diagnosis, vitals, doctorNotes } = req.body;
+        const { medicines, diagnosis, vitals, doctorNotes, followUpDate } = req.body;
 
         const appointment = await doctorOpdService.savePrescription({
             hospitalId,
@@ -515,7 +515,8 @@ exports.savePrescription = async (req, res) => {
             medicines,
             diagnosis,
             vitals,
-            doctorNotes
+            doctorNotes,
+            followUpDate
         });
 
         res.json({ success: true, message: 'Prescription saved successfully', appointment });

@@ -547,8 +547,33 @@ async function createAppointment({
     }
 
     const { dateStr } = quotaService.getIstDayRange(appointmentDate);
+    const todayIstRange = quotaService.getIstDayRange(new Date());
 
-    // 1. Quota reservation (Atomic Phase 2 service)
+    // 1. Strict Validation: Disallow booking in the past date
+    if (dateStr < todayIstRange.dateStr) {
+        const err = new Error('Appointment date cannot be in the past');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    // 2. Strict Validation: Disallow past time if booking for today
+    if (dateStr === todayIstRange.dateStr && appointmentTime) {
+        const istOffset = (5 * 60 + 30) * 60 * 1000;
+        const nowIst = new Date(Date.now() + istOffset);
+        const currentHours = nowIst.getUTCHours();
+        const currentMinutes = nowIst.getUTCMinutes();
+        const [appHour, appMin] = appointmentTime.split(':').map(Number);
+        if (!isNaN(appHour) && !isNaN(appMin)) {
+            if (appHour < currentHours || (appHour === currentHours && appMin < currentMinutes)) {
+                const curTimeStr = `${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`;
+                const err = new Error(`Appointment time cannot be in the past for today. Current IST time is ${curTimeStr}`);
+                err.statusCode = 400;
+                throw err;
+            }
+        }
+    }
+
+    // 3. Quota reservation (Atomic Phase 2 service)
     const quotaResult = await quotaService.reserveAppointmentSlot({
         hospitalId,
         doctorId,
@@ -611,7 +636,9 @@ async function createAppointment({
             appointmentTime: appointmentTime || '10:00',
             amount: Number(amount) || 0,
             paymentMethod: paymentMethod || 'Cash',
-            paymentStatus: Number(amount) > 0 ? 'Pending' : 'Paid',
+            paymentStatus: (String(paymentMethod || '').toLowerCase().trim() === 'pending' || String(paymentMethod || '').toLowerCase().trim() === 'pay later')
+                ? (Number(amount) > 0 ? 'Pending' : 'Paid')
+                : 'Paid',
             status: 'confirmed',
             notes,
             visitType: visitType || 'New Consultation',
@@ -642,6 +669,31 @@ async function rescheduleAppointment({ hospitalId, doctorId, appointmentId, newD
     const appt = await Appointment.findOne({ _id: appointmentId, hospitalId });
     if (!appt) throw new Error('Appointment not found or unauthorized');
 
+    const { dateStr } = quotaService.getIstDayRange(newDate);
+    const todayIstRange = quotaService.getIstDayRange(new Date());
+
+    if (dateStr < todayIstRange.dateStr) {
+        const err = new Error('Reschedule date cannot be in the past');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (dateStr === todayIstRange.dateStr && newTime) {
+        const istOffset = (5 * 60 + 30) * 60 * 1000;
+        const nowIst = new Date(Date.now() + istOffset);
+        const currentHours = nowIst.getUTCHours();
+        const currentMinutes = nowIst.getUTCMinutes();
+        const [appHour, appMin] = newTime.split(':').map(Number);
+        if (!isNaN(appHour) && !isNaN(appMin)) {
+            if (appHour < currentHours || (appHour === currentHours && appMin < currentMinutes)) {
+                const curTimeStr = `${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`;
+                const err = new Error(`Reschedule time cannot be in the past. Current IST time is ${curTimeStr}`);
+                err.statusCode = 400;
+                throw err;
+            }
+        }
+    }
+
     const effectiveDoctorId = doctorId || appt.doctorId;
 
     // Cross-day atomic rescheduling check
@@ -660,7 +712,6 @@ async function rescheduleAppointment({ hospitalId, doctorId, appointmentId, newD
         throw err;
     }
 
-    const { dateStr } = quotaService.getIstDayRange(newDate);
     appt.appointmentDate = new Date(dateStr);
     if (newTime) appt.appointmentTime = newTime;
     if (appt.status === 'cancelled') appt.status = 'confirmed';
@@ -993,9 +1044,14 @@ async function getRevisits({
 
     const todayRange = quotaService.getIstDayRange(new Date());
 
+    // Matches any appointment with a scheduled follow-up date OR booked as Follow-up / Revisit
     const query = {
         hospitalId,
-        followUpDate: { $ne: null }
+        status: { $ne: 'cancelled' },
+        $or: [
+            { followUpDate: { $ne: null } },
+            { visitType: { $in: ['Follow-up', 'follow-up', 'Revisit', 'revisit'] } }
+        ]
     };
 
     if (patientId) {
@@ -1128,7 +1184,8 @@ async function savePrescription({
     medicines = [],
     diagnosis = '',
     vitals = null,
-    doctorNotes = ''
+    doctorNotes = '',
+    followUpDate = null
 }) {
     let appt = null;
     if (appointmentId && mongoose.Types.ObjectId.isValid(appointmentId)) {
@@ -1187,6 +1244,10 @@ async function savePrescription({
     // Auto mark status as completed when prescription is saved
     if (appt.status === 'in-consultation' || appt.status === 'confirmed' || appt.status === 'pending') {
         appt.status = 'completed';
+    }
+
+    if (followUpDate) {
+        appt.followUpDate = new Date(followUpDate);
     }
 
     await appt.save();
