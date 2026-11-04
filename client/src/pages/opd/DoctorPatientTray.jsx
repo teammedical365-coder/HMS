@@ -444,7 +444,7 @@ const DoctorPatientTray = () => {
                                         {/* 1. Kitne doge (Dose / Quantity) */}
                                         <div>
                                             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                                                Dose (कितनी)
+                                                Dose
                                             </label>
                                             <select
                                                 style={{
@@ -460,7 +460,7 @@ const DoctorPatientTray = () => {
                                                 value={m.dosage || '1 tab'}
                                                 onChange={(e) => handleMedChange(idx, 'dosage', e.target.value)}
                                             >
-                                                <option value="1 tab">1 tab (गोली)</option>
+                                                <option value="1 tab">1 tab</option>
                                                 <option value="2 tabs">2 tabs</option>
                                                 <option value="1/2 tab">1/2 tab</option>
                                                 <option value="1 cap">1 capsule</option>
@@ -469,14 +469,14 @@ const DoctorPatientTray = () => {
                                                 <option value="2 tsp (10ml)">2 tsp (10ml)</option>
                                                 <option value="1 puff">1 puff</option>
                                                 <option value="2 puffs">2 puffs</option>
-                                                <option value="1 drop">1 drop (बूंद)</option>
+                                                <option value="1 drop">1 drop</option>
                                                 <option value="2 drops">2 drops</option>
                                                 <option value="1 sachet">1 sachet</option>
                                                 <option value="1 inj">1 injection</option>
                                             </select>
                                         </div>
 
-                                        {/* 2. Frequency (Frequency / कब कब) */}
+                                        {/* 2. Frequency*/}
                                         <div>
                                             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Frequency
@@ -495,20 +495,20 @@ const DoctorPatientTray = () => {
                                                 value={m.frequency || '1-0-1'}
                                                 onChange={(e) => handleMedChange(idx, 'frequency', e.target.value)}
                                             >
-                                                <option value="1-0-1">1-0-1 (सुबह-रात)</option>
-                                                <option value="1-1-1">1-1-1 (सुबह-दोपहर-रात)</option>
-                                                <option value="1-0-0">1-0-0 (सिर्फ सुबह)</option>
-                                                <option value="0-0-1">0-0-1 (सिर्फ रात)</option>
-                                                <option value="0-1-0">0-1-0 (सिर्फ दोपहर)</option>
-                                                <option value="1-1-1-1">1-1-1-1 (दिन में 4 बार)</option>
-                                                <option value="SOS">SOS (जरूरत पड़ने पर)</option>
+                                                <option value="1-0-1">1-0-1</option>
+                                                <option value="1-1-1">1-1-1</option>
+                                                <option value="1-0-0">1-0-0</option>
+                                                <option value="0-0-1">0-0-1</option>
+                                                <option value="0-1-0">0-1-0</option>
+                                                <option value="1-1-1-1">1-1-1-1</option>
+                                                <option value="SOS">SOS</option>
                                             </select>
                                         </div>
 
                                         {/* 3. Kitne din ka hai (Duration / कितने दिन) */}
                                         <div>
                                             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                                                Duration (दिन)
+                                                Duration
                                             </label>
                                             <select
                                                 style={{
@@ -524,15 +524,15 @@ const DoctorPatientTray = () => {
                                                 value={m.duration || '5 days'}
                                                 onChange={(e) => handleMedChange(idx, 'duration', e.target.value)}
                                             >
-                                                <option value="3 days">3 Days (3 दिन)</option>
-                                                <option value="5 days">5 Days (5 दिन)</option>
-                                                <option value="7 days">7 Days (1 हफ्ता)</option>
+                                                <option value="3 days">3 Days </option>
+                                                <option value="5 days">5 Days </option>
+                                                <option value="7 days">7 Days </option>
                                                 <option value="10 days">10 Days</option>
-                                                <option value="14 days">14 Days (2 हफ्ते)</option>
+                                                <option value="14 days">14 Days </option>
                                                 <option value="15 days">15 Days</option>
-                                                <option value="30 days">1 Month (30 दिन)</option>
-                                                <option value="1 day">1 Day (1 दिन)</option>
-                                                <option value="As needed">As needed (जरूरत अनुसार)</option>
+                                                <option value="30 days">1 Month</option>
+                                                <option value="1 day">1 Day</option>
+                                                <option value="As needed">As needed</option>
                                             </select>
                                         </div>
 
@@ -555,12 +555,12 @@ const DoctorPatientTray = () => {
                                                 value={m.instructions || 'After meal'}
                                                 onChange={(e) => handleMedChange(idx, 'instructions', e.target.value)}
                                             >
-                                                <option value="After meal">After meal (खाने के बाद)</option>
-                                                <option value="Before meal">Before meal (खाने से पहले)</option>
-                                                <option value="With meal">With meal (खाने के साथ)</option>
-                                                <option value="At bedtime">At bedtime (सोते समय)</option>
-                                                <option value="Empty stomach">Empty stomach (खाली पेट)</option>
-                                                <option value="As directed">As directed (निर्देशानुसार)</option>
+                                                <option value="After meal">After meal </option>
+                                                <option value="Before meal">Before meal </option>
+                                                <option value="With meal">With meal </option>
+                                                <option value="At bedtime">At bedtime </option>
+                                                <option value="Empty stomach">Empty stomach </option>
+                                                <option value="As directed">As directed </option>
                                             </select>
                                         </div>
                                     </div>
