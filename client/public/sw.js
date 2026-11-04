@@ -170,7 +170,7 @@ if (isLocalDev) {
     }
 
     // ── CDN/External assets: Stale-While-Revalidate ──
-    if (url.hostname.includes('cdnjs.cloudflare.com') || url.hostname.includes('cdn.tailwindcss.com')) {
+    if (url.hostname.includes('cdnjs.cloudflare.com')) {
       event.respondWith(
         caches.open(STATIC_CACHE).then((cache) => {
           return cache.match(request).then((cached) => {

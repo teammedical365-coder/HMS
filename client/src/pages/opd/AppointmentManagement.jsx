@@ -23,6 +23,7 @@ import {
     FiActivity,
     FiAlertTriangle,
     FiHeart,
+    FiGlobe,
 } from 'react-icons/fi';
 import './AppointmentManagement.css';
 import './PatientMonitoring.css';
@@ -219,6 +220,7 @@ const AppointmentManagement = () => {
 
     // Book Modal State (Single Unified Direct Patient Registration & Profile Matching)
     const [showBookModal, setShowBookModal] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [bookForm, setBookForm] = useState({
         patientName: '',
         patientPhone: '',
@@ -314,6 +316,10 @@ const AppointmentManagement = () => {
     }, [loadAppointments, loadQuota]);
 
     const handleOpenBookModal = () => {
+        if (isQuotaExceeded) {
+            setShowUpgradeModal(true);
+            return;
+        }
         setBookError('');
         setDetectedPatient(null);
         setShowBookModal(true);
@@ -408,7 +414,13 @@ const AppointmentManagement = () => {
                 setBookError(res.message || 'Failed to book appointment');
             }
         } catch (err) {
-            setBookError(err.response?.data?.message || err.message || 'Error booking appointment');
+            const isQuota = err.response?.data?.isQuotaError || (err.response?.status === 403 && (err.response?.data?.message || '').toLowerCase().includes('quota'));
+            if (isQuota && isFreeDoctorOpd) {
+                setBookError(err.response?.data?.message || 'Daily limit of 20 appointments reached for Free Doctor OPD plan.');
+                setShowUpgradeModal(true);
+            } else {
+                setBookError(err.response?.data?.message || err.message || 'Error booking appointment');
+            }
         } finally {
             setSubmittingBook(false);
         }
@@ -454,6 +466,10 @@ const AppointmentManagement = () => {
             setCancelling(false);
         }
     };
+
+    const uLocal = JSON.parse(localStorage.getItem('user') || '{}');
+    const isFreeDoctorOpd = user?.subscriptionPlan === 'free_doctor_opd' || uLocal?.subscriptionPlan === 'free_doctor_opd';
+    const isQuotaExceeded = isFreeDoctorOpd && todayCount >= 20;
 
     const quotaPct = Math.min(100, Math.round((todayCount / 20) * 100));
     const quotaClass = todayCount >= 20 ? 'limit-reached' : todayCount >= 16 ? 'near-limit' : '';
@@ -1160,14 +1176,44 @@ const AppointmentManagement = () => {
                     </div>
                 </div>
 
-                <button
-                    type="button"
-                    className="pm-action-btn-primary"
-                    onClick={handleOpenBookModal}
-                >
-                    <FiPlus />
-                    <span>Book Appointment</span>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        className="pm-action-btn-primary"
+                        onClick={handleOpenBookModal}
+                        disabled={isQuotaExceeded}
+                        style={isQuotaExceeded ? { opacity: 0.5, cursor: 'not-allowed', filter: 'grayscale(0.6)' } : {}}
+                        title={isQuotaExceeded ? "Daily 20 appointment limit reached for Free Doctor OPD plan" : "Book Appointment"}
+                    >
+                        <FiPlus />
+                        <span>Book Appointment</span>
+                    </button>
+
+                    {isQuotaExceeded && (
+                        <button
+                            type="button"
+                            onClick={() => setShowUpgradeModal(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '10px 18px',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '13.5px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            <span>⭐</span>
+                            <span>Upgrade Your Plan</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Filter Toolbar */}
@@ -1413,6 +1459,130 @@ const AppointmentManagement = () => {
             {/* ─────────────────────────────────────────────────────────────
                RESCHEDULE MODAL
                ───────────────────────────────────────────────────────────── */}
+            {/* ─────────────────────────────────────────────────────────────
+               UPGRADE YOUR PLAN MODAL (Free Doctor OPD Contact)
+               ───────────────────────────────────────────────────────────── */}
+            {showUpgradeModal && (
+                <div className="pm-modal-overlay" style={{ zIndex: 10000 }}>
+                    <div className="pm-modal-card" style={{ maxWidth: '480px', borderRadius: '16px', overflow: 'hidden' }} role="dialog" aria-modal="true">
+                        <div className="pm-modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                                    ⭐
+                                </div>
+                                <h3 className="pm-modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                                    Upgrade Your Plan
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                className="pm-modal-close-btn"
+                                onClick={() => setShowUpgradeModal(false)}
+                                title="Close"
+                                style={{ width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                <FiX style={{ fontSize: '20px' }} />
+                            </button>
+                        </div>
+
+                        <div className="pm-modal-body" style={{ padding: '28px 24px', background: '#ffffff' }}>
+                            <p style={{ margin: '0 0 20px', fontSize: '14px', lineHeight: '1.6', color: '#334155', fontWeight: 500 }}>
+                                Contact us to upgrade your plan and explore available subscription options.
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {/* Mobile */}
+                                <a
+                                    href="tel:+917791910007"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '14px',
+                                        padding: '14px 16px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        textDecoration: 'none',
+                                        color: '#0f172a',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
+                                        <FiPhone />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Mobile</div>
+                                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#0284c7', marginTop: '2px' }}>+91 77919 10007</div>
+                                    </div>
+                                </a>
+
+                                {/* Email */}
+                                <a
+                                    href="mailto:support@medical365.in"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '14px',
+                                        padding: '14px 16px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        textDecoration: 'none',
+                                        color: '#0f172a',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
+                                        <FiMail />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Email</div>
+                                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#15803d', marginTop: '2px' }}>support@medical365.in</div>
+                                    </div>
+                                </a>
+
+                                {/* Website */}
+                                <a
+                                    href="https://medical365.in"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '14px',
+                                        padding: '14px 16px',
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        textDecoration: 'none',
+                                        color: '#0f172a',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
+                                        <FiGlobe />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Website</div>
+                                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#d97706', marginTop: '2px' }}>https://medical365.in</div>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div className="pm-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                className="pm-btn-secondary"
+                                onClick={() => setShowUpgradeModal(false)}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {rescheduleModal.open && (
                 <div className="pm-modal-overlay">
                     <div className="pm-modal-card" style={{ maxWidth: '440px' }}>
