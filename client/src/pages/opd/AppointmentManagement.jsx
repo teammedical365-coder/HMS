@@ -460,278 +460,10 @@ const AppointmentManagement = () => {
 
     return (
         <div className="am-container">
-            {/* Daily Quota Progress Banner */}
-            <div className="am-quota-banner">
-                <div className="am-quota-info">
-                    <h4>Daily Appointment Quota (20 Max/Day)</h4>
-                    <p>Doctor OPD plan allows up to 20 appointments per day.</p>
-                </div>
-
-                <div className="am-quota-bar-wrap">
-                    <div className="am-progress-bg">
-                        <div
-                            className={`am-progress-fill ${quotaClass}`}
-                            style={{ width: `${quotaPct}%` }}
-                        />
-                    </div>
-                    <div className="am-quota-stats">
-                        <span>Used: {todayCount} / 20</span>
-                        <span>{20 - todayCount} Remaining Today</span>
-                    </div>
-                </div>
-
-                <button
-                    type="button"
-                    className="pm-action-btn-primary"
-                    onClick={handleOpenBookModal}
-                >
-                    <FiPlus />
-                    <span>Book Appointment</span>
-                </button>
-            </div>
-
-            {/* Filter Toolbar */}
-            <div className="am-controls">
-                {/* Quick Search & Open Patient Profile */}
-                <div className="am-filter-group" style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
-                    <div className="pm-search-box" style={{ width: '100%', maxWidth: '380px' }}>
-                        <FiSearch style={{ color: '#94a3b8' }} />
-                        <input
-                            type="text"
-                            className="pm-search-input"
-                            placeholder="Search patient by Name, Phone, UID to open profile..."
-                            value={searchQuery}
-                            onChange={handleSearchChange}
-                            onFocus={() => { if (searchResults.length > 0) setShowSearchDropdown(true); }}
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
-                                onClick={() => { setSearchQuery(''); setSearchResults([]); setShowSearchDropdown(false); }}
-                            >
-                                <FiX />
-                            </button>
-                        )}
-                    </div>
-
-                    {showSearchDropdown && searchResults.length > 0 && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            zIndex: 40,
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '10px',
-                            boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
-                            width: '380px',
-                            maxHeight: '260px',
-                            overflowY: 'auto',
-                            marginTop: '4px'
-                        }}>
-                            {searchResults.map((p) => (
-                                <div
-                                    key={p._id}
-                                    style={{
-                                        padding: '10px 14px',
-                                        borderBottom: '1px solid #f1f5f9',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                    }}
-                                    onClick={() => openPatientProfile(p._id)}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{p.name}</div>
-                                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                                            {p.patientUid || p.patientId || 'UID'} • {p.phone || 'No phone'}
-                                        </div>
-                                    </div>
-                                    <span style={{ fontSize: '11.5px', color: '#0d9488', fontWeight: 700 }}>
-                                        Open Profile →
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <div className="am-filter-group">
-                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Filter Date:</label>
-                    <input
-                        type="date"
-                        className="pm-input"
-                        style={{ width: 'auto' }}
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                    />
-                    <button
-                        type="button"
-                        className="pm-btn-secondary"
-                        onClick={() => setSelectedDate(todayStr)}
-                    >
-                        Today
-                    </button>
-                    <button
-                        type="button"
-                        className="pm-btn-secondary"
-                        onClick={() => setSelectedDate('')}
-                    >
-                        All Dates
-                    </button>
-                </div>
-
-                <div className="am-filter-group">
-                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Status:</label>
-                    <select
-                        className="pm-select"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <option value="all">All Statuses</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="pending">Pending</option>
-                        <option value="in-consultation">In Consultation</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Appointments Master Table */}
-            <div className="am-table-card">
-                <div className="am-table-wrap">
-                    <table className="am-table">
-                        <thead>
-                            <tr>
-                                <th>Date & Time</th>
-                                <th>Patient Name</th>
-                                <th>Patient UID / Mobile</th>
-                                <th>Visit Type</th>
-                                <th>Fee (₹)</th>
-                                <th>Status</th>
-                                <th style={{ textAlign: 'center' }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr>
-                                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                                        Loading appointments...
-                                    </td>
-                                </tr>
-                            ) : appointments.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                                        No appointments found for the selected criteria.
-                                    </td>
-                                </tr>
-                            ) : (
-                                appointments.map((appt) => {
-                                    const pName = appt.userId?.name || appt.clinicPatientId?.name || 'Walk-in';
-                                    const pPhone = appt.userId?.phone || appt.clinicPatientId?.phone || '—';
-                                    const pUid = appt.userId?.patientId || appt.userId?.mrn || appt.clinicPatientId?.patientUid || appt.patientId || 'N/A';
-                                    const apptDateStr = new Date(appt.appointmentDate).toLocaleDateString('en-IN', {
-                                        day: '2-digit', month: 'short', year: 'numeric'
-                                    });
-
-                                    return (
-                                        <tr key={appt._id}>
-                                            <td>
-                                                <strong>{apptDateStr}</strong>
-                                                <div style={{ fontSize: '11.5px', color: '#64748b' }}>{appt.appointmentTime || '10:00 AM'}</div>
-                                            </td>
-                                            <td>
-                                                <strong
-                                                    style={{ color: '#0f172a', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cbd5e1' }}
-                                                    title="Click to open patient profile"
-                                                    onClick={() => {
-                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
-                                                        openPatientProfile(pId);
-                                                    }}
-                                                >
-                                                    {pName}
-                                                </strong>
-                                            </td>
-                                            <td>
-                                                <span
-                                                    className="pm-patient-id-badge"
-                                                    style={{ cursor: 'pointer' }}
-                                                    title="Click to open patient profile"
-                                                    onClick={() => {
-                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
-                                                        openPatientProfile(pId);
-                                                    }}
-                                                >
-                                                    {pUid}
-                                                </span>
-                                                <div style={{ fontSize: '11.5px', color: '#64748b' }}>{pPhone}</div>
-                                            </td>
-                                            <td>{appt.visitType || 'OPD Consult'}</td>
-                                            <td>₹{appt.amount || 0}</td>
-                                            <td>
-                                                <span className={`am-status-badge am-status-${appt.status}`}>
-                                                    {appt.status?.toUpperCase() || 'CONFIRMED'}
-                                                </span>
-                                            </td>
-                                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                <button
-                                                    type="button"
-                                                    className="am-action-btn"
-                                                    style={{ color: '#0d9488', borderColor: '#99f6e4', fontWeight: 700 }}
-                                                    title="Open Patient Profile, Medical History & Prescriptions"
-                                                    onClick={() => {
-                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
-                                                        openPatientProfile(pId);
-                                                    }}
-                                                >
-                                                    <FiFileText style={{ marginRight: '4px' }} /> Profile
-                                                </button>
-                                                {appt.status !== 'completed' && appt.status !== 'cancelled' && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            className="am-action-btn"
-                                                            onClick={() => setRescheduleModal({
-                                                                open: true,
-                                                                apptId: appt._id,
-                                                                date: appt.appointmentDate ? appt.appointmentDate.split('T')[0] : todayStr,
-                                                                time: appt.appointmentTime || '10:00'
-                                                            })}
-                                                        >
-                                                            <FiEdit2 style={{ marginRight: '4px' }} /> Reschedule
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className="am-action-btn"
-                                                            style={{ color: '#ef4444' }}
-                                                            onClick={() => setCancelModal({ open: true, apptId: appt._id, reason: '' })}
-                                                        >
-                                                            <FiXCircle style={{ marginRight: '4px' }} /> Cancel
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {appt.status === 'completed' && (
-                                                    <span style={{ fontSize: '12px', color: '#059669', fontWeight: 700 }}>✓ Completed</span>
-                                                )}
-                                                {appt.status === 'cancelled' && (
-                                                    <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>Cancelled</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* ─────────────────────────────────────────────────────────────
-               BOOK OPD APPOINTMENT MODAL (Direct Patient Registration & Profile Matching)
-               ───────────────────────────────────────────────────────────── */}
-            {showBookModal && (
+            {showBookModal ? (
+                /* ─────────────────────────────────────────────────────────────
+                   BOOK OPD APPOINTMENT FORM VIEW (Sidebar & Navbar 100% Visible)
+                   ───────────────────────────────────────────────────────────── */
                 <div className="pm-fullscreen-page" role="dialog" aria-modal="true">
                     <div className="pm-fullscreen-page-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1043,125 +775,10 @@ const AppointmentManagement = () => {
                             </div>
                         </form>
                 </div>
-            )}
-
-            {/* ─────────────────────────────────────────────────────────────
-               RESCHEDULE MODAL
-               ───────────────────────────────────────────────────────────── */}
-            {rescheduleModal.open && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '440px' }}>
-                        <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Reschedule Appointment</h3>
-                            <button
-                                type="button"
-                                className="pm-modal-close-btn"
-                                onClick={() => setRescheduleModal({ open: false, apptId: null, date: todayStr, time: '10:00' })}
-                            >
-                                <FiX />
-                            </button>
-                        </div>
-                        <form onSubmit={handleRescheduleSubmit}>
-                            <div className="pm-modal-body">
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                    <div>
-                                        <label className="pm-label">New Appointment Date *</label>
-                                        <input
-                                            type="date"
-                                            className="pm-input"
-                                            value={rescheduleModal.date}
-                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, date: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="pm-label">New Appointment Time</label>
-                                        <input
-                                            type="time"
-                                            className="pm-input"
-                                            value={rescheduleModal.time}
-                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, time: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="pm-modal-footer">
-                                <button
-                                    type="button"
-                                    className="pm-btn-secondary"
-                                    onClick={() => setRescheduleModal({ open: false, apptId: null, date: todayStr, time: '10:00' })}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="pm-btn-primary"
-                                    disabled={rescheduling}
-                                >
-                                    {rescheduling ? 'Rescheduling...' : 'Save New Date'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* ─────────────────────────────────────────────────────────────
-               CANCEL MODAL
-               ───────────────────────────────────────────────────────────── */}
-            {cancelModal.open && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '440px' }}>
-                        <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Cancel Appointment</h3>
-                            <button
-                                type="button"
-                                className="pm-modal-close-btn"
-                                onClick={() => setCancelModal({ open: false, apptId: null, reason: '' })}
-                            >
-                                <FiX />
-                            </button>
-                        </div>
-                        <form onSubmit={handleCancelSubmit}>
-                            <div className="pm-modal-body">
-                                <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0 }}>
-                                    Are you sure you want to cancel this appointment? This action will free up the daily quota slot.
-                                </p>
-                                <div>
-                                    <label className="pm-label">Cancellation Reason</label>
-                                    <input
-                                        type="text"
-                                        className="pm-input"
-                                        placeholder="e.g. Patient requested cancellation"
-                                        value={cancelModal.reason}
-                                        onChange={(e) => setCancelModal({ ...cancelModal, reason: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="pm-modal-footer">
-                                <button
-                                    type="button"
-                                    className="pm-btn-secondary"
-                                    onClick={() => setCancelModal({ open: false, apptId: null, reason: '' })}
-                                >
-                                    Keep Appointment
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{ background: '#ef4444', color: '#ffffff', border: 'none', padding: '9px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
-                                    disabled={cancelling}
-                                >
-                                    {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-            {/* ─────────────────────────────────────────────────────────────
-               INDIVIDUAL PATIENT PROFILE & DIRECT PRESCRIBE (Integrated from Patient Monitoring)
-               ───────────────────────────────────────────────────────────── */}
-            {selectedPatientId && (
+            ) : selectedPatientId ? (
+                /* ─────────────────────────────────────────────────────────────
+                   PATIENT PROFILE & CLINICAL RECORD VIEW (Sidebar & Navbar 100% Visible)
+                   ───────────────────────────────────────────────────────────── */
                 <div className="pm-fullscreen-page" role="dialog" aria-modal="true">
                     <div className="pm-fullscreen-page-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1521,7 +1138,392 @@ const AppointmentManagement = () => {
                             </button>
                         </div>
                     </div>
+            ) : (
+                <>
+                    {/* Daily Quota Progress Banner */}
+            <div className="am-quota-banner">
+                <div className="am-quota-info">
+                    <h4>Daily Appointment Quota (20 Max/Day)</h4>
+                    <p>Doctor OPD plan allows up to 20 appointments per day.</p>
+                </div>
+
+                <div className="am-quota-bar-wrap">
+                    <div className="am-progress-bg">
+                        <div
+                            className={`am-progress-fill ${quotaClass}`}
+                            style={{ width: `${quotaPct}%` }}
+                        />
+                    </div>
+                    <div className="am-quota-stats">
+                        <span>Used: {todayCount} / 20</span>
+                        <span>{20 - todayCount} Remaining Today</span>
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    className="pm-action-btn-primary"
+                    onClick={handleOpenBookModal}
+                >
+                    <FiPlus />
+                    <span>Book Appointment</span>
+                </button>
+            </div>
+
+            {/* Filter Toolbar */}
+            <div className="am-controls">
+                {/* Quick Search & Open Patient Profile */}
+                <div className="am-filter-group" style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
+                    <div className="pm-search-box" style={{ width: '100%', maxWidth: '380px' }}>
+                        <FiSearch style={{ color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            className="pm-search-input"
+                            placeholder="Search patient by Name, Phone, UID to open profile..."
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            onFocus={() => { if (searchResults.length > 0) setShowSearchDropdown(true); }}
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                                onClick={() => { setSearchQuery(''); setSearchResults([]); setShowSearchDropdown(false); }}
+                            >
+                                <FiX />
+                            </button>
+                        )}
+                    </div>
+
+                    {showSearchDropdown && searchResults.length > 0 && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            zIndex: 40,
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '10px',
+                            boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                            width: '380px',
+                            maxHeight: '260px',
+                            overflowY: 'auto',
+                            marginTop: '4px'
+                        }}>
+                            {searchResults.map((p) => (
+                                <div
+                                    key={p._id}
+                                    style={{
+                                        padding: '10px 14px',
+                                        borderBottom: '1px solid #f1f5f9',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center'
+                                    }}
+                                    onClick={() => openPatientProfile(p._id)}
+                                >
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>{p.name}</div>
+                                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                                            {p.patientUid || p.patientId || 'UID'} • {p.phone || 'No phone'}
+                                        </div>
+                                    </div>
+                                    <span style={{ fontSize: '11.5px', color: '#0d9488', fontWeight: 700 }}>
+                                        Open Profile →
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="am-filter-group">
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Filter Date:</label>
+                    <input
+                        type="date"
+                        className="pm-input"
+                        style={{ width: 'auto' }}
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                    />
+                    <button
+                        type="button"
+                        className="pm-btn-secondary"
+                        onClick={() => setSelectedDate(todayStr)}
+                    >
+                        Today
+                    </button>
+                    <button
+                        type="button"
+                        className="pm-btn-secondary"
+                        onClick={() => setSelectedDate('')}
+                    >
+                        All Dates
+                    </button>
+                </div>
+
+                <div className="am-filter-group">
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Status:</label>
+                    <select
+                        className="pm-select"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="pending">Pending</option>
+                        <option value="in-consultation">In Consultation</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Appointments Master Table */}
+            <div className="am-table-card">
+                <div className="am-table-wrap">
+                    <table className="am-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Patient Name</th>
+                                <th>Patient UID / Mobile</th>
+                                <th>Visit Type</th>
+                                <th>Fee (₹)</th>
+                                <th>Status</th>
+                                <th style={{ textAlign: 'center' }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                        Loading appointments...
+                                    </td>
+                                </tr>
+                            ) : appointments.length === 0 ? (
+                                <tr>
+                                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                        No appointments found for the selected criteria.
+                                    </td>
+                                </tr>
+                            ) : (
+                                appointments.map((appt) => {
+                                    const pName = appt.userId?.name || appt.clinicPatientId?.name || 'Walk-in';
+                                    const pPhone = appt.userId?.phone || appt.clinicPatientId?.phone || '—';
+                                    const pUid = appt.userId?.patientId || appt.userId?.mrn || appt.clinicPatientId?.patientUid || appt.patientId || 'N/A';
+                                    const apptDateStr = new Date(appt.appointmentDate).toLocaleDateString('en-IN', {
+                                        day: '2-digit', month: 'short', year: 'numeric'
+                                    });
+
+                                    return (
+                                        <tr key={appt._id}>
+                                            <td>
+                                                <strong>{apptDateStr}</strong>
+                                                <div style={{ fontSize: '11.5px', color: '#64748b' }}>{appt.appointmentTime || '10:00 AM'}</div>
+                                            </td>
+                                            <td>
+                                                <strong
+                                                    style={{ color: '#0f172a', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cbd5e1' }}
+                                                    title="Click to open patient profile"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    {pName}
+                                                </strong>
+                                            </td>
+                                            <td>
+                                                <span
+                                                    className="pm-patient-id-badge"
+                                                    style={{ cursor: 'pointer' }}
+                                                    title="Click to open patient profile"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    {pUid}
+                                                </span>
+                                                <div style={{ fontSize: '11.5px', color: '#64748b' }}>{pPhone}</div>
+                                            </td>
+                                            <td>{appt.visitType || 'OPD Consult'}</td>
+                                            <td>₹{appt.amount || 0}</td>
+                                            <td>
+                                                <span className={`am-status-badge am-status-${appt.status}`}>
+                                                    {appt.status?.toUpperCase() || 'CONFIRMED'}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                <button
+                                                    type="button"
+                                                    className="am-action-btn"
+                                                    style={{ color: '#0d9488', borderColor: '#99f6e4', fontWeight: 700 }}
+                                                    title="Open Patient Profile, Medical History & Prescriptions"
+                                                    onClick={() => {
+                                                        const pId = appt.clinicPatientId?._id || appt.userId?._id || appt.patientId || appt.clinicPatientId || appt.userId;
+                                                        openPatientProfile(pId);
+                                                    }}
+                                                >
+                                                    <FiFileText style={{ marginRight: '4px' }} /> Profile
+                                                </button>
+                                                {appt.status !== 'completed' && appt.status !== 'cancelled' && (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            className="am-action-btn"
+                                                            onClick={() => setRescheduleModal({
+                                                                open: true,
+                                                                apptId: appt._id,
+                                                                date: appt.appointmentDate ? appt.appointmentDate.split('T')[0] : todayStr,
+                                                                time: appt.appointmentTime || '10:00'
+                                                            })}
+                                                        >
+                                                            <FiEdit2 style={{ marginRight: '4px' }} /> Reschedule
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="am-action-btn"
+                                                            style={{ color: '#ef4444' }}
+                                                            onClick={() => setCancelModal({ open: true, apptId: appt._id, reason: '' })}
+                                                        >
+                                                            <FiXCircle style={{ marginRight: '4px' }} /> Cancel
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {appt.status === 'completed' && (
+                                                    <span style={{ fontSize: '12px', color: '#059669', fontWeight: 700 }}>✓ Completed</span>
+                                                )}
+                                                {appt.status === 'cancelled' && (
+                                                    <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>Cancelled</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+                </>
             )}
+
+            {/* ─────────────────────────────────────────────────────────────
+               RESCHEDULE MODAL
+               ───────────────────────────────────────────────────────────── */}
+            {rescheduleModal.open && (
+                <div className="pm-modal-overlay">
+                    <div className="pm-modal-card" style={{ maxWidth: '440px' }}>
+                        <div className="pm-modal-header">
+                            <h3 className="pm-modal-title">Reschedule Appointment</h3>
+                            <button
+                                type="button"
+                                className="pm-modal-close-btn"
+                                onClick={() => setRescheduleModal({ open: false, apptId: null, date: todayStr, time: '10:00' })}
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+                        <form onSubmit={handleRescheduleSubmit}>
+                            <div className="pm-modal-body">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                    <div>
+                                        <label className="pm-label">New Appointment Date *</label>
+                                        <input
+                                            type="date"
+                                            className="pm-input"
+                                            value={rescheduleModal.date}
+                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, date: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="pm-label">New Appointment Time</label>
+                                        <input
+                                            type="time"
+                                            className="pm-input"
+                                            value={rescheduleModal.time}
+                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, time: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="pm-modal-footer">
+                                <button
+                                    type="button"
+                                    className="pm-btn-secondary"
+                                    onClick={() => setRescheduleModal({ open: false, apptId: null, date: todayStr, time: '10:00' })}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="pm-btn-primary"
+                                    disabled={rescheduling}
+                                >
+                                    {rescheduling ? 'Rescheduling...' : 'Save New Date'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ─────────────────────────────────────────────────────────────
+               CANCEL MODAL
+               ───────────────────────────────────────────────────────────── */}
+            {cancelModal.open && (
+                <div className="pm-modal-overlay">
+                    <div className="pm-modal-card" style={{ maxWidth: '440px' }}>
+                        <div className="pm-modal-header">
+                            <h3 className="pm-modal-title">Cancel Appointment</h3>
+                            <button
+                                type="button"
+                                className="pm-modal-close-btn"
+                                onClick={() => setCancelModal({ open: false, apptId: null, reason: '' })}
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCancelSubmit}>
+                            <div className="pm-modal-body">
+                                <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0 }}>
+                                    Are you sure you want to cancel this appointment? This action will free up the daily quota slot.
+                                </p>
+                                <div>
+                                    <label className="pm-label">Cancellation Reason</label>
+                                    <input
+                                        type="text"
+                                        className="pm-input"
+                                        placeholder="e.g. Patient requested cancellation"
+                                        value={cancelModal.reason}
+                                        onChange={(e) => setCancelModal({ ...cancelModal, reason: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="pm-modal-footer">
+                                <button
+                                    type="button"
+                                    className="pm-btn-secondary"
+                                    onClick={() => setCancelModal({ open: false, apptId: null, reason: '' })}
+                                >
+                                    Keep Appointment
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{ background: '#ef4444', color: '#ffffff', border: 'none', padding: '9px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer' }}
+                                    disabled={cancelling}
+                                >
+                                    {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };

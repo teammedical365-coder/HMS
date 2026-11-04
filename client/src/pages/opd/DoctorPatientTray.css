@@ -231,3 +231,17 @@
     color: #0f172a;
 }
 
+/* Medicine Prescription Selectors Grid */
+.dpt-med-dropdowns-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+@media (max-width: 1280px) {
+    .dpt-med-dropdowns-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+
