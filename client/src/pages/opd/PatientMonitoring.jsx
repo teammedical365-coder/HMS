@@ -545,9 +545,8 @@ const PatientMonitoring = () => {
                INDIVIDUAL PATIENT PROFILE & DIRECT PRESCRIBE (Modal)
                ───────────────────────────────────────────────────────────── */}
             {selectedPatientId && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card pm-modal-fullscreen" role="dialog" aria-modal="true" data-scrollable="true">
-                        <div className="pm-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="pm-fullscreen-page" role="dialog" aria-modal="true">
+                    <div className="pm-fullscreen-page-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#e6fffa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
                                     <FiUser />
@@ -572,7 +571,7 @@ const PatientMonitoring = () => {
                             </button>
                         </div>
 
-                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true" style={{ padding: '24px 28px', background: '#f8fafc', flex: 1, overflowY: 'auto' }}>
+                        <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
                             {loadingDetails || !patientDetails ? (
                                 <div className="pm-empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
@@ -895,8 +894,16 @@ const PatientMonitoring = () => {
                                 </>
                             )}
                         </div>
+                        <div className="pm-fullscreen-page-footer">
+                            <button
+                                type="button"
+                                className="pm-btn-secondary"
+                                onClick={closeProfileModal}
+                            >
+                                Close Profile
+                            </button>
+                        </div>
                     </div>
-                </div>
             )}
         </div>
     );

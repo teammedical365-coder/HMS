@@ -18,6 +18,7 @@ import {
 import './DoctorPatientTray.css';
 
 const DoctorPatientTray = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
     const { user } = useAuth();
     const { hospitalName } = useBranding();
 

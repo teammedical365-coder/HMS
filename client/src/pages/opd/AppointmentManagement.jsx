@@ -732,26 +732,32 @@ const AppointmentManagement = () => {
                BOOK OPD APPOINTMENT MODAL (Direct Patient Registration & Profile Matching)
                ───────────────────────────────────────────────────────────── */}
             {showBookModal && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '640px' }} role="dialog" aria-modal="true" data-scrollable="true">
-                        <div className="pm-modal-header">
+                <div className="pm-fullscreen-page" role="dialog" aria-modal="true">
+                    <div className="pm-fullscreen-page-header">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#e6fffa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                                <FiPlus />
+                            </div>
                             <div>
-                                <h3 className="pm-modal-title" style={{ margin: 0 }}>Book OPD Appointment</h3>
-                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    Register patient and schedule appointment in one seamless step
+                                <h3 className="pm-modal-title" style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a' }}>Book OPD Appointment</h3>
+                                <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#64748b' }}>
+                                    Register patient and schedule appointment in one seamless step (100% Full View)
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                className="pm-modal-close-btn"
-                                onClick={() => setShowBookModal(false)}
-                            >
-                                <FiX />
-                            </button>
                         </div>
+                        <button
+                            type="button"
+                            className="pm-modal-close-btn"
+                            onClick={() => setShowBookModal(false)}
+                            title="Close (Esc)"
+                            style={{ width: '38px', height: '38px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <FiX style={{ fontSize: '22px' }} />
+                        </button>
+                    </div>
 
-                        <form onSubmit={handleBookSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                            <div className="pm-modal-body" data-lenis-prevent data-scrollable="true" style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
+                    <form onSubmit={handleBookSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                            <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
                                 {bookError && (
                                     <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '12px 16px', borderRadius: '10px', marginBottom: '20px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #fecaca' }}>
                                         <span style={{ fontSize: '18px' }}>⚠️</span>
@@ -1017,7 +1023,7 @@ const AppointmentManagement = () => {
                                 </div>
                             </div>
 
-                            <div className="pm-modal-footer">
+                            <div className="pm-fullscreen-page-footer">
                                 <button
                                     type="button"
                                     className="pm-btn-secondary"
@@ -1036,7 +1042,6 @@ const AppointmentManagement = () => {
                                 </button>
                             </div>
                         </form>
-                    </div>
                 </div>
             )}
 
@@ -1157,9 +1162,8 @@ const AppointmentManagement = () => {
                INDIVIDUAL PATIENT PROFILE & DIRECT PRESCRIBE (Integrated from Patient Monitoring)
                ───────────────────────────────────────────────────────────── */}
             {selectedPatientId && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card pm-modal-fullscreen" role="dialog" aria-modal="true" data-scrollable="true">
-                        <div className="pm-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="pm-fullscreen-page" role="dialog" aria-modal="true">
+                    <div className="pm-fullscreen-page-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#e6fffa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
                                     <FiUser />
@@ -1184,7 +1188,7 @@ const AppointmentManagement = () => {
                             </button>
                         </div>
 
-                        <div className="pm-modal-body" data-lenis-prevent data-scrollable="true" style={{ padding: '24px 28px', background: '#f8fafc', flex: 1, overflowY: 'auto' }}>
+                        <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
                             {loadingDetails || !patientDetails ? (
                                 <div className="pm-empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
@@ -1507,8 +1511,16 @@ const AppointmentManagement = () => {
                                 </>
                             )}
                         </div>
+                        <div className="pm-fullscreen-page-footer">
+                            <button
+                                type="button"
+                                className="pm-btn-secondary"
+                                onClick={closeProfileModal}
+                            >
+                                Close Profile
+                            </button>
+                        </div>
                     </div>
-                </div>
             )}
         </div>
     );

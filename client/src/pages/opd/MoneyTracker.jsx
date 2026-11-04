@@ -34,18 +34,7 @@ const MoneyTracker = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMethod, setSelectedMethod] = useState('all');
 
-    // Record Fee Modal State
-    const [showRecordModal, setShowRecordModal] = useState(false);
-    const [recordForm, setRecordForm] = useState({
-        appointmentId: '',
-        amount: '',
-        paymentMethod: 'Cash',
-        transactionId: '',
-        description: ''
-    });
-    const [unpaidAppts, setUnpaidAppts] = useState([]);
-    const [savingFee, setSavingFee] = useState(false);
-    const [recordError, setRecordError] = useState('');
+    // Auto-Sync: Payments recorded anywhere in OPD automatically reflect in real-time
 
     // Fetch Financial Summary (Daily, Weekly, Monthly, Total)
     const loadSummary = useCallback(async () => {
@@ -113,7 +102,13 @@ const MoneyTracker = () => {
 
     useEffect(() => {
         loadSummary();
-    }, [loadSummary]);
+        // Auto-refresh summary and transactions every 15 seconds to ensure live real-time synchronization
+        const timer = setInterval(() => {
+            loadSummary();
+            loadTransactions();
+        }, 15000);
+        return () => clearInterval(timer);
+    }, [loadSummary, loadTransactions]);
 
     useEffect(() => {
         if (periodFilter !== 'custom' || (customFrom && customTo)) {
@@ -136,60 +131,7 @@ const MoneyTracker = () => {
         });
     }, [transactions, searchTerm]);
 
-    // Open Record Fee Modal
-    const handleOpenRecordModal = async () => {
-        setRecordError('');
-        setShowRecordModal(true);
-        try {
-            const res = await freeOpdAPI.listAppointments({ limit: 40 });
-            if (res.success) {
-                setUnpaidAppts(res.appointments || []);
-            }
-        } catch (_) {}
-    };
-
-    // Submit Recorded Fee
-    const handleRecordSubmit = async (e) => {
-        e.preventDefault();
-        setRecordError('');
-        if (!recordForm.appointmentId) {
-            setRecordError('Please select an appointment');
-            return;
-        }
-        if (!recordForm.amount || Number(recordForm.amount) <= 0) {
-            setRecordError('Please enter a valid consultation amount');
-            return;
-        }
-
-        setSavingFee(true);
-        try {
-            const res = await freeOpdAPI.recordFee(recordForm.appointmentId, {
-                amount: Number(recordForm.amount),
-                paymentMethod: recordForm.paymentMethod,
-                transactionId: recordForm.transactionId.trim(),
-                description: recordForm.description.trim()
-            });
-
-            if (res.success) {
-                setShowRecordModal(false);
-                setRecordForm({
-                    appointmentId: '',
-                    amount: '',
-                    paymentMethod: 'Cash',
-                    transactionId: '',
-                    description: ''
-                });
-                loadSummary();
-                loadTransactions();
-            } else {
-                setRecordError(res.message || 'Error recording fee');
-            }
-        } catch (err) {
-            setRecordError(err.response?.data?.message || err.message || 'Error recording fee');
-        } finally {
-            setSavingFee(false);
-        }
-    };
+    
 
     return (
         <div className="mt-container">
@@ -374,15 +316,7 @@ const MoneyTracker = () => {
                         <option value="Online">Online</option>
                     </select>
 
-                    {/* Record Payment Button */}
-                    <button
-                        type="button"
-                        className="pm-action-btn-primary"
-                        onClick={handleOpenRecordModal}
-                    >
-                        <FiPlus />
-                        <span>Record Payment</span>
-                    </button>
+                    {/* Auto-Synced Payment Ledger (Manual Record Button Removed) */}
                 </div>
             </div>
 
@@ -499,121 +433,7 @@ const MoneyTracker = () => {
                 </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────────────
-               RECORD CONSULTATION FEE MODAL
-               ───────────────────────────────────────────────────────────── */}
-            {showRecordModal && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '520px' }}>
-                        <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Record Consultation Fee</h3>
-                            <button
-                                type="button"
-                                className="pm-modal-close-btn"
-                                onClick={() => setShowRecordModal(false)}
-                            >
-                                <FiX />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleRecordSubmit}>
-                            <div className="pm-modal-body">
-                                {recordError && (
-                                    <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
-                                        ⚠ {recordError}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                    <div>
-                                        <label className="pm-label">Select Patient / Appointment *</label>
-                                        <select
-                                            className="pm-select"
-                                            value={recordForm.appointmentId}
-                                            onChange={(e) => {
-                                                const sel = unpaidAppts.find(a => a._id === e.target.value);
-                                                setRecordForm(prev => ({
-                                                    ...prev,
-                                                    appointmentId: e.target.value,
-                                                    amount: sel?.amount ? String(sel.amount) : prev.amount
-                                                }));
-                                            }}
-                                            required
-                                        >
-                                            <option value="">-- Choose Consultation --</option>
-                                            {unpaidAppts.map(a => {
-                                                const pName = a.userId?.name || a.clinicPatientId?.name || 'Walk-in';
-                                                const dStr = new Date(a.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-                                                return (
-                                                    <option key={a._id} value={a._id}>
-                                                        {pName} ({dStr}) — Fee: ₹{a.amount || 0}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="pm-label">Amount Collected (₹) *</label>
-                                        <input
-                                            type="number"
-                                            className="pm-input"
-                                            min="0"
-                                            placeholder="e.g. 500"
-                                            value={recordForm.amount}
-                                            onChange={(e) => setRecordForm({ ...recordForm, amount: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="pm-label">Payment Method *</label>
-                                        <select
-                                            className="pm-select"
-                                            value={recordForm.paymentMethod}
-                                            onChange={(e) => setRecordForm({ ...recordForm, paymentMethod: e.target.value })}
-                                        >
-                                            <option value="Cash">Cash</option>
-                                            <option value="UPI">UPI / QR Code</option>
-                                            <option value="Card">Debit / Credit Card</option>
-                                            <option value="Online">Online Bank Transfer</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="pm-label">Transaction Reference / UPI ID (Optional)</label>
-                                        <input
-                                            type="text"
-                                            className="pm-input"
-                                            placeholder="e.g. UPI-98765432"
-                                            value={recordForm.transactionId}
-                                            onChange={(e) => setRecordForm({ ...recordForm, transactionId: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="pm-modal-footer">
-                                <button
-                                    type="button"
-                                    className="pm-btn-secondary"
-                                    onClick={() => setShowRecordModal(false)}
-                                    disabled={savingFee}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="pm-btn-primary"
-                                    disabled={savingFee}
-                                >
-                                    {savingFee ? 'Recording...' : 'Save Fee Collection'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            
         </div>
     );
 };
