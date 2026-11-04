@@ -59,8 +59,8 @@
 /* Tray Layout (3 Columns: Waiting, In Consultation, Completed) */
 .dpt-tray-grid {
     display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr;
-    gap: 16px;
+    grid-template-columns: 0.85fr 1.65fr 0.85fr;
+    gap: 12px;
     align-items: flex-start;
 }
 

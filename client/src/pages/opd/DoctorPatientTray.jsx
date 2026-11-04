@@ -439,128 +439,127 @@ const DoctorPatientTray = () => {
                                         )}
                                     </div>
 
-                                    {/* 4 Dropdowns Grid: Dose, Frequency, Duration, Meal Timing */}
-                                    <div className="dpt-med-dropdowns-grid">
-                                        {/* 1. Kitne doge (Dose / Quantity) */}
+                                    {/* Line 1: Dose and Frequency */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Dose
                                             </label>
                                             <select
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
-                                                    padding: '5px 6px',
+                                                    padding: '6px 8px',
                                                     border: '1px solid #cbd5e1',
                                                     borderRadius: '6px',
-                                                    fontSize: '11.5px',
+                                                    fontSize: '12px',
                                                     background: '#ffffff',
                                                     color: '#0f172a'
                                                 }}
                                                 value={m.dosage || '1 tab'}
                                                 onChange={(e) => handleMedChange(idx, 'dosage', e.target.value)}
                                             >
-                                                <option value="1 tab">1 tab</option>
-                                                <option value="2 tabs">2 tabs</option>
-                                                <option value="1/2 tab">1/2 tab</option>
-                                                <option value="1 cap">1 capsule</option>
-                                                <option value="2 caps">2 capsules</option>
+                                                <option value="1 tab">1 Tablet</option>
+                                                <option value="2 tabs">2 Tablets</option>
+                                                <option value="1/2 tab">1/2 Tablet</option>
+                                                <option value="1 cap">1 Capsule</option>
+                                                <option value="2 caps">2 Capsules</option>
                                                 <option value="1 tsp (5ml)">1 tsp (5ml)</option>
                                                 <option value="2 tsp (10ml)">2 tsp (10ml)</option>
-                                                <option value="1 puff">1 puff</option>
-                                                <option value="2 puffs">2 puffs</option>
-                                                <option value="1 drop">1 drop</option>
-                                                <option value="2 drops">2 drops</option>
-                                                <option value="1 sachet">1 sachet</option>
-                                                <option value="1 inj">1 injection</option>
+                                                <option value="1 puff">1 Puff</option>
+                                                <option value="2 puffs">2 Puffs</option>
+                                                <option value="1 drop">1 Drop</option>
+                                                <option value="2 drops">2 Drops</option>
+                                                <option value="1 sachet">1 Sachet</option>
+                                                <option value="1 inj">1 Injection</option>
                                             </select>
                                         </div>
 
-                                        {/* 2. Frequency*/}
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Frequency
                                             </label>
                                             <select
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
-                                                    padding: '5px 6px',
+                                                    padding: '6px 8px',
                                                     border: '1px solid #cbd5e1',
                                                     borderRadius: '6px',
-                                                    fontSize: '11.5px',
+                                                    fontSize: '12px',
                                                     background: '#ffffff',
                                                     color: '#0f172a'
                                                 }}
                                                 value={m.frequency || '1-0-1'}
                                                 onChange={(e) => handleMedChange(idx, 'frequency', e.target.value)}
                                             >
-                                                <option value="1-0-1">1-0-1</option>
-                                                <option value="1-1-1">1-1-1</option>
-                                                <option value="1-0-0">1-0-0</option>
-                                                <option value="0-0-1">0-0-1</option>
-                                                <option value="0-1-0">0-1-0</option>
-                                                <option value="1-1-1-1">1-1-1-1</option>
-                                                <option value="SOS">SOS</option>
+                                                <option value="1-0-1">1-0-1 (Twice Daily)</option>
+                                                <option value="1-1-1">1-1-1 (Thrice Daily)</option>
+                                                <option value="1-0-0">1-0-0 (Morning Only)</option>
+                                                <option value="0-0-1">0-0-1 (Night Only)</option>
+                                                <option value="0-1-0">0-1-0 (Afternoon Only)</option>
+                                                <option value="1-1-1-1">1-1-1-1 (4 Times Daily)</option>
+                                                <option value="SOS">SOS (As Needed)</option>
                                             </select>
                                         </div>
+                                    </div>
 
-                                        {/* 3. Kitne din ka hai (Duration / कितने दिन) */}
+                                    {/* Line 2: Duration and Meal Timing */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Duration
                                             </label>
                                             <select
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
-                                                    padding: '5px 6px',
+                                                    padding: '6px 8px',
                                                     border: '1px solid #cbd5e1',
                                                     borderRadius: '6px',
-                                                    fontSize: '11.5px',
+                                                    fontSize: '12px',
                                                     background: '#ffffff',
                                                     color: '#0f172a'
                                                 }}
                                                 value={m.duration || '5 days'}
                                                 onChange={(e) => handleMedChange(idx, 'duration', e.target.value)}
                                             >
-                                                <option value="3 days">3 Days </option>
-                                                <option value="5 days">5 Days </option>
-                                                <option value="7 days">7 Days </option>
+                                                <option value="3 days">3 Days</option>
+                                                <option value="5 days">5 Days</option>
+                                                <option value="7 days">7 Days (1 Week)</option>
                                                 <option value="10 days">10 Days</option>
-                                                <option value="14 days">14 Days </option>
+                                                <option value="14 days">14 Days (2 Weeks)</option>
                                                 <option value="15 days">15 Days</option>
-                                                <option value="30 days">1 Month</option>
+                                                <option value="30 days">30 Days (1 Month)</option>
                                                 <option value="1 day">1 Day</option>
-                                                <option value="As needed">As needed</option>
+                                                <option value="As needed">As Needed</option>
                                             </select>
                                         </div>
 
-                                        {/* 4. Meal Timing (After meal / Before meal) */}
                                         <div>
-                                            <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                                            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Meal Timing
                                             </label>
                                             <select
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
-                                                    padding: '5px 6px',
+                                                    padding: '6px 8px',
                                                     border: '1px solid #cbd5e1',
                                                     borderRadius: '6px',
-                                                    fontSize: '11.5px',
+                                                    fontSize: '12px',
                                                     background: '#ffffff',
                                                     color: '#0f172a'
                                                 }}
                                                 value={m.instructions || 'After meal'}
                                                 onChange={(e) => handleMedChange(idx, 'instructions', e.target.value)}
                                             >
-                                                <option value="After meal">After meal </option>
-                                                <option value="Before meal">Before meal </option>
-                                                <option value="With meal">With meal </option>
-                                                <option value="At bedtime">At bedtime </option>
-                                                <option value="Empty stomach">Empty stomach </option>
-                                                <option value="As directed">As directed </option>
+                                                <option value="After meal">After Meal</option>
+                                                <option value="Before meal">Before Meal</option>
+                                                <option value="With meal">With Meal</option>
+                                                <option value="At bedtime">At Bedtime</option>
+                                                <option value="Empty stomach">Empty Stomach</option>
+                                                <option value="As directed">As Directed</option>
                                             </select>
                                         </div>
                                     </div>
