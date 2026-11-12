@@ -1679,6 +1679,21 @@ export const ipdClinicalAPI = {
     getPatientNurseCommunication: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/communication`)).data,
     addPatientNurseCommunication: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/communication`, data)).data,
     editPatientNurseCommunication: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/communication/${noteId}`, data)).data,
+
+    // Exact 1-Page IPD Clinical Progress Notes (+ Continuation Sheets & Edit Audit)
+    getProgressNotes: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`)).data,
+    addProgressNote: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`, data)).data,
+    editProgressNote: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/progress-notes/${noteId}`, data)).data,
+
+    // Exact 2-Page IPD Drug Chart (Allergies, STAT Doses, IV Fluids & MAR Grid)
+    getDrugChart: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/drug-chart`)).data,
+    saveDrugChartAllergies: async (admissionId, data) => (await apiClient.put(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/allergies`, data)).data,
+    addDrugChartStatDose: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/stat-doses`, data)).data,
+    updateDrugChartStatDose: async (admissionId, entryId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/stat-doses/${entryId}`, data)).data,
+    addDrugChartIVFluid: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/iv-fluids`, data)).data,
+    updateDrugChartIVFluid: async (admissionId, entryId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/iv-fluids/${entryId}`, data)).data,
+    administerDrugChartMAR: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/mar-administer`, data)).data,
+    correctDrugChartMAR: async (admissionId, marId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/mar/${marId}/correct`, data)).data,
 };
 
 // ── IPD Nursing Workflow APIs ──

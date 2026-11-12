@@ -26,6 +26,7 @@ import './DoctorIPDOrdersPanel.css';
 import CustomSelect from '../common/CustomSelect';
 import TPRChartModal from './TPRChartModal';
 import InpatientClinicalNotesModal from './InpatientClinicalNotesModal';
+import IPDClinicalChartsModal from './IPDClinicalChartsModal';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -172,6 +173,7 @@ const DoctorIPDOrdersPanel = ({
     const [loadingAdmission, setLoadingAdmission] = useState(true);
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
+    const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
 
     // Hospitalize Modal State
     const [hospitalizeModalOpen, setHospitalizeModalOpen] = useState(false);
@@ -906,6 +908,48 @@ const DoctorIPDOrdersPanel = ({
                             >
                                 <FiFileText size={14} />
                                 <span>Clinical Notes</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setClinicalChartsModal({ open: true, tab: 'progress_notes' })}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    background: '#0f766e',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                                title="1-Page Clinical Progress Notes"
+                            >
+                                <FiFileText size={14} />
+                                <span>Progress Notes</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    background: '#1e3a8a',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                                title="2-Page Drug Chart (STAT Doses, IV Fluids & Scheduled MAR Grid)"
+                            >
+                                <FiFileText size={14} />
+                                <span>Drug Chart</span>
                             </button>
                             <div className="ipd-status-card admitted">
                                 <span className="ipd-pulse-dot green"></span>
@@ -2218,6 +2262,15 @@ const DoctorIPDOrdersPanel = ({
                 admissionId={activeAdmission?._id}
                 admission={activeAdmission}
                 patient={patient || activeAdmission?.patientId}
+            />
+
+            <IPDClinicalChartsModal
+                isOpen={clinicalChartsModal.open}
+                onClose={() => setClinicalChartsModal(prev => ({ ...prev, open: false }))}
+                admissionId={activeAdmission?._id}
+                admission={activeAdmission}
+                patient={patient || activeAdmission?.patientId}
+                initialTab={clinicalChartsModal.tab}
             />
         </div>
     );

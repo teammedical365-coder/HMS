@@ -52,43 +52,53 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .npw-back-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: none;
-    border: none;
-    color: #0284c7;
-    font-size: 13.5px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: #0f172a;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    padding: 6px 0;
+    padding: 8px 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: all 0.15s ease;
 }
 .npw-back-btn:hover {
-    color: #0369a1;
-    transform: translateX(-3px);
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0284c7;
 }
 
 .npw-header-actions {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .npw-btn-outline {
-    padding: 8px 14px;
+    padding: 8px 12px;
     background: #ffffff;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     color: #334155;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: all 0.15s ease;
 }
 .npw-btn-outline:hover:not(:disabled) {
@@ -101,17 +111,19 @@
 }
 
 .npw-btn-primary {
-    padding: 8px 16px;
+    padding: 8px 14px;
     background: #0284c7;
     border: none;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 700;
     color: #ffffff;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: all 0.2s ease;
 }
 .npw-btn-primary:hover:not(:disabled) {

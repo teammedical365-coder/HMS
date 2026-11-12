@@ -393,6 +393,8 @@ function getTenantModels(tenantDb) {
     const { migrationRecordSchema } = require('../models/migrationRecord.model');
     const { inpatientClinicalNoteSchema } = require('../models/inpatientClinicalNote.model');
     const { patientNurseNoteSchema } = require('../models/patientNurseNote.model');
+    const { inpatientProgressNoteSchema } = require('../models/inpatientProgressNote.model');
+    const { inpatientDrugChartSchema } = require('../models/inpatientDrugChart.model');
 
     const models = {
         User: model('User', userSchema),
@@ -428,6 +430,8 @@ function getTenantModels(tenantDb) {
         MigrationRecord: model('MigrationRecord', migrationRecordSchema),
         InpatientClinicalNote: model('InpatientClinicalNote', inpatientClinicalNoteSchema),
         PatientNurseNote: model('PatientNurseNote', patientNurseNoteSchema),
+        InpatientProgressNote: model('InpatientProgressNote', inpatientProgressNoteSchema),
+        InpatientDrugChart: model('InpatientDrugChart', inpatientDrugChartSchema),
         SyncEvent: require('../models/syncEvent.model'),
         LocalInstallation: require('../models/localInstallation.model'),
         SyncConflict: require('../models/syncConflict.model'),

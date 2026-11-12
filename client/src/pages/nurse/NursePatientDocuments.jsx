@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fi';
 import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
+import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
 import './NursePatientDocuments.css';
 
 const REPORT_CATEGORIES = [
@@ -43,6 +44,18 @@ const CONSENT_TEMPLATES = [
         label: 'In-Patient Clinical Notes (2-Page IPD Form)',
         title: 'IN PATIENT CLINICAL NOTES',
         description: 'Official two-page inpatient clinical notes document with History, Examination, Investigations, Discharge & Follow-up, plus Patient & Nurse Communication.'
+    },
+    {
+        value: 'PROGRESS_NOTES',
+        label: 'Clinical Progress Notes (1-Page IPD Form)',
+        title: 'CLINICAL PROGRESS NOTES',
+        description: 'Official one-page inpatient clinical progress notes sheet with ruled date/time entries, continuation pagination, and NABH hospital letterhead.'
+    },
+    {
+        value: 'DRUG_CHART',
+        label: 'Drug Chart (2-Page STAT, IV Fluids & MAR Grid)',
+        title: 'IPD DRUG CHART',
+        description: 'Official two-page inpatient drug chart containing Drug Allergies, Once-Only STAT Doses, I.V. Fluids, and 4-Day Scheduled Medication Administration Record.'
     },
     {
         value: 'GENERAL_ADMISSION',
@@ -152,6 +165,7 @@ const NursePatientDocuments = () => {
     const [tprBlankMode, setTprBlankMode] = useState(false);
     const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
     const [clinicalNotesBlankMode, setClinicalNotesBlankMode] = useState(false);
+    const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes', isBlank: false });
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -350,6 +364,16 @@ const NursePatientDocuments = () => {
         if (templateKey === 'IN_PATIENT_CLINICAL_NOTES') {
             setClinicalNotesBlankMode(isBlank);
             setClinicalNotesModalOpen(true);
+            return;
+        }
+
+        if (templateKey === 'PROGRESS_NOTES') {
+            setClinicalChartsModal({ open: true, tab: 'progress_notes', isBlank });
+            return;
+        }
+
+        if (templateKey === 'DRUG_CHART') {
+            setClinicalChartsModal({ open: true, tab: 'drug_stat_iv', isBlank });
             return;
         }
 
@@ -917,7 +941,7 @@ const NursePatientDocuments = () => {
                                                     value={selectedDownloadTemplate}
                                                     onChange={e => {
                                                         setSelectedDownloadTemplate(e.target.value);
-                                                        if (e.target.value !== 'TPR_CHART' && e.target.value !== 'IN_PATIENT_CLINICAL_NOTES') {
+                                                        if (!['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART'].includes(e.target.value)) {
                                                             setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
                                                         }
                                                     }}
@@ -973,7 +997,7 @@ const NursePatientDocuments = () => {
                                                         value={consentForm.consentType}
                                                         onChange={e => setConsentForm({ ...consentForm, consentType: e.target.value })}
                                                     >
-                                                        {CONSENT_TEMPLATES.filter(ct => ct.value !== 'TPR_CHART' && ct.value !== 'IN_PATIENT_CLINICAL_NOTES').map(ct => (
+                                                        {CONSENT_TEMPLATES.filter(ct => !['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART'].includes(ct.value)).map(ct => (
                                                             <option key={ct.value} value={ct.value}>{ct.label}</option>
                                                         ))}
                                                     </select>
@@ -1181,6 +1205,16 @@ const NursePatientDocuments = () => {
                 admission={selectedPatient?.admission}
                 admissionId={selectedPatient?.admission?._id}
                 isBlank={clinicalNotesBlankMode}
+            />
+
+            <IPDClinicalChartsModal
+                isOpen={clinicalChartsModal.open}
+                onClose={() => setClinicalChartsModal({ open: false, tab: 'progress_notes', isBlank: false })}
+                patient={selectedPatient}
+                admission={selectedPatient?.admission}
+                admissionId={selectedPatient?.admission?._id}
+                initialTab={clinicalChartsModal.tab}
+                isBlank={clinicalChartsModal.isBlank}
             />
         </div>
     );

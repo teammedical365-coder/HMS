@@ -38,6 +38,7 @@ import {
 } from 'react-icons/fi';
 import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
+import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
 import './NursePatientWorkspace.css';
 
 // ── Tab definitions ──
@@ -119,6 +120,7 @@ const NursePatientWorkspace = () => {
     const [clarifyModal, setClarifyModal] = useState({ open: false, order: null, question: '' });
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [clinicalNotesModal, setClinicalNotesModal] = useState({ open: false, tab: 'notes' });
+    const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
     const [editingVitalsId, setEditingVitalsId] = useState(null);
     const [editingRemarkText, setEditingRemarkText] = useState('');
     const [savingRemark, setSavingRemark] = useState(false);
@@ -561,8 +563,8 @@ const NursePatientWorkspace = () => {
             {/* ── Header: Patient IPD Care Banner ── */}
             <div className="npw-header">
                 <div className="npw-header-nav">
-                    <button className="npw-back-btn" onClick={() => navigate('/nurse/dashboard')}>
-                        <FiArrowLeft size={16} /> Back to IPD Patients
+                    <button type="button" className="npw-back-btn" onClick={() => navigate('/nurse/dashboard')}>
+                        <FiArrowLeft size={15} /> Back
                     </button>
                     <div className="npw-header-actions">
                         <button
@@ -601,6 +603,24 @@ const NursePatientWorkspace = () => {
                             title="2-Page In-Patient Clinical Notes & Patient Communication"
                         >
                             <FiFileText size={13} /> Clinical Notes
+                        </button>
+                        <button
+                            type="button"
+                            className="npw-btn-outline"
+                            style={{ borderColor: '#0f766e', color: '#0f766e', fontWeight: 700 }}
+                            onClick={() => setClinicalChartsModal({ open: true, tab: 'progress_notes' })}
+                            title="1-Page Clinical Progress Notes"
+                        >
+                            <FiFileText size={13} /> Progress Notes
+                        </button>
+                        <button
+                            type="button"
+                            className="npw-btn-outline"
+                            style={{ borderColor: '#1e3a8a', color: '#1e3a8a', fontWeight: 700 }}
+                            onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}
+                            title="2-Page Drug Chart (STAT Doses, IV Fluids & Scheduled MAR Grid)"
+                        >
+                            <FiFileText size={13} /> Drug Chart
                         </button>
                     </div>
                 </div>
@@ -1947,6 +1967,15 @@ const NursePatientWorkspace = () => {
                 admission={admission}
                 patient={admission?.patientId}
                 initialTab={clinicalNotesModal.tab}
+            />
+
+            <IPDClinicalChartsModal
+                isOpen={clinicalChartsModal.open}
+                onClose={() => setClinicalChartsModal(prev => ({ ...prev, open: false }))}
+                admissionId={admissionId}
+                admission={admission}
+                patient={admission?.patientId}
+                initialTab={clinicalChartsModal.tab}
             />
         </div>
     );
