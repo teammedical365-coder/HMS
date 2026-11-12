@@ -140,19 +140,24 @@
     box-sizing: border-box;
 }
 
-/* 1. Top Patient Demographics Line (exact VITAL CHART.pdf deep blue serif regular) */
+/* 1. Top Patient Demographics Line (pleasant light blue with light slate "|" dividers) */
 .tpr-sheet-patient-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     font-size: 13.5px;
     font-weight: normal;
-    color: #0f2e7a;
+    color: #2563eb;
     margin-bottom: 14px;
-    line-height: 1.35;
+    line-height: 1.4;
     padding-left: 4px;
 }
 
 .tpr-sheet-patient-line .tpr-sep {
     display: inline-block;
-    width: 12px;
+    margin: 0 9px;
+    color: #64748b;
+    font-weight: 400;
 }
 
 /* 2. Letterhead: Left Accreditation & Right Hospital Branding */

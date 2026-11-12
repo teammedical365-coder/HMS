@@ -4,7 +4,8 @@ import {
     escapeHtml,
     sanitizeImageUrl,
     resolvePatientChartDetails,
-    loadImageForPdf
+    loadImageForPdf,
+    drawPatientBannerPdf
 } from './tprChartPdf.js';
 
 const formatShortDate = (dtVal) => {
@@ -206,11 +207,11 @@ export const downloadInpatientClinicalNotesPdf = async ({
     ]);
 
     const drawTopBluePatientBanner = () => {
-        doc.setTextColor(15, 46, 122);
-        doc.setFont('times', 'normal');
-        doc.setFontSize(10.5);
-        const bannerText = `Patient Name : ${ptDetails.name}   UHID : ${ptDetails.uhid}   IPD : ${ptDetails.ipdNumber}   Gender : ${ptDetails.gender}   Age : ${ptDetails.age}`;
-        doc.text(bannerText, boxLeft + 2, 10.5, { maxWidth: boxWidth - 4 });
+        drawPatientBannerPdf(doc, ptDetails, {
+            x: boxLeft + 2,
+            y: 10.5,
+            maxWidth: boxWidth - 4
+        });
     };
 
     const drawOuterFrame = () => {
@@ -566,11 +567,11 @@ export const printInpatientClinicalNotes = ({
 
     const bannerHtml = `
         <div class="ipn-top-banner">
-            Patient Name : ${escapeHtml(ptDetails.name)}
-            <span class="sep"></span>UHID : ${escapeHtml(ptDetails.uhid)}
-            <span class="sep"></span>IPD : ${escapeHtml(ptDetails.ipdNumber)}
-            <span class="sep"></span>Gender : ${escapeHtml(ptDetails.gender)}
-            <span class="sep"></span>Age : ${escapeHtml(ptDetails.age)}
+            <span>Patient Name : ${escapeHtml(ptDetails.name)}</span>
+            <span class="sep">|</span><span>UHID : ${escapeHtml(ptDetails.uhid)}</span>
+            <span class="sep">|</span><span>IPD : ${escapeHtml(ptDetails.ipdNumber)}</span>
+            <span class="sep">|</span><span>Gender : ${escapeHtml(ptDetails.gender)}</span>
+            <span class="sep">|</span><span>Age : ${escapeHtml(ptDetails.age)}</span>
         </div>
     `;
 
@@ -595,8 +596,8 @@ export const printInpatientClinicalNotes = ({
                 @media print { .ipn-print-bar { display: none !important; } }
                 .ipn-page { width: 190mm; margin: 0 auto; padding-top: 2mm; page-break-after: always; }
                 .ipn-page:last-child { page-break-after: auto; }
-                .ipn-top-banner { font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #0f2e7a; margin-bottom: 4mm; padding-left: 2mm; }
-                .ipn-top-banner .sep { display: inline-block; width: 11px; }
+                .ipn-top-banner { display: flex; flex-wrap: wrap; align-items: center; font-family: 'Times New Roman', Times, serif; font-size: 13px; color: #2563eb; margin-bottom: 4mm; padding-left: 2mm; line-height: 1.4; }
+                .ipn-top-banner .sep { display: inline-block; margin: 0 9px; color: #64748b; font-weight: 400; }
                 .ipn-box { border: 1.5px solid #111827; width: 100%; }
                 .ipn-letterhead { display: flex; justify-content: space-between; align-items: center; padding: 3mm 5mm; border-bottom: 1px solid #111827; min-height: 24mm; }
                 .ipn-nabh { display: flex; flex-direction: column; align-items: center; }

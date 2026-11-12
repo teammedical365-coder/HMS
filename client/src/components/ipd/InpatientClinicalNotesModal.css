@@ -196,17 +196,22 @@
 }
 
 .ipn-doc-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     font-family: 'Times New Roman', Times, serif;
     font-size: 13px;
-    color: #0f2e7a;
+    color: #2563eb;
     margin-bottom: 10px;
     padding-left: 4px;
-    line-height: 1.35;
+    line-height: 1.4;
 }
 
 .ipn-doc-banner .ipn-sep {
     display: inline-block;
-    width: 11px;
+    margin: 0 9px;
+    color: #64748b;
+    font-weight: 400;
 }
 
 .ipn-doc-box {

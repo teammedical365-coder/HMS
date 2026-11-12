@@ -239,11 +239,15 @@ const InpatientClinicalNotesModal = ({
 
     const renderBanner = () => (
         <div className="ipn-doc-banner">
-            Patient Name : {ptBannerDetails.name}
-            <span className="ipn-sep" />UHID : {ptBannerDetails.uhid}
-            <span className="ipn-sep" />IPD : {ptBannerDetails.ipdNumber}
-            <span className="ipn-sep" />Gender : {ptBannerDetails.gender}
-            <span className="ipn-sep" />Age : {ptBannerDetails.age}
+            <span>Patient Name : {ptBannerDetails.name}</span>
+            <span className="ipn-sep">|</span>
+            <span>UHID : {ptBannerDetails.uhid}</span>
+            <span className="ipn-sep">|</span>
+            <span>IPD : {ptBannerDetails.ipdNumber}</span>
+            <span className="ipn-sep">|</span>
+            <span>Gender : {ptBannerDetails.gender}</span>
+            <span className="ipn-sep">|</span>
+            <span>Age : {ptBannerDetails.age}</span>
         </div>
     );
 

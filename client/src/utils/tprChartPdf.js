@@ -267,33 +267,122 @@ export const resolveHospitalChartBranding = ({
     };
 };
 
-export const loadImageForPdf = (url) => {
+const isSameOriginAssetUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    if (url.startsWith('/')) return true;
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return url.startsWith(window.location.origin);
+    }
+    return false;
+};
+
+const rasterizeImageToPng = (img) => {
+    try {
+        if (typeof document !== 'undefined') {
+            const w = img.naturalWidth || img.width || 200;
+            const h = img.naturalHeight || img.height || 200;
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                // Fill white base so alpha-transparent PNGs always render crisply inside jsPDF
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/png');
+                return { dataUrl, naturalWidth: w, naturalHeight: h };
+            }
+        }
+    } catch (_) {}
+    return null;
+};
+
+const loadImageViaElement = (src, useCrossOrigin) => {
     return new Promise((resolve) => {
-        if (!url || typeof Image === 'undefined') return resolve(null);
+        if (!src || typeof Image === 'undefined') return resolve(null);
         const img = new Image();
-        img.crossOrigin = 'Anonymous';
+        if (useCrossOrigin) {
+            img.crossOrigin = 'Anonymous';
+        }
         img.onload = () => {
-            try {
-                if (typeof document !== 'undefined') {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.naturalWidth || img.width || 200;
-                    canvas.height = img.naturalHeight || img.height || 200;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(img, 0, 0);
-                        const dataUrl = canvas.toDataURL('image/png');
-                        return resolve({
-                            dataUrl,
-                            naturalWidth: img.naturalWidth || img.width,
-                            naturalHeight: img.naturalHeight || img.height
-                        });
-                    }
-                }
-            } catch (_) {}
-            resolve(img);
+            const rasterized = rasterizeImageToPng(img);
+            resolve(rasterized || img);
         };
         img.onerror = () => resolve(null);
-        img.src = url;
+        img.src = src;
+    });
+};
+
+export const loadImageForPdf = async (url) => {
+    if (!url) return null;
+
+    if (url.startsWith('data:image/')) {
+        return await loadImageViaElement(url, false);
+    }
+
+    // For same-origin static assets (e.g. /assets/nabh-logo.png), fetch via Blob first so
+    // non-CORS <img> HTTP cache entries never cause canvas/CORS errors on PDF generation.
+    if (isSameOriginAssetUrl(url) && typeof fetch === 'function') {
+        try {
+            const res = await fetch(url, { cache: 'no-cache' });
+            if (res.ok) {
+                const blob = await res.blob();
+                const objUrl = URL.createObjectURL(blob);
+                try {
+                    const loaded = await loadImageViaElement(objUrl, false);
+                    if (loaded) return loaded;
+                } finally {
+                    URL.revokeObjectURL(objUrl);
+                }
+            }
+        } catch (_) {}
+        return await loadImageViaElement(url, false);
+    }
+
+    const withCors = await loadImageViaElement(url, true);
+    if (withCors) return withCors;
+
+    // Retry external image without CORS header if server blocks preflight
+    return await loadImageViaElement(url, false);
+};
+
+/**
+ * Draw formatted patient demographic banner in pleasant light blue with light slate/black "|" dividers.
+ */
+export const drawPatientBannerPdf = (doc, ptDetails = {}, { x = 14, y = 10.5, maxWidth = 182 } = {}) => {
+    const segments = [
+        `Patient Name : ${ptDetails.name || '—'}`,
+        `UHID : ${ptDetails.uhid || '—'}`,
+        `IPD : ${ptDetails.ipdNumber || '—'}`,
+        `Gender : ${ptDetails.gender || '—'}`,
+        `Age : ${ptDetails.age || '—'}`
+    ];
+
+    doc.setFont('times', 'normal');
+    let fontSize = 10;
+    doc.setFontSize(fontSize);
+
+    const sepStr = '  |  ';
+    const fullStr = segments.join(sepStr);
+    const totalW = doc.getTextWidth(fullStr);
+    if (totalW > maxWidth && totalW > 0) {
+        fontSize = Math.max(8, (fontSize * maxWidth) / totalW);
+        doc.setFontSize(fontSize);
+    }
+
+    const sepW = doc.getTextWidth(sepStr);
+    let cursorX = x;
+    segments.forEach((seg, idx) => {
+        doc.setTextColor(37, 99, 235); // Soft light royal blue (#2563eb)
+        doc.text(seg, cursorX, y);
+        cursorX += doc.getTextWidth(seg);
+
+        if (idx < segments.length - 1) {
+            doc.setTextColor(100, 116, 139); // Soft muted slate-black (#64748b)
+            doc.text(sepStr, cursorX, y);
+            cursorX += sepW;
+        }
     });
 };
 
@@ -454,13 +543,12 @@ export const downloadTPRChartPdf = async ({
         ]);
 
         const drawHeader = () => {
-            // 1. Top Patient Details Line in exact deep blue (#0f2e7a), regular serif matching reference PDF
-            doc.setTextColor(15, 46, 122);
-            doc.setFont('times', 'normal');
-            doc.setFontSize(10.5);
-
-            const patientLine = `Patient Name : ${ptDetails.name}   UHID : ${ptDetails.uhid}   IPD : ${ptDetails.ipdNumber}   Gender : ${ptDetails.gender}   Age : ${ptDetails.age}`;
-            doc.text(patientLine, marginLeft + 2, 10.5, { maxWidth: printableWidth - 4 });
+            // 1. Top Patient Details Line in pleasant light blue with subtle "|" dividers
+            drawPatientBannerPdf(doc, ptDetails, {
+                x: marginLeft + 2,
+                y: 10.5,
+                maxWidth: printableWidth - 4
+            });
 
             // 2. Left side: Common NABH PNG seal & verified certificate number ONLY when Central Admin enabled it
             if (isAccredited) {
@@ -748,18 +836,23 @@ export const printTPRChart = ({
                         display: none !important;
                     }
                 }
-                /* Top Demographics Bar matching VITAL CHART.pdf blue serif style */
+                /* Top Demographics Bar matching pleasant light blue + subtle "|" dividers */
                 .tpr-patient-line {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
                     font-size: 13px;
                     font-weight: normal;
-                    color: #0f2e7a;
+                    color: #2563eb;
                     margin-bottom: 10px;
-                    line-height: 1.35;
+                    line-height: 1.4;
                     padding-left: 4px;
                 }
                 .tpr-patient-line span.sep {
                     display: inline-block;
-                    width: 10px;
+                    margin: 0 9px;
+                    color: #64748b;
+                    font-weight: 400;
                 }
                 /* Letterhead Header */
                 .tpr-letterhead {
@@ -928,15 +1021,15 @@ export const printTPRChart = ({
                             <td colspan="10" class="tpr-repeat-head-cell">
                                 <!-- 1. Patient Demographics Top Line -->
                                 <div class="tpr-patient-line">
-                                    Patient Name : ${escapeHtml(ptDetails.name)}
-                                    <span class="sep"></span>
-                                    UHID : ${escapeHtml(ptDetails.uhid)}
-                                    <span class="sep"></span>
-                                    IPD : ${escapeHtml(ptDetails.ipdNumber)}
-                                    <span class="sep"></span>
-                                    Gender : ${escapeHtml(ptDetails.gender)}
-                                    <span class="sep"></span>
-                                    Age : ${escapeHtml(ptDetails.age)}
+                                    <span>Patient Name : ${escapeHtml(ptDetails.name)}</span>
+                                    <span class="sep">|</span>
+                                    <span>UHID : ${escapeHtml(ptDetails.uhid)}</span>
+                                    <span class="sep">|</span>
+                                    <span>IPD : ${escapeHtml(ptDetails.ipdNumber)}</span>
+                                    <span class="sep">|</span>
+                                    <span>Gender : ${escapeHtml(ptDetails.gender)}</span>
+                                    <span class="sep">|</span>
+                                    <span>Age : ${escapeHtml(ptDetails.age)}</span>
                                 </div>
 
                                 <!-- 2. Letterhead: Left Accreditation & Right Hospital Branding -->

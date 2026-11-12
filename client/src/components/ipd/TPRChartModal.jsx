@@ -207,15 +207,15 @@ const TPRChartModal = ({
                     <div className="tpr-sheet-paper">
                         {/* 1. Patient Demographics Top Line */}
                         <div className="tpr-sheet-patient-line">
-                            Patient Name : {patientObj.name}
-                            <span className="tpr-sep"></span>
-                            UHID : {patientObj.uhid}
-                            <span className="tpr-sep"></span>
-                            IPD : {patientObj.ipdNumber}
-                            <span className="tpr-sep"></span>
-                            Gender : {patientObj.gender}
-                            <span className="tpr-sep"></span>
-                            Age : {patientObj.age}
+                            <span>Patient Name : {patientObj.name}</span>
+                            <span className="tpr-sep">|</span>
+                            <span>UHID : {patientObj.uhid}</span>
+                            <span className="tpr-sep">|</span>
+                            <span>IPD : {patientObj.ipdNumber}</span>
+                            <span className="tpr-sep">|</span>
+                            <span>Gender : {patientObj.gender}</span>
+                            <span className="tpr-sep">|</span>
+                            <span>Age : {patientObj.age}</span>
                         </div>
 
                         {/* 2. Letterhead: Left Accreditation (only if authorized & configured) & Right Hospital Branding */}
