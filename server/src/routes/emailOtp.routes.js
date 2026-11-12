@@ -13,6 +13,7 @@ const Hospital = require('../models/hospital.model');
 const LoginOtp = require('../models/loginOtp.model');
 const Session = require('../models/session.model');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
+const { invalidateAuthCache } = require('../middleware/auth.middleware');
 
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
 const { emailOtpSendLimiter, emailOtpVerifyLimiter, loginLimiter } = require('../middleware/rateLimiter');
@@ -237,6 +238,7 @@ async function invalidateUserSessions(userId) {
         session.logoutTime = now;
         await session.save();
     }
+    invalidateAuthCache({ userId });
 }
 
 /**
@@ -264,6 +266,7 @@ async function invalidateOldestSessions(userId, keepCount = 0) {
         session.logoutTime = now;
         await session.save();
     }
+    invalidateAuthCache({ userId });
 }
 
 

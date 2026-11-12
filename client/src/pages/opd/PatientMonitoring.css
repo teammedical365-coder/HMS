@@ -171,7 +171,9 @@
 .pm-fullscreen-page {
     position: relative;
     width: 100%;
-    min-height: calc(100vh - 120px);
+    height: calc(100vh - 120px);
+    max-height: calc(100vh - 120px);
+    min-height: 0;
     background: #f8fafc;
     border-radius: 14px;
     border: 1px solid #e2e8f0;
@@ -196,11 +198,18 @@
 }
 
 .pm-fullscreen-page-body {
-    flex: 1;
-    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
     padding: 24px 28px;
     background: #f8fafc;
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+    touch-action: pan-y !important;
+    pointer-events: auto !important;
+    -webkit-overflow-scrolling: touch;
 }
 
 .pm-fullscreen-page-footer {
@@ -345,7 +354,7 @@
 
 .pm-profile-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }

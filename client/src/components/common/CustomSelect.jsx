@@ -13,7 +13,7 @@ const CustomSelect = ({
     disabled = false,
     options,
     children,
-    maxVisibleItems = 3
+    maxVisibleItems = 4
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [openUpward, setOpenUpward] = useState(false);
@@ -214,8 +214,8 @@ const CustomSelect = ({
                     ref={dropdownRef}
                     className={`custom-select-dropdown ${openUpward ? 'upward' : ''}`}
                     style={{
-                        // Exactly 3 items visible: each item is 38px + 2px borders = 116px
-                        maxHeight: `${(maxVisibleItems * 38) + 2}px`
+                        // Exactly 4 items visible: dynamically scaled for standard (38px) or compact (34px)
+                        maxHeight: `${(maxVisibleItems * (className.includes('custom-select-compact') ? 34 : 38)) + 2}px`
                     }}
                 >
                     {dropdownOptions.map((item, idx) => {

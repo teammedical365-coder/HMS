@@ -100,9 +100,10 @@ const appointmentSchema = new mongoose.Schema({
 });
 
 appointmentSchema.index(
-    { doctorId: 1, appointmentDate: 1, appointmentTime: 1 },
-    { unique: true, partialFilterExpression: { status: { $ne: 'cancelled' } } }
+    { hospitalId: 1, doctorId: 1, appointmentDate: 1, appointmentTime: 1 },
+    { unique: true, partialFilterExpression: { status: { $ne: 'cancelled' }, doctorId: { $type: 'objectId' } } }
 );
+appointmentSchema.index({ hospitalId: 1, doctorUserId: 1, appointmentDate: 1, status: 1 });
 appointmentSchema.index({ hospitalId: 1, appointmentDate: -1, status: 1 });
 appointmentSchema.index({ hospitalId: 1, createdAt: -1 });
 appointmentSchema.index({ userId: 1, createdAt: -1 });

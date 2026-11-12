@@ -30,12 +30,23 @@ const localUploadFallback = async (options) => {
     }
 };
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 let imagekit = null;
 
 if (!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !process.env.IMAGEKIT_URL_ENDPOINTS) {
-    console.warn('[ImageKit] Missing credentials — using local disk fallback for uploads.');
+    if (isProduction) {
+        console.error('🚨 [ImageKit Critical]: Missing ImageKit credentials in production! Uploads will be rejected to prevent silent data loss on ephemeral containers.');
+    } else {
+        console.warn('[ImageKit] Missing credentials — using local disk fallback for uploads in non-production environment.');
+    }
     imagekit = {
-        upload: localUploadFallback,
+        upload: async (options) => {
+            if (isProduction) {
+                throw new Error('Cloud file storage (ImageKit) is not configured in production. Ephemeral disk storage is disabled to prevent permanent patient data loss.');
+            }
+            return await localUploadFallback(options);
+        },
         deleteFile: async () => ({ success: true })
     };
 } else {
@@ -50,7 +61,11 @@ if (!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !pr
                 try {
                     return await realImageKit.upload(options);
                 } catch (netErr) {
-                    console.warn('[ImageKit] Cloud upload failed, falling back to local disk:', netErr.message);
+                    if (isProduction) {
+                        console.error('🚨 [ImageKit Upload Failure]: Cloud upload failed in production:', netErr.message);
+                        throw new Error(`Cloud storage upload failed: ${netErr.message || 'ImageKit network error'}. Request aborted to prevent ephemeral data loss.`);
+                    }
+                    console.warn('[ImageKit] Cloud upload failed, falling back to local disk (dev mode):', netErr.message);
                     return await localUploadFallback(options);
                 }
             },
@@ -63,9 +78,14 @@ if (!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !pr
             }
         };
     } catch (initErr) {
-        console.warn('[ImageKit] Initialization failed:', initErr.message, '— using local disk fallback.');
+        console.error('[ImageKit] Initialization failed:', initErr.message);
         imagekit = {
-            upload: localUploadFallback,
+            upload: async (options) => {
+                if (isProduction) {
+                    throw new Error('ImageKit initialization failed in production. Ephemeral disk storage is disabled.');
+                }
+                return await localUploadFallback(options);
+            },
             deleteFile: async () => ({ success: true })
         };
     }

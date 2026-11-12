@@ -505,10 +505,18 @@ router.get('/appointments', verifyToken, async (req, res) => {
         }
         const doctorUserId = req.user.id || req.user.userId;
         const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
+
+        // Safe pagination / bounded limits to prevent Node OOM on large datasets
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 100), 500);
+        const skip = (page - 1) * limit;
+
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
             .populate('clinicPatientId')
             .sort({ appointmentDate: 1, appointmentTime: 1 })
+            .skip(skip)
+            .limit(limit)
             .lean();
         res.json({ success: true, appointments });
     } catch (error) {
@@ -547,12 +555,19 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
             ];
         }
 
+        // Safe pagination / bounded limits to prevent Node OOM on large datasets
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 100), 500);
+        const skip = (page - 1) * limit;
+
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
             .populate('clinicPatientId')
             .populate('doctorId', 'name specialty departments')
             .populate('doctorUserId', 'name')
             .sort({ appointmentDate: -1, appointmentTime: 1 })
+            .skip(skip)
+            .limit(limit)
             .lean();
 
         // Attach doctor name from whichever field is available

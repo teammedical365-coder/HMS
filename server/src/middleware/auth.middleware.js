@@ -7,18 +7,82 @@ const Session = require('../models/session.model');
 const { JWT_SECRET } = require('../config/jwt');
 const { isDemoAccount, isDemoHospital, isPredefinedDemoUser } = require('../config/demoConfig');
 
+// ── Bounded In-Memory TTL Cache for Verified Auth Tokens ──────────────────────
+// Drastically reduces database round trips (from 5 DB queries down to 0) on repeat requests
+const authCache = new Map();
+const AUTH_CACHE_TTL_MS = 45 * 1000; // 45 seconds TTL
+const AUTH_CACHE_MAX_ENTRIES = 1000;
+
+function pruneAuthCache() {
+    const now = Date.now();
+    for (const [key, val] of authCache.entries()) {
+        if (val.expiresAt <= now) {
+            authCache.delete(key);
+        }
+    }
+    if (authCache.size > AUTH_CACHE_MAX_ENTRIES) {
+        const excess = authCache.size - AUTH_CACHE_MAX_ENTRIES;
+        let count = 0;
+        for (const key of authCache.keys()) {
+            authCache.delete(key);
+            count++;
+            if (count >= excess) break;
+        }
+    }
+}
+
+/**
+ * Invalidate cached auth context upon logout, session revocation, user update/deletion, or role modification
+ */
+function invalidateAuthCache({ userId, jti, token, roleId } = {}) {
+    if (token && authCache.has(token)) {
+        authCache.delete(token);
+    }
+    if (jti) {
+        for (const [key, val] of authCache.entries()) {
+            if (val.jti === jti) {
+                authCache.delete(key);
+            }
+        }
+    }
+    if (userId) {
+        const uIdStr = String(userId);
+        for (const [key, val] of authCache.entries()) {
+            if (String(val.userId) === uIdStr) {
+                authCache.delete(key);
+            }
+        }
+    }
+    if (roleId) {
+        const rIdStr = String(roleId).toLowerCase();
+        for (const [key, val] of authCache.entries()) {
+            const cachedRoleId = val.roleId ? String(val.roleId).toLowerCase() : null;
+            const cachedRoleName = val.roleName ? String(val.roleName).toLowerCase() : null;
+            if (cachedRoleId === rIdStr || cachedRoleName === rIdStr) {
+                authCache.delete(key);
+            }
+        }
+    }
+}
+exports.invalidateAuthCache = invalidateAuthCache;
+
 /**
  * Verify JWT token and attach user + populated role to req.user
  */
 exports.verifyToken = async (req, res, next) => {
+    // If user is already authenticated by an upstream middleware, proceed immediately (prevents duplicate execution)
+    if (req.user && req.user._roleData) {
+        return next();
+    }
     let decoded;
+    let token;
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ success: false, message: 'No token provided' });
         }
 
-        const token = authHeader.split(' ')[1];
+        token = authHeader.split(' ')[1];
         decoded = jwt.verify(token, JWT_SECRET);
     } catch (jwtErr) {
         if (jwtErr.name === 'TokenExpiredError') {
@@ -31,6 +95,31 @@ exports.verifyToken = async (req, res, next) => {
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 
+    // ── Fast-Path: Check Bounded Auth Cache ─────────────────────────────────────
+    const cachedAuth = authCache.get(token);
+    const now = Date.now();
+    if (cachedAuth && cachedAuth.expiresAt > now) {
+        // Double-check token version if present in token
+        if (decoded.tv === undefined || decoded.tv === cachedAuth.tokenVersion) {
+            req.user = { ...cachedAuth.user };
+            req.user.id = cachedAuth.userId;
+            req.user.userId = cachedAuth.userId;
+            req.user._roleData = cachedAuth.roleData;
+
+            if (cachedAuth.isDemoTenant) {
+                req.user.isDemo = true;
+                req.user.isDemoTenant = true;
+                req.isDemo = true;
+                if (cachedAuth.isPredefinedDemo) {
+                    req.user.isDemoUser = true;
+                }
+            }
+            return next();
+        } else {
+            authCache.delete(token); // Version mismatch, invalidate entry
+        }
+    }
+
     try {
         // Reject tokens that have been explicitly invalidated (logout)
         const jti = decoded.jti;
@@ -40,9 +129,11 @@ exports.verifyToken = async (req, res, next) => {
         }
 
         // Reject tokens issued before the user's token version was bumped (revoke-all-sessions)
+        let tokenVersion = 0;
         if (decoded.tv !== undefined) {
-            const currentVersion = await require('../models/user.model').findById(decoded.userId).select('tokenVersion').lean();
-            if (currentVersion && (currentVersion.tokenVersion ?? 0) !== decoded.tv) {
+            const currentVersion = await User.findById(decoded.userId).select('tokenVersion').lean();
+            tokenVersion = currentVersion?.tokenVersion ?? 0;
+            if (currentVersion && tokenVersion !== decoded.tv) {
                 return res.status(401).json({ success: false, message: 'Session revoked. Please log in again.' });
             }
         }
@@ -79,7 +170,7 @@ exports.verifyToken = async (req, res, next) => {
                 return res.status(401).json({ success: false, message: 'Invalid token payload' });
             }
             const PatientAuth = require('../models/patientAuth.model');
-            const patient = await PatientAuth.findById(decoded.patientId);
+            const patient = await PatientAuth.findById(decoded.patientId).lean();
             if (!patient) return res.status(401).json({ success: false, message: 'Patient not found' });
             user = {
                 _id: patient._id,
@@ -93,7 +184,7 @@ exports.verifyToken = async (req, res, next) => {
             if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
                 return res.status(401).json({ success: false, message: 'Invalid token payload' });
             }
-            user = await User.findById(decoded.userId);
+            user = await User.findById(decoded.userId).lean();
             if (!user) return res.status(401).json({ success: false, message: 'User not found' });
         }
 
@@ -128,21 +219,21 @@ exports.verifyToken = async (req, res, next) => {
             };
         } else if (user.role) {
             if (mongoose.Types.ObjectId.isValid(user.role)) {
-                roleData = await Role.findById(user.role);
+                roleData = await Role.findById(user.role).lean();
             }
 
             if (!roleData) {
                 const query = { name: { $regex: new RegExp(`^${user.role}$`, 'i') } };
                 // Scope legacy role lookup to the user's hospital
                 if (user.hospitalId) query.hospitalId = user.hospitalId;
-                roleData = await Role.findOne(query);
+                roleData = await Role.findOne(query).lean();
                 
                 // Fallback to global roles if hospital-specific role is not found
                 if (!roleData && user.hospitalId) {
                     roleData = await Role.findOne({
                         hospitalId: null,
                         name: { $regex: new RegExp(`^${user.role}$`, 'i') }
-                    });
+                    }).lean();
                 }
 
                 if (roleData) {
@@ -159,7 +250,7 @@ exports.verifyToken = async (req, res, next) => {
             }
         }
 
-        req.user = user;
+        req.user = { ...user };
         req.user.id = user._id || user.id || user.userId;
         req.user.userId = user._id || user.id || user.userId;
         req.user._roleData = roleData;
@@ -178,6 +269,23 @@ exports.verifyToken = async (req, res, next) => {
             if (isPredefinedDemo) {
                 req.user.isDemoUser = true;
             }
+        }
+
+        // Cache the verified auth details
+        if (token) {
+            if (authCache.size >= AUTH_CACHE_MAX_ENTRIES) pruneAuthCache();
+            authCache.set(token, {
+                user: { ...user },
+                userId: req.user.id,
+                roleData,
+                roleId: roleData?._id ? String(roleData._id) : (user?.role ? String(user.role) : null),
+                roleName: roleData?.name ? String(roleData.name).toLowerCase() : null,
+                tokenVersion,
+                jti: decoded.jti,
+                isDemoTenant,
+                isPredefinedDemo,
+                expiresAt: now + AUTH_CACHE_TTL_MS
+            });
         }
     } catch (dbErr) {
         if (dbErr.name === 'CastError') {

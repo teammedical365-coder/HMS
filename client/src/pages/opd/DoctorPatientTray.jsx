@@ -3,6 +3,8 @@ import { freeOpdAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { useBranding } from '../../context/BrandingContext';
 import { downloadPrescriptionPdf } from '../../utils/prescriptionPdf';
+import toast from 'react-hot-toast';
+import CustomSelect from '../../components/common/CustomSelect';
 import {
     FiActivity,
     FiClock,
@@ -16,6 +18,54 @@ import {
     FiRefreshCw
 } from 'react-icons/fi';
 import './DoctorPatientTray.css';
+
+
+const DOSE_OPTIONS = [
+    { value: '1 tab', label: '1 Tablet' },
+    { value: '2 tabs', label: '2 Tablets' },
+    { value: '1/2 tab', label: '1/2 Tablet' },
+    { value: '1 cap', label: '1 Capsule' },
+    { value: '2 caps', label: '2 Capsules' },
+    { value: '1 tsp (5ml)', label: '1 tsp (5ml)' },
+    { value: '2 tsp (10ml)', label: '2 tsp (10ml)' },
+    { value: '1 puff', label: '1 Puff' },
+    { value: '2 puffs', label: '2 Puffs' },
+    { value: '1 drop', label: '1 Drop' },
+    { value: '2 drops', label: '2 Drops' },
+    { value: '1 sachet', label: '1 Sachet' },
+    { value: '1 inj', label: '1 Injection' },
+];
+
+const FREQ_OPTIONS = [
+    { value: '1-0-1', label: '1-0-1 (Twice Daily)' },
+    { value: '1-1-1', label: '1-1-1 (Thrice Daily)' },
+    { value: '1-0-0', label: '1-0-0 (Morning Only)' },
+    { value: '0-0-1', label: '0-0-1 (Night Only)' },
+    { value: '0-1-0', label: '0-1-0 (Afternoon Only)' },
+    { value: '1-1-1-1', label: '1-1-1-1 (4 Times Daily)' },
+    { value: 'SOS', label: 'SOS (As Needed)' },
+];
+
+const DURATION_OPTIONS = [
+    { value: '3 days', label: '3 Days' },
+    { value: '5 days', label: '5 Days' },
+    { value: '7 days', label: '7 Days (1 Week)' },
+    { value: '10 days', label: '10 Days' },
+    { value: '14 days', label: '14 Days (2 Weeks)' },
+    { value: '15 days', label: '15 Days' },
+    { value: '30 days', label: '30 Days (1 Month)' },
+    { value: '1 day', label: '1 Day' },
+    { value: 'As needed', label: 'As Needed' },
+];
+
+const MEAL_OPTIONS = [
+    { value: 'After meal', label: 'After Meal' },
+    { value: 'Before meal', label: 'Before Meal' },
+    { value: 'With meal', label: 'With Meal' },
+    { value: 'At bedtime', label: 'At Bedtime' },
+    { value: 'Empty stomach', label: 'Empty Stomach' },
+    { value: 'As directed', label: 'As Directed' },
+];
 
 const DoctorPatientTray = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -31,6 +81,19 @@ const DoctorPatientTray = () => {
     });
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
+
+    // Waiting Queue Pagination (5 patients per page)
+    const [waitingPage, setWaitingPage] = useState(1);
+    const waitingPageSize = 5;
+    const totalWaiting = trayData.waiting?.length || 0;
+    const totalWaitingPages = Math.max(1, Math.ceil(totalWaiting / waitingPageSize));
+    const paginatedWaiting = (trayData.waiting || []).slice((waitingPage - 1) * waitingPageSize, waitingPage * waitingPageSize);
+
+    useEffect(() => {
+        if (waitingPage > totalWaitingPages) {
+            setWaitingPage(1);
+        }
+    }, [totalWaiting, totalWaitingPages, waitingPage]);
 
     // Active Consultation Workspace state
     const [activeAppt, setActiveAppt] = useState(null);
@@ -84,10 +147,11 @@ const DoctorPatientTray = () => {
         try {
             const res = await freeOpdAPI.startConsultation(appt._id);
             if (res.success) {
+                toast.success('Consultation started');
                 loadTray();
             }
         } catch (err) {
-            alert('Failed to start consultation: ' + (err.response?.data?.message || err.message));
+            toast.error('Failed to start consultation: ' + (err.response?.data?.message || err.message));
         } finally {
             setActionLoading(false);
         }
@@ -175,7 +239,7 @@ const DoctorPatientTray = () => {
                 loadTray();
             }
         } catch (err) {
-            alert('Failed to complete consultation: ' + (err.response?.data?.message || err.message));
+            toast.error('Failed to complete consultation: ' + (err.response?.data?.message || err.message));
         } finally {
             setActionLoading(false);
         }
@@ -192,7 +256,7 @@ const DoctorPatientTray = () => {
                 loadTray();
             }
         } catch (err) {
-            alert('Error cancelling: ' + (err.response?.data?.message || err.message));
+            toast.error('Error cancelling: ' + (err.response?.data?.message || err.message));
         } finally {
             setActionLoading(false);
         }
@@ -262,7 +326,7 @@ const DoctorPatientTray = () => {
                             No patients currently waiting.
                         </div>
                     ) : (
-                        trayData.waiting.map((appt) => (
+                        paginatedWaiting.map((appt) => (
                             <div key={appt._id} className="dpt-patient-card">
                                 <div className="dpt-card-top">
                                     <span className="dpt-patient-name">{appt.patientName}</span>
@@ -296,6 +360,30 @@ const DoctorPatientTray = () => {
                                 </div>
                             </div>
                         ))
+                    )}
+                    
+                    {totalWaiting > waitingPageSize && (
+                        <div className="dpt-pagination">
+                            <button
+                                type="button"
+                                className="dpt-pagination-btn"
+                                disabled={waitingPage === 1}
+                                onClick={() => setWaitingPage(p => Math.max(1, p - 1))}
+                            >
+                                ← Prev
+                            </button>
+                            <span className="dpt-pagination-info">
+                                Page {waitingPage} of {totalWaitingPages} ({totalWaiting} waiting)
+                            </span>
+                            <button
+                                type="button"
+                                className="dpt-pagination-btn"
+                                disabled={waitingPage === totalWaitingPages}
+                                onClick={() => setWaitingPage(p => Math.min(totalWaitingPages, p + 1))}
+                            >
+                                Next →
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -445,62 +533,26 @@ const DoctorPatientTray = () => {
                                             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Dose
                                             </label>
-                                            <select
-                                                style={{
-                                                    width: '100%',
-                                                    boxSizing: 'border-box',
-                                                    padding: '6px 8px',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    background: '#ffffff',
-                                                    color: '#0f172a'
-                                                }}
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
                                                 value={m.dosage || '1 tab'}
+                                                options={DOSE_OPTIONS}
                                                 onChange={(e) => handleMedChange(idx, 'dosage', e.target.value)}
-                                            >
-                                                <option value="1 tab">1 Tablet</option>
-                                                <option value="2 tabs">2 Tablets</option>
-                                                <option value="1/2 tab">1/2 Tablet</option>
-                                                <option value="1 cap">1 Capsule</option>
-                                                <option value="2 caps">2 Capsules</option>
-                                                <option value="1 tsp (5ml)">1 tsp (5ml)</option>
-                                                <option value="2 tsp (10ml)">2 tsp (10ml)</option>
-                                                <option value="1 puff">1 Puff</option>
-                                                <option value="2 puffs">2 Puffs</option>
-                                                <option value="1 drop">1 Drop</option>
-                                                <option value="2 drops">2 Drops</option>
-                                                <option value="1 sachet">1 Sachet</option>
-                                                <option value="1 inj">1 Injection</option>
-                                            </select>
+                                            />
                                         </div>
 
                                         <div>
                                             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Frequency
                                             </label>
-                                            <select
-                                                style={{
-                                                    width: '100%',
-                                                    boxSizing: 'border-box',
-                                                    padding: '6px 8px',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    background: '#ffffff',
-                                                    color: '#0f172a'
-                                                }}
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
                                                 value={m.frequency || '1-0-1'}
+                                                options={FREQ_OPTIONS}
                                                 onChange={(e) => handleMedChange(idx, 'frequency', e.target.value)}
-                                            >
-                                                <option value="1-0-1">1-0-1 (Twice Daily)</option>
-                                                <option value="1-1-1">1-1-1 (Thrice Daily)</option>
-                                                <option value="1-0-0">1-0-0 (Morning Only)</option>
-                                                <option value="0-0-1">0-0-1 (Night Only)</option>
-                                                <option value="0-1-0">0-1-0 (Afternoon Only)</option>
-                                                <option value="1-1-1-1">1-1-1-1 (4 Times Daily)</option>
-                                                <option value="SOS">SOS (As Needed)</option>
-                                            </select>
+                                            />
                                         </div>
                                     </div>
 
@@ -510,57 +562,26 @@ const DoctorPatientTray = () => {
                                             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Duration
                                             </label>
-                                            <select
-                                                style={{
-                                                    width: '100%',
-                                                    boxSizing: 'border-box',
-                                                    padding: '6px 8px',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    background: '#ffffff',
-                                                    color: '#0f172a'
-                                                }}
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
                                                 value={m.duration || '5 days'}
+                                                options={DURATION_OPTIONS}
                                                 onChange={(e) => handleMedChange(idx, 'duration', e.target.value)}
-                                            >
-                                                <option value="3 days">3 Days</option>
-                                                <option value="5 days">5 Days</option>
-                                                <option value="7 days">7 Days (1 Week)</option>
-                                                <option value="10 days">10 Days</option>
-                                                <option value="14 days">14 Days (2 Weeks)</option>
-                                                <option value="15 days">15 Days</option>
-                                                <option value="30 days">30 Days (1 Month)</option>
-                                                <option value="1 day">1 Day</option>
-                                                <option value="As needed">As Needed</option>
-                                            </select>
+                                            />
                                         </div>
 
                                         <div>
                                             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
                                                 Meal Timing
                                             </label>
-                                            <select
-                                                style={{
-                                                    width: '100%',
-                                                    boxSizing: 'border-box',
-                                                    padding: '6px 8px',
-                                                    border: '1px solid #cbd5e1',
-                                                    borderRadius: '6px',
-                                                    fontSize: '12px',
-                                                    background: '#ffffff',
-                                                    color: '#0f172a'
-                                                }}
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
                                                 value={m.instructions || 'After meal'}
+                                                options={MEAL_OPTIONS}
                                                 onChange={(e) => handleMedChange(idx, 'instructions', e.target.value)}
-                                            >
-                                                <option value="After meal">After Meal</option>
-                                                <option value="Before meal">Before Meal</option>
-                                                <option value="With meal">With Meal</option>
-                                                <option value="At bedtime">At Bedtime</option>
-                                                <option value="Empty stomach">Empty Stomach</option>
-                                                <option value="As directed">As Directed</option>
-                                            </select>
+                                            />
                                         </div>
                                     </div>
                                 </div>

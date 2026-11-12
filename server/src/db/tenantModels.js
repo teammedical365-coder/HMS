@@ -358,6 +358,11 @@ function getTenantModels(tenantDb) {
         throw new Error('tenantDb connection is required for getTenantModels()');
     }
 
+    // Memoize compiled models directly on the tenantDb instance
+    if (tenantDb.__cachedTenantModels) {
+        return tenantDb.__cachedTenantModels;
+    }
+
     // Helper: register model once per connection
     const model = (name, schema) => {
         try {
@@ -387,7 +392,7 @@ function getTenantModels(tenantDb) {
     const { customFieldDefinitionSchema } = require('../models/customFieldDefinition.model');
     const { migrationRecordSchema } = require('../models/migrationRecord.model');
 
-    return {
+    const models = {
         User: model('User', userSchema),
         Appointment: model('Appointment', appointmentSchema),
         LabReport: model('LabReport', labReportSchema),
@@ -423,6 +428,9 @@ function getTenantModels(tenantDb) {
         LocalInstallation: require('../models/localInstallation.model'),
         SyncConflict: require('../models/syncConflict.model'),
     };
+
+    tenantDb.__cachedTenantModels = models;
+    return models;
 }
 
 module.exports = { getTenantModels };

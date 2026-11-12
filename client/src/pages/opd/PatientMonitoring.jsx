@@ -17,6 +17,26 @@ import {
     FiAlertCircle
 } from 'react-icons/fi';
 import './PatientMonitoring.css';
+import toast from 'react-hot-toast';
+import CustomSelect from '../../components/common/CustomSelect';
+
+const GENDER_OPTIONS = [
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Other', label: 'Other' },
+];
+
+const BLOOD_GROUP_OPTIONS = [
+    { value: '', label: 'Unknown / Select' },
+    { value: 'A+', label: 'A+' },
+    { value: 'A-', label: 'A-' },
+    { value: 'B+', label: 'B+' },
+    { value: 'B-', label: 'B-' },
+    { value: 'O+', label: 'O+' },
+    { value: 'O-', label: 'O-' },
+    { value: 'AB+', label: 'AB+' },
+    { value: 'AB-', label: 'AB-' },
+];
 
 const PatientMonitoring = () => {
     const { user } = useAuth();
@@ -160,6 +180,7 @@ const PatientMonitoring = () => {
             };
             const res = await freeOpdAPI.registerPatient(payload);
             if (res.success) {
+                toast.success('Patient registered successfully!');
                 setShowRegisterModal(false);
                 setRegForm({
                     name: '',
@@ -179,10 +200,13 @@ const PatientMonitoring = () => {
                     openPatientProfile(res.patient._id);
                 }
             } else {
+                toast.error(res.message || 'Registration failed');
                 setRegError(res.message || 'Registration failed');
             }
         } catch (err) {
-            setRegError(err.response?.data?.message || err.message || 'Error registering patient');
+            const msg = err.response?.data?.message || err.message || 'Error registering patient';
+            toast.error(msg);
+            setRegError(msg);
         } finally {
             setRegistering(false);
         }
@@ -234,6 +258,7 @@ const PatientMonitoring = () => {
 
             const res = await freeOpdAPI.savePrescription(payload);
             if (res.success) {
+                toast.success('Prescription recorded successfully');
                 setRxNotice('✓ Prescription recorded successfully');
 
                 if (triggerDownload) {
@@ -269,7 +294,9 @@ const PatientMonitoring = () => {
                 openPatientProfile(patientDetails.patient._id);
             }
         } catch (err) {
-            setRxNotice('Failed to save prescription: ' + (err.response?.data?.message || err.message));
+            const msg = 'Failed to save prescription: ' + (err.response?.data?.message || err.message);
+            toast.error(msg);
+            setRxNotice(msg);
         } finally {
             setSavingRx(false);
         }
@@ -441,15 +468,13 @@ const PatientMonitoring = () => {
 
                                     <div className="pm-form-group">
                                         <label className="pm-label">Gender</label>
-                                        <select
-                                            className="pm-select"
+                                        <CustomSelect
+                                            className="custom-select-compact"
+                                            maxVisibleItems={4}
                                             value={regForm.gender}
-                                            onChange={(e) => setRegForm({ ...regForm, gender: e.target.value })}
-                                        >
-                                            <option value="Male">Male</option>
-                                            <option value="Female">Female</option>
-                                            <option value="Other">Other</option>
-                                        </select>
+                                            options={GENDER_OPTIONS}
+                                            onChange={(e) => setRegForm(prev => ({ ...prev, gender: e.target.value }))}
+                                        />
                                     </div>
 
                                     <div className="pm-form-group">
@@ -467,21 +492,13 @@ const PatientMonitoring = () => {
 
                                     <div className="pm-form-group">
                                         <label className="pm-label">Blood Group</label>
-                                        <select
-                                            className="pm-select"
+                                        <CustomSelect
+                                            className="custom-select-compact"
+                                            maxVisibleItems={4}
                                             value={regForm.bloodGroup}
-                                            onChange={(e) => setRegForm({ ...regForm, bloodGroup: e.target.value })}
-                                        >
-                                            <option value="">Unknown / Select</option>
-                                            <option value="A+">A+</option>
-                                            <option value="A-">A-</option>
-                                            <option value="B+">B+</option>
-                                            <option value="B-">B-</option>
-                                            <option value="O+">O+</option>
-                                            <option value="O-">O-</option>
-                                            <option value="AB+">AB+</option>
-                                            <option value="AB-">AB-</option>
-                                        </select>
+                                            options={BLOOD_GROUP_OPTIONS}
+                                            onChange={(e) => setRegForm(prev => ({ ...prev, bloodGroup: e.target.value }))}
+                                        />
                                     </div>
 
                                     <div className="pm-form-group full-width">
@@ -571,7 +588,7 @@ const PatientMonitoring = () => {
                             </button>
                         </div>
 
-                        <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
+                        <div className="pm-fullscreen-page-body" data-lenis-prevent="true" data-scrollable="true" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
                             {loadingDetails || !patientDetails ? (
                                 <div className="pm-empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
@@ -708,39 +725,6 @@ const PatientMonitoring = () => {
                                                         <div style={{ marginTop: '4px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', fontSize: '12.5px', lineHeight: 1.4 }}>
                                                             {patientDetails.patient?.medicalNotes || 'No specific clinical notes on record.'}
                                                         </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 3: Latest Recorded Vitals */}
-                                                <div className="pm-info-card">
-                                                    <div className="pm-info-card-header">
-                                                        <span>💓 Latest Vitals & Stats</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Blood Pressure (BP)</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.bp || 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Pulse Rate</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.pulse ? `${patientDetails.vitals.pulse} bpm` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Body Temperature</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.temp ? `${patientDetails.vitals.temp} °F` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Oxygen SpO2</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.spo2 ? `${patientDetails.vitals.spo2} %` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Weight</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.weight ? `${patientDetails.vitals.weight} kg` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Total Recorded Visits</span>
-                                                        <span className="pm-info-value" style={{ color: '#0d9488' }}>
-                                                            {patientDetails.appointments?.length || 0} Consultations
-                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>

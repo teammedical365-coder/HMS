@@ -1147,6 +1147,12 @@ export const hospitalAPI = {
     getMyBranding: async () => (await apiClient.get('/api/hospitals/my-hospital/branding')).data,
     updateMyBranding: async (data) => (await apiClient.put('/api/hospitals/my-hospital/branding', data)).data,
     previewEmail: async (data) => (await apiClient.post('/api/hospitals/my-hospital/preview-email', data)).data,
+    // Central Admin exclusive NABH accreditation control
+    getNabhStatus: async (id) => (await apiClient.get(`/api/hospitals/${id}/nabh`)).data,
+    updateNabhStatus: async (id, data) => {
+        invalidateMetaCache('hospitals');
+        return (await apiClient.put(`/api/hospitals/${id}/nabh`, data)).data;
+    },
     // Appointment mode (Supreme Admin)
     updateAppointmentMode: async (id, appointmentMode) => (await apiClient.put(`/api/hospitals/${id}`, { appointmentMode })).data,
     getNextToken: async (hospitalId, doctorId, date) => (await apiClient.get(`/api/hospitals/${hospitalId}/next-token?doctorId=${doctorId}&date=${date}`)).data,

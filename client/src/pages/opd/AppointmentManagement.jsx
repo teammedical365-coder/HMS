@@ -27,11 +27,133 @@ import {
 } from 'react-icons/fi';
 import './AppointmentManagement.css';
 import './PatientMonitoring.css';
+import toast from 'react-hot-toast';
+import CustomSelect from '../../components/common/CustomSelect';
+
+const GENDER_OPTIONS = [
+    { value: 'Male', label: 'Male' },
+    { value: 'Female', label: 'Female' },
+    { value: 'Other', label: 'Other' },
+];
+
+const VISIT_TYPE_OPTIONS = [
+    { value: 'New Consultation', label: 'New Consultation' },
+    { value: 'Follow-up', label: 'Follow-up / Revisit' },
+    { value: 'Emergency', label: 'Emergency' },
+];
+
+const PAYMENT_MODE_OPTIONS = [
+    { value: 'Cash', label: 'Cash (Directly Paid)' },
+    { value: 'UPI', label: 'UPI / QR (Directly Paid)' },
+    { value: 'Card', label: 'Debit / Credit Card' },
+    { value: 'Pending', label: 'Pay Later (Pending)' },
+];
+
+const STATUS_FILTER_OPTIONS = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'in-consultation', label: 'In Consultation' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+];
+
+const getAvailableMinutes = (dateStr, selectedHour, todayStr, bookedTimes = new Set()) => {
+    const isToday = dateStr === todayStr;
+    const now = new Date();
+    const curH = now.getHours();
+    const curM = now.getMinutes();
+    const allMins = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+    return allMins
+        .filter(m => {
+            if (isToday && Number(selectedHour) === curH && Number(m) < curM) {
+                return false;
+            }
+            const slot = `${selectedHour}:${m}`;
+            if (bookedTimes && bookedTimes.has(slot)) {
+                return false;
+            }
+            return true;
+        })
+        .map(m => ({ value: m, label: `${m} min` }));
+};
+
+const getAvailableHours = (dateStr, todayStr, bookedTimes = new Set()) => {
+    const isToday = dateStr === todayStr;
+    const now = new Date();
+    const curH = now.getHours();
+    const startHour = isToday ? curH : 8;
+    const endHour = 22;
+    const actualEnd = Math.max(endHour, isToday ? curH : endHour);
+
+    const hours = [];
+    for (let h = startHour; h <= actualEnd; h++) {
+        const val = String(h).padStart(2, '0');
+        const minsForHour = getAvailableMinutes(dateStr, val, todayStr, bookedTimes);
+        if (minsForHour.length > 0) {
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            hours.push({
+                value: val,
+                label: `${String(h12).padStart(2, '0')}:00 ${ampm} (${val}:00)`
+            });
+        }
+    }
+    if (hours.length === 0) {
+        const val = String(curH).padStart(2, '0');
+        hours.push({ value: val, label: `${val}:00` });
+    }
+    return hours;
+};
+
+const getValidSlotTime = (dateStr, currentSlotTime, todayStr, bookedTimes = new Set()) => {
+    const now = new Date();
+    const curH = now.getHours();
+    const curM = now.getMinutes();
+    const isToday = dateStr === todayStr;
+
+    let [h, m] = (currentSlotTime || '').split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) {
+        h = isToday ? curH : 10;
+        m = isToday ? Math.ceil(curM / 5) * 5 : 0;
+    }
+
+    if (isToday) {
+        if (h < curH) {
+            h = curH;
+            m = Math.ceil(curM / 5) * 5;
+        } else if (h === curH && m < curM) {
+            m = Math.ceil(curM / 5) * 5;
+        }
+    }
+
+    if (m >= 60) {
+        h += 1;
+        m = 0;
+    }
+    if (h >= 24) h = 23;
+
+    let candidate = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    let safetyCounter = 0;
+    while (bookedTimes.has(candidate) && safetyCounter < 150) {
+        m += 5;
+        if (m >= 60) {
+            h += 1;
+            m = 0;
+        }
+        if (h >= 24) break;
+        candidate = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        safetyCounter++;
+    }
+
+    return candidate;
+};
 
 const getInitialSlotTime = () => {
     const now = new Date();
     let hours = now.getHours();
-    let minutes = Math.ceil(now.getMinutes() / 15) * 15;
+    let minutes = Math.ceil(now.getMinutes() / 5) * 5;
     if (minutes >= 60) {
         hours += 1;
         minutes = 0;
@@ -172,6 +294,7 @@ const AppointmentManagement = () => {
 
             const res = await freeOpdAPI.savePrescription(payload);
             if (res.success) {
+                toast.success('Prescription recorded successfully');
                 setRxNotice('✓ Prescription recorded successfully');
 
                 if (triggerDownload) {
@@ -206,7 +329,9 @@ const AppointmentManagement = () => {
                 openPatientProfile(patientDetails.patient._id);
             }
         } catch (err) {
-            setRxNotice('Failed to save prescription: ' + (err.response?.data?.message || err.message));
+            const msg = 'Failed to save prescription: ' + (err.response?.data?.message || err.message);
+            toast.error(msg);
+            setRxNotice(msg);
         } finally {
             setSavingRx(false);
         }
@@ -277,6 +402,76 @@ const AppointmentManagement = () => {
     const [rescheduleModal, setRescheduleModal] = useState({ open: false, apptId: null, date: todayStr, time: '10:00' });
     const [rescheduling, setRescheduling] = useState(false);
 
+    // Appointments Pagination (5 per page as requested)
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 5;
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedDate, statusFilter]);
+
+    // Book Modal Time Calculations with double-booking prevention
+    const bookedTimesForBook = new Set(
+        appointments
+            .filter(a => a.status !== 'cancelled' && (a.appointmentDate ? a.appointmentDate.split('T')[0] : '') === bookForm.appointmentDate)
+            .map(a => a.appointmentTime)
+            .filter(Boolean)
+    );
+    const isBookToday = bookForm.appointmentDate === todayStr;
+    const [bookHourRaw, bookMinuteRaw] = (bookForm.appointmentTime || '10:00').split(':');
+    const bookHourOptions = getAvailableHours(bookForm.appointmentDate, todayStr, bookedTimesForBook);
+    const validBookHour = bookHourOptions.some(h => h.value === bookHourRaw)
+        ? bookHourRaw
+        : (bookHourOptions[0]?.value || '10');
+    const bookMinuteOptions = getAvailableMinutes(bookForm.appointmentDate, validBookHour, todayStr, bookedTimesForBook);
+    const validBookMinute = bookMinuteOptions.some(m => m.value === bookMinuteRaw)
+        ? bookMinuteRaw
+        : (bookMinuteOptions[0]?.value || '00');
+
+    const handleBookHourChange = (newHour) => {
+        const availMins = getAvailableMinutes(bookForm.appointmentDate, newHour, todayStr, bookedTimesForBook);
+        let newMin = validBookMinute;
+        if (!availMins.some(m => m.value === newMin)) {
+            newMin = availMins[0]?.value || '00';
+        }
+        setBookForm(prev => ({ ...prev, appointmentTime: `${newHour}:${newMin}` }));
+    };
+
+    const handleBookMinuteChange = (newMin) => {
+        setBookForm(prev => ({ ...prev, appointmentTime: `${validBookHour}:${newMin}` }));
+    };
+
+    // Reschedule Modal Time Calculations with double-booking prevention
+    const bookedTimesForReschedule = new Set(
+        appointments
+            .filter(a => a._id !== rescheduleModal.apptId && a.status !== 'cancelled' && (a.appointmentDate ? a.appointmentDate.split('T')[0] : '') === rescheduleModal.date)
+            .map(a => a.appointmentTime)
+            .filter(Boolean)
+    );
+    const isRescheduleToday = rescheduleModal.date === todayStr;
+    const [rescheduleHourRaw, rescheduleMinuteRaw] = (rescheduleModal.time || '10:00').split(':');
+    const rescheduleHourOptions = getAvailableHours(rescheduleModal.date, todayStr, bookedTimesForReschedule);
+    const validRescheduleHour = rescheduleHourOptions.some(h => h.value === rescheduleHourRaw)
+        ? rescheduleHourRaw
+        : (rescheduleHourOptions[0]?.value || '10');
+    const rescheduleMinuteOptions = getAvailableMinutes(rescheduleModal.date, validRescheduleHour, todayStr, bookedTimesForReschedule);
+    const validRescheduleMinute = rescheduleMinuteOptions.some(m => m.value === rescheduleMinuteRaw)
+        ? rescheduleMinuteRaw
+        : (rescheduleMinuteOptions[0]?.value || '00');
+
+    const handleRescheduleHourChange = (newHour) => {
+        const availMins = getAvailableMinutes(rescheduleModal.date, newHour, todayStr, bookedTimesForReschedule);
+        let newMin = validRescheduleMinute;
+        if (!availMins.some(m => m.value === newMin)) {
+            newMin = availMins[0]?.value || '00';
+        }
+        setRescheduleModal(prev => ({ ...prev, time: `${newHour}:${newMin}` }));
+    };
+
+    const handleRescheduleMinuteChange = (newMin) => {
+        setRescheduleModal(prev => ({ ...prev, time: `${validRescheduleHour}:${newMin}` }));
+    };
+
     // Cancel Modal State
     const [cancelModal, setCancelModal] = useState({ open: false, apptId: null, reason: '' });
     const [cancelling, setCancelling] = useState(false);
@@ -322,6 +517,11 @@ const AppointmentManagement = () => {
         }
         setBookError('');
         setDetectedPatient(null);
+        setBookForm(prev => ({
+            ...prev,
+            appointmentDate: todayStr,
+            appointmentTime: getInitialSlotTime()
+        }));
         setShowBookModal(true);
     };
 
@@ -350,6 +550,15 @@ const AppointmentManagement = () => {
 
             if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
                 setBookError('Please enter a valid email address');
+                setSubmittingBook(false);
+                return;
+            }
+
+            // Client-side Double Booking Prevention Check
+            if (bookedTimesForBook.has(bookForm.appointmentTime)) {
+                const msg = `Time slot ${bookForm.appointmentTime} is already booked for this date. Please choose a different time slot.`;
+                setBookError(msg);
+                toast.error(msg);
                 setSubmittingBook(false);
                 return;
             }
@@ -393,6 +602,7 @@ const AppointmentManagement = () => {
 
             const res = await freeOpdAPI.createAppointment(payload);
             if (res.success) {
+                toast.success('Appointment booked successfully!');
                 setShowBookModal(false);
                 setDetectedPatient(null);
                 setBookForm({
@@ -412,14 +622,19 @@ const AppointmentManagement = () => {
                 loadQuota();
             } else {
                 setBookError(res.message || 'Failed to book appointment');
+                toast.error(res.message || 'Failed to book appointment');
             }
         } catch (err) {
             const isQuota = err.response?.data?.isQuotaError || (err.response?.status === 403 && (err.response?.data?.message || '').toLowerCase().includes('quota'));
             if (isQuota && isFreeDoctorOpd) {
-                setBookError(err.response?.data?.message || 'Daily limit of 20 appointments reached for Free Doctor OPD plan.');
+                const qMsg = err.response?.data?.message || 'Daily limit of 20 appointments reached for Free Doctor OPD plan.';
+                setBookError(qMsg);
+                toast.error(qMsg);
                 setShowUpgradeModal(true);
             } else {
-                setBookError(err.response?.data?.message || err.message || 'Error booking appointment');
+                const errMsg = err.response?.data?.message || err.message || 'Error booking appointment';
+                setBookError(errMsg);
+                toast.error(errMsg);
             }
         } finally {
             setSubmittingBook(false);
@@ -429,6 +644,10 @@ const AppointmentManagement = () => {
     // Handle Reschedule
     const handleRescheduleSubmit = async (e) => {
         e.preventDefault();
+        if (bookedTimesForReschedule.has(rescheduleModal.time)) {
+            toast.error(`Time slot ${rescheduleModal.time} is already booked for this date. Please choose a different time slot.`);
+            return;
+        }
         setRescheduling(true);
         try {
             const res = await freeOpdAPI.rescheduleAppointment(rescheduleModal.apptId, {
@@ -436,14 +655,15 @@ const AppointmentManagement = () => {
                 time: rescheduleModal.time
             });
             if (res.success) {
-                setRescheduleModal({ open: false, apptId: null, date: todayStr, time: '10:00' });
+                toast.success('Appointment rescheduled successfully!');
+                setRescheduleModal({ open: false, apptId: null, date: todayStr, time: getInitialSlotTime() });
                 loadAppointments();
                 loadQuota();
             } else {
-                alert(res.message || 'Reschedule failed');
+                toast.error(res.message || 'Reschedule failed');
             }
         } catch (err) {
-            alert(err.response?.data?.message || err.message || 'Error rescheduling');
+            toast.error(err.response?.data?.message || err.message || 'Error rescheduling');
         } finally {
             setRescheduling(false);
         }
@@ -456,12 +676,13 @@ const AppointmentManagement = () => {
         try {
             const res = await freeOpdAPI.cancelAppointment(cancelModal.apptId, cancelModal.reason || 'Cancelled by doctor');
             if (res.success) {
+                toast.success('Appointment cancelled successfully!');
                 setCancelModal({ open: false, apptId: null, reason: '' });
                 loadAppointments();
                 loadQuota();
             }
         } catch (err) {
-            alert(err.response?.data?.message || err.message || 'Error cancelling appointment');
+            toast.error(err.response?.data?.message || err.message || 'Error cancelling appointment');
         } finally {
             setCancelling(false);
         }
@@ -473,6 +694,10 @@ const AppointmentManagement = () => {
 
     const quotaPct = Math.min(100, Math.round((todayCount / 20) * 100));
     const quotaClass = todayCount >= 20 ? 'limit-reached' : todayCount >= 16 ? 'near-limit' : '';
+
+    const totalAppointments = appointments.length;
+    const totalPages = Math.max(1, Math.ceil(totalAppointments / pageSize));
+    const paginatedAppointments = appointments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
         <div className="am-container">
@@ -505,7 +730,7 @@ const AppointmentManagement = () => {
                     </div>
 
                     <form onSubmit={handleBookSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                            <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
+                            <div className="pm-fullscreen-page-body" data-lenis-prevent="true" data-scrollable="true" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
                                 {bookError && (
                                     <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '12px 16px', borderRadius: '10px', marginBottom: '20px', fontSize: '13.5px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #fecaca' }}>
                                         <span style={{ fontSize: '18px' }}>⚠️</span>
@@ -587,15 +812,13 @@ const AppointmentManagement = () => {
 
                                             <div className="pm-form-group">
                                                 <label className="pm-label">Gender</label>
-                                                <select
-                                                    className="pm-select"
+                                                <CustomSelect
+                                                    className="custom-select-compact"
+                                                    maxVisibleItems={4}
                                                     value={bookForm.gender}
-                                                    onChange={(e) => setBookForm({ ...bookForm, gender: e.target.value })}
-                                                >
-                                                    <option value="Male">Male</option>
-                                                    <option value="Female">Female</option>
-                                                    <option value="Other">Other</option>
-                                                </select>
+                                                    options={GENDER_OPTIONS}
+                                                    onChange={(e) => setBookForm(prev => ({ ...prev, gender: e.target.value }))}
+                                                />
                                             </div>
 
                                             <div className="pm-form-group">
@@ -613,15 +836,13 @@ const AppointmentManagement = () => {
 
                                             <div className="pm-form-group full-width">
                                                 <label className="pm-label">Visit Type</label>
-                                                <select
-                                                    className="pm-select"
+                                                <CustomSelect
+                                                    className="custom-select-compact"
+                                                    maxVisibleItems={4}
                                                     value={bookForm.visitType}
-                                                    onChange={(e) => setBookForm({ ...bookForm, visitType: e.target.value })}
-                                                >
-                                                    <option value="New Consultation">New Consultation</option>
-                                                    <option value="Follow-up">Follow-up / Revisit</option>
-                                                    <option value="Emergency">Emergency</option>
-                                                </select>
+                                                    options={VISIT_TYPE_OPTIONS}
+                                                    onChange={(e) => setBookForm(prev => ({ ...prev, visitType: e.target.value }))}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -645,10 +866,12 @@ const AppointmentManagement = () => {
                                                         const val = e.target.value;
                                                         if (val < todayStr) {
                                                             setBookError('Appointment date cannot be in the past');
-                                                            setBookForm({ ...bookForm, appointmentDate: todayStr, appointmentTime: getInitialSlotTime() });
+                                                            const validTime = getValidSlotTime(todayStr, bookForm.appointmentTime, todayStr);
+                                                            setBookForm(prev => ({ ...prev, appointmentDate: todayStr, appointmentTime: validTime }));
                                                         } else {
                                                             setBookError('');
-                                                            setBookForm({ ...bookForm, appointmentDate: val });
+                                                            const validTime = getValidSlotTime(val, bookForm.appointmentTime, todayStr);
+                                                            setBookForm(prev => ({ ...prev, appointmentDate: val, appointmentTime: validTime }));
                                                         }
                                                     }}
                                                     required
@@ -656,27 +879,29 @@ const AppointmentManagement = () => {
                                             </div>
 
                                             <div className="pm-form-group">
-                                                <label className="pm-label">Appointment Time *</label>
-                                                <input
-                                                    type="time"
-                                                    className="pm-input"
-                                                    value={bookForm.appointmentTime}
-                                                    onChange={(e) => {
-                                                        const tVal = e.target.value;
-                                                        setBookForm({ ...bookForm, appointmentTime: tVal });
-                                                        if (bookForm.appointmentDate === todayStr && tVal) {
-                                                            const [h, m] = tVal.split(':').map(Number);
-                                                            const now = new Date();
-                                                            if (h < now.getHours() || (h === now.getHours() && m < now.getMinutes())) {
-                                                                const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-                                                                setBookError(`Appointment time cannot be in the past. Current time is ${curTimeStr}`);
-                                                            } else {
-                                                                setBookError('');
-                                                            }
-                                                        }
-                                                    }}
-                                                    required
-                                                />
+                                                <label className="pm-label">
+                                                    Appointment Time Slot * <span style={{ fontSize: '11px', color: '#0d9488', fontWeight: 600 }}>{isBookToday ? '(Current Time Onwards)' : '(Clinic Hours)'}</span>
+                                                </label>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '8px' }}>
+                                                    <CustomSelect
+                                                        className="custom-select-compact"
+                                                        maxVisibleItems={4}
+                                                        value={validBookHour}
+                                                        options={bookHourOptions}
+                                                        onChange={(e) => handleBookHourChange(e.target.value)}
+                                                    />
+                                                    <CustomSelect
+                                                        className="custom-select-compact"
+                                                        maxVisibleItems={4}
+                                                        value={validBookMinute}
+                                                        options={bookMinuteOptions}
+                                                        onChange={(e) => handleBookMinuteChange(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div style={{ marginTop: '6px', fontSize: '11.5px', color: '#0d9488', background: '#f0fdfa', padding: '6px 10px', borderRadius: '6px', border: '1px solid #ccfbf1', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                                                    <span>ℹ️</span>
+                                                    <span>Already booked slots are hidden to prevent double booking. Each appointment requires a distinct slot.</span>
+                                                </div>
                                             </div>
 
                                             <div className="pm-form-group">
@@ -693,16 +918,13 @@ const AppointmentManagement = () => {
 
                                             <div className="pm-form-group">
                                                 <label className="pm-label">Payment Mode</label>
-                                                <select
-                                                    className="pm-select"
+                                                <CustomSelect
+                                                    className="custom-select-compact"
+                                                    maxVisibleItems={4}
                                                     value={bookForm.paymentMethod}
-                                                    onChange={(e) => setBookForm({ ...bookForm, paymentMethod: e.target.value })}
-                                                >
-                                                    <option value="Cash">Cash (Directly Paid)</option>
-                                                    <option value="UPI">UPI / QR (Directly Paid)</option>
-                                                    <option value="Card">Debit / Credit Card</option>
-                                                    <option value="Pending">Pay Later (Pending)</option>
-                                                </select>
+                                                    options={PAYMENT_MODE_OPTIONS}
+                                                    onChange={(e) => setBookForm(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                                                />
                                             </div>
 
                                             {/* Optional Next Follow-up Revisit Date */}
@@ -821,7 +1043,7 @@ const AppointmentManagement = () => {
                             </button>
                         </div>
 
-                        <div className="pm-fullscreen-page-body" data-lenis-prevent data-scrollable="true">
+                        <div className="pm-fullscreen-page-body" data-lenis-prevent="true" data-scrollable="true" style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
                             {loadingDetails || !patientDetails ? (
                                 <div className="pm-empty-state" style={{ padding: '60px 20px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
@@ -958,39 +1180,6 @@ const AppointmentManagement = () => {
                                                         <div style={{ marginTop: '4px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', fontSize: '12.5px', lineHeight: 1.4 }}>
                                                             {patientDetails.patient?.medicalNotes || 'No specific clinical notes on record.'}
                                                         </div>
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 3: Latest Recorded Vitals */}
-                                                <div className="pm-info-card">
-                                                    <div className="pm-info-card-header">
-                                                        <span>💓 Latest Vitals & Stats</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Blood Pressure (BP)</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.bp || 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Pulse Rate</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.pulse ? `${patientDetails.vitals.pulse} bpm` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Body Temperature</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.temp ? `${patientDetails.vitals.temp} °F` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Oxygen SpO2</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.spo2 ? `${patientDetails.vitals.spo2} %` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Weight</span>
-                                                        <span className="pm-info-value">{patientDetails.vitals?.weight ? `${patientDetails.vitals.weight} kg` : 'Not recorded'}</span>
-                                                    </div>
-                                                    <div className="pm-info-row">
-                                                        <span className="pm-info-label">Total Recorded Visits</span>
-                                                        <span className="pm-info-value" style={{ color: '#0d9488' }}>
-                                                            {patientDetails.appointments?.length || 0} Consultations
-                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1308,20 +1497,17 @@ const AppointmentManagement = () => {
                     </button>
                 </div>
 
-                <div className="am-filter-group">
+                <div className="am-filter-group" style={{ minWidth: '170px' }}>
                     <label style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Status:</label>
-                    <select
-                        className="pm-select"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                        <option value="all">All Statuses</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="pending">Pending</option>
-                        <option value="in-consultation">In Consultation</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
+                    <div style={{ flex: 1, minWidth: '130px' }}>
+                        <CustomSelect
+                            className="custom-select-compact"
+                            maxVisibleItems={4}
+                            value={statusFilter}
+                            options={STATUS_FILTER_OPTIONS}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -1354,7 +1540,7 @@ const AppointmentManagement = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                appointments.map((appt) => {
+                                paginatedAppointments.map((appt) => {
                                     const pName = appt.userId?.name || appt.clinicPatientId?.name || 'Walk-in';
                                     const pPhone = appt.userId?.phone || appt.clinicPatientId?.phone || '—';
                                     const pUid = appt.userId?.patientId || appt.userId?.mrn || appt.clinicPatientId?.patientUid || appt.patientId || 'N/A';
@@ -1452,6 +1638,45 @@ const AppointmentManagement = () => {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Table Pagination (5 per page as requested) */}
+                {totalAppointments > pageSize && (
+                    <div className="am-pagination">
+                        <div className="am-pagination-info">
+                            Showing <strong>{(currentPage - 1) * pageSize + 1}</strong> to{' '}
+                            <strong>{Math.min(currentPage * pageSize, totalAppointments)}</strong> of{' '}
+                            <strong>{totalAppointments}</strong> appointments
+                        </div>
+                        <div className="am-pagination-controls">
+                            <button
+                                type="button"
+                                className="am-pagination-btn"
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            >
+                                ← Prev
+                            </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                                <button
+                                    key={pageNum}
+                                    type="button"
+                                    className={`am-pagination-page-btn ${currentPage === pageNum ? 'active' : ''}`}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                >
+                                    {pageNum}
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                className="am-pagination-btn"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            >
+                                Next →
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
                 </>
             )}
@@ -1600,23 +1825,44 @@ const AppointmentManagement = () => {
                             <div className="pm-modal-body">
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                                     <div>
-                                        <label className="pm-label">New Appointment Date *</label>
+                                        <label className="pm-label">New Appointment Date * <span style={{ fontSize: '11px', color: '#0d9488' }}>(Today or Future)</span></label>
                                         <input
                                             type="date"
                                             className="pm-input"
+                                            min={todayStr}
                                             value={rescheduleModal.date}
-                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, date: e.target.value })}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                const validTime = getValidSlotTime(val, rescheduleModal.time, todayStr);
+                                                setRescheduleModal(prev => ({ ...prev, date: val, time: validTime }));
+                                            }}
                                             required
                                         />
                                     </div>
                                     <div>
-                                        <label className="pm-label">New Appointment Time</label>
-                                        <input
-                                            type="time"
-                                            className="pm-input"
-                                            value={rescheduleModal.time}
-                                            onChange={(e) => setRescheduleModal({ ...rescheduleModal, time: e.target.value })}
-                                        />
+                                        <label className="pm-label">
+                                            New Appointment Time Slot * <span style={{ fontSize: '11px', color: '#0d9488', fontWeight: 600 }}>{isRescheduleToday ? '(Current Time Onwards)' : '(Clinic Hours)'}</span>
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '8px' }}>
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
+                                                value={validRescheduleHour}
+                                                options={rescheduleHourOptions}
+                                                onChange={(e) => handleRescheduleHourChange(e.target.value)}
+                                            />
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
+                                                value={validRescheduleMinute}
+                                                options={rescheduleMinuteOptions}
+                                                onChange={(e) => handleRescheduleMinuteChange(e.target.value)}
+                                            />
+                                        </div>
+                                        <div style={{ marginTop: '6px', fontSize: '11.5px', color: '#0d9488', background: '#f0fdfa', padding: '6px 10px', borderRadius: '6px', border: '1px solid #ccfbf1', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                                            <span>ℹ️</span>
+                                            <span>Already booked slots are hidden to prevent double booking. Please select an available slot.</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

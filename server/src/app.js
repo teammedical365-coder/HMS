@@ -6,7 +6,13 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 
-const { generalLimiter } = require('./middleware/rateLimiter');
+const { 
+    generalLimiter, 
+    publicConfigLimiter, 
+    aiWalletLimiter, 
+    uploadLimiter, 
+    searchLimiter 
+} = require('./middleware/rateLimiter');
 
 // Import Routes
 const authRoutes = require('./routes/auth.routes');
@@ -122,6 +128,15 @@ const isAllowedOrigin = (origin) => {
 
 const HospitalModelForCors = require('./models/hospital.model');
 const verifiedDomainCache = new Map(); // domain -> { allowed: boolean, expireAt: number }
+const VERIFIED_DOMAIN_CACHE_MAX = 500;
+
+function setDomainCache(domain, val) {
+    if (verifiedDomainCache.size >= VERIFIED_DOMAIN_CACHE_MAX) {
+        const oldest = verifiedDomainCache.keys().next().value;
+        verifiedDomainCache.delete(oldest);
+    }
+    verifiedDomainCache.set(domain, val);
+}
 
 // Preflight & CORS Header Fallback (Guarantees preflight OPTIONS 204 response with proper CORS headers)
 app.use((req, res, next) => {
@@ -178,10 +193,10 @@ const corsOptions = {
         HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean()
             .then(hospital => {
                 if (hospital) {
-                    verifiedDomainCache.set(domainOnly, { allowed: true, expireAt: now + 10 * 60 * 1000 });
+                    setDomainCache(domainOnly, { allowed: true, expireAt: now + 10 * 60 * 1000 });
                     callback(null, true);
                 } else {
-                    verifiedDomainCache.set(domainOnly, { allowed: false, expireAt: now + 2 * 60 * 1000 });
+                    setDomainCache(domainOnly, { allowed: false, expireAt: now + 2 * 60 * 1000 });
                     callback(null, false);
                 }
             })
@@ -258,6 +273,48 @@ app.use(mongoSanitize());
 // ── HTTP parameter pollution protection ──────────────────────────────────────
 app.use(hpp());
 
+// ── Lightweight Performance & Status Metrics Tracker ─────────────────────────
+const serverMetrics = {
+    totalRequests: 0,
+    statusCodes: { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 },
+    startTime: Date.now()
+};
+
+app.use((req, res, next) => {
+    serverMetrics.totalRequests++;
+    res.on('finish', () => {
+        const cat = `${Math.floor(res.statusCode / 100)}xx`;
+        if (serverMetrics.statusCodes[cat] !== undefined) {
+            serverMetrics.statusCodes[cat]++;
+        }
+    });
+    next();
+});
+
+// ── Health Check Endpoint (Render & APM Liveness Probe) ───────────────────────
+app.get('/healthz', (req, res) => {
+    const mongoose = require('mongoose');
+    const mongoStatus = mongoose.connection.readyState;
+    const isHealthy = mongoStatus === 1;
+    const mem = process.memoryUsage();
+    
+    res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? 'healthy' : 'degraded',
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        database: {
+            connected: isHealthy,
+            state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoStatus] || 'unknown'
+        },
+        memory: {
+            heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+            rssMB: Math.round(mem.rss / 1024 / 1024)
+        },
+        traffic: serverMetrics
+    });
+});
+
 // ── ABDM Callback Layer (Public bridge endpoints — bypass general rate limiter) ──
 const { ABDM_CALLBACK_PATH, abdmCallbackLimiter, verifyAbdmCallback, abdmCallbackHandler } =
     require('./modules/abdm/abdm.callbacks');
@@ -277,6 +334,14 @@ app.use(tenantResolver);
 
 // ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// ── Layered Resource Rate Limiters ───────────────────────────────────────────
+app.use('/api/public/branding', publicConfigLimiter);
+app.use('/api/public/tenant-config', publicConfigLimiter);
+app.use('/api/public/auth-config', publicConfigLimiter);
+app.use('/api/ai-wallet', aiWalletLimiter);
+app.use('/api/upload', uploadLimiter);
+app.use('/api/search', searchLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);

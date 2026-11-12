@@ -24,6 +24,7 @@ import {
 } from 'react-icons/fi';
 import './DoctorIPDOrdersPanel.css';
 import CustomSelect from '../common/CustomSelect';
+import TPRChartModal from './TPRChartModal';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -168,6 +169,7 @@ const DoctorIPDOrdersPanel = ({
     // Active admission state
     const [activeAdmission, setActiveAdmission] = useState(null);
     const [loadingAdmission, setLoadingAdmission] = useState(true);
+    const [tprModalOpen, setTprModalOpen] = useState(false);
 
     // Hospitalize Modal State
     const [hospitalizeModalOpen, setHospitalizeModalOpen] = useState(false);
@@ -860,19 +862,42 @@ const DoctorIPDOrdersPanel = ({
                             </div>
                         </div>
                     ) : activeAdmission ? (
-                        <div className="ipd-status-card admitted">
-                            <span className="ipd-pulse-dot green"></span>
-                            <div className="ipd-status-card-text">
-                                <div className="ipd-status-badge-row">
-                                    <span className="ipd-status-live-badge">Hospitalized / Admitted</span>
-                                </div>
-                                <div className="ipd-status-location-row">
-                                    <span className="ipd-ward-pill">
-                                        <FiMapPin /> {activeAdmission.ward || 'General Ward'}
-                                    </span>
-                                    <span className="ipd-bed-pill">
-                                        Bed {activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || 'Assigned'}
-                                    </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                onClick={() => setTprModalOpen(true)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    background: '#0d9488',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                                title="View, Print & Download Bedside TPR Chart"
+                            >
+                                <FiPrinter size={14} />
+                                <span>TPR Chart</span>
+                            </button>
+                            <div className="ipd-status-card admitted">
+                                <span className="ipd-pulse-dot green"></span>
+                                <div className="ipd-status-card-text">
+                                    <div className="ipd-status-badge-row">
+                                        <span className="ipd-status-live-badge">Hospitalized / Admitted</span>
+                                    </div>
+                                    <div className="ipd-status-location-row">
+                                        <span className="ipd-ward-pill">
+                                            <FiMapPin /> {activeAdmission.ward || 'General Ward'}
+                                        </span>
+                                        <span className="ipd-bed-pill">
+                                            Bed {activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || 'Assigned'}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2155,6 +2180,14 @@ const DoctorIPDOrdersPanel = ({
                     </div>
                 </div>
             )}
+
+            <TPRChartModal
+                isOpen={tprModalOpen}
+                onClose={() => setTprModalOpen(false)}
+                admissionId={activeAdmission?._id}
+                admission={activeAdmission}
+                patient={patient || activeAdmission?.patientId}
+            />
         </div>
     );
 };

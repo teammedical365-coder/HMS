@@ -33,8 +33,10 @@ import {
     FiCheckCircle,
     FiMessageSquare,
     FiTag,
-    FiHelpCircle
+    FiHelpCircle,
+    FiPrinter
 } from 'react-icons/fi';
+import TPRChartModal from '../../components/ipd/TPRChartModal';
 import './NursePatientWorkspace.css';
 
 // ── Tab definitions ──
@@ -113,6 +115,7 @@ const NursePatientWorkspace = () => {
     const [noteForm, setNoteForm] = useState(NOTE_INIT);
     const [notesFilter, setNotesFilter] = useState('ALL');
     const [clarifyModal, setClarifyModal] = useState({ open: false, order: null, question: '' });
+    const [tprModalOpen, setTprModalOpen] = useState(false);
 
     // History filter
     const [historyFilter, setHistoryFilter] = useState('All');
@@ -553,6 +556,15 @@ const NursePatientWorkspace = () => {
                             onClick={() => setVitalsModalOpen(true)}
                         >
                             <FiPlus size={14} /> Record Vitals
+                        </button>
+                        <button
+                            type="button"
+                            className="npw-btn-outline"
+                            style={{ borderColor: '#0d9488', color: '#0d9488', fontWeight: 700 }}
+                            onClick={() => setTprModalOpen(true)}
+                            title="View, Print & Download TPR Chart"
+                        >
+                            <FiPrinter size={13} /> TPR Chart
                         </button>
                     </div>
                 </div>
@@ -1343,9 +1355,20 @@ const NursePatientWorkspace = () => {
                                         <h2>PATIENT VITALS</h2>
                                         <p className="npw-sub-info">Continuous clinical observation and time-series vital history.</p>
                                     </div>
-                                    <button className="npw-btn-primary" onClick={() => setVitalsModalOpen(true)}>
-                                        <FiPlus size={14} /> Record Vitals
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <button
+                                            type="button"
+                                            className="npw-btn-outline"
+                                            style={{ borderColor: '#0d9488', color: '#0d9488', fontWeight: 700 }}
+                                            onClick={() => setTprModalOpen(true)}
+                                            title="View, Print & Download TPR Chart (VITAL CHART)"
+                                        >
+                                            <FiPrinter size={14} /> View / Print TPR Chart
+                                        </button>
+                                        <button className="npw-btn-primary" onClick={() => setVitalsModalOpen(true)}>
+                                            <FiPlus size={14} /> Record Vitals
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Latest Vitals Summary */}
@@ -1824,6 +1847,16 @@ const NursePatientWorkspace = () => {
                     </div>
                 </div>
             )}
+
+            {/* ── TPR & Vital Observation Chart Modal (Exact Visual Reference) ── */}
+            <TPRChartModal
+                isOpen={tprModalOpen}
+                onClose={() => setTprModalOpen(false)}
+                admissionId={admissionId}
+                admission={admission}
+                patient={admission?.patientId}
+                vitals={vitalsHistory}
+            />
         </div>
     );
 };

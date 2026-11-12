@@ -5,7 +5,7 @@ const User = require('../models/user.model');
 const Role = require('../models/role.model');
 const Hospital = require('../models/hospital.model');
 const jwt = require('jsonwebtoken');
-const { verifyAdmin, verifyAdminOrSuperAdmin, verifyToken } = require('../middleware/auth.middleware');
+const { verifyAdmin, verifyAdminOrSuperAdmin, verifyToken, invalidateAuthCache } = require('../middleware/auth.middleware');
 const { loginLimiter, signupLimiter } = require('../middleware/rateLimiter');
 const { nanoid } = require('nanoid');
 
@@ -246,6 +246,7 @@ router.put('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
         if (navLinks !== undefined) roleDoc.navLinks = navLinks;
 
         await roleDoc.save();
+        invalidateAuthCache({ roleId: roleDoc._id });
         res.json({ success: true, message: 'Role updated successfully', data: roleDoc });
     } catch (error) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -277,6 +278,7 @@ router.delete('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
         }
 
         await Role.findByIdAndDelete(roleId);
+        invalidateAuthCache({ roleId });
         res.json({ success: true, message: 'Role deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -780,6 +782,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         });
 
         await user.save();
+        invalidateAuthCache({ userId: user._id });
 
         // Auto-create linked entity profiles with hospitalId
         const roleName = (roleDoc.name || '').toLowerCase();
@@ -955,6 +958,7 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         }
 
         await user.save();
+        invalidateAuthCache({ userId: user._id });
 
         // Update linked entity profiles if present
         try {
@@ -1033,6 +1037,7 @@ router.delete('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         if (roleName === 'reception' || roleName === 'receptionist') await Reception.findOneAndDelete({ userId: user._id });
 
         await User.findByIdAndDelete(userId);
+        invalidateAuthCache({ userId });
         res.json({ success: true, message: 'User and associated profile deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error deleting user' });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { freeOpdAPI } from '../../utils/api';
 import {
     FiClock,
@@ -10,6 +11,85 @@ import {
     FiSearch
 } from 'react-icons/fi';
 import './AppointmentManagement.css';
+import './RevisitSchedule.css';
+import toast from 'react-hot-toast';
+import CustomSelect from '../../components/common/CustomSelect';
+import { updateModalScrollLock } from '../../utils/modalScrollLock';
+
+const getAvailableHours = (dateStr, todayStr) => {
+    const isToday = dateStr === todayStr;
+    const now = new Date();
+    const curH = now.getHours();
+    const startHour = isToday ? curH : 8;
+    const endHour = 22;
+    const actualEnd = Math.max(endHour, isToday ? curH : endHour);
+
+    const hours = [];
+    for (let h = startHour; h <= actualEnd; h++) {
+        const val = String(h).padStart(2, '0');
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        hours.push({
+            value: val,
+            label: `${String(h12).padStart(2, '0')}:00 ${ampm} (${val}:00)`
+        });
+    }
+    if (hours.length === 0) {
+        const val = String(curH).padStart(2, '0');
+        hours.push({ value: val, label: `${val}:00` });
+    }
+    return hours;
+};
+
+const getAvailableMinutes = (dateStr, selectedHour, todayStr) => {
+    const isToday = dateStr === todayStr;
+    const now = new Date();
+    const curH = now.getHours();
+    const curM = now.getMinutes();
+    const allMins = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+    if (isToday && Number(selectedHour) === curH) {
+        const filtered = allMins.filter(m => Number(m) >= curM);
+        if (filtered.length > 0) {
+            return filtered.map(m => ({ value: m, label: `${m} min` }));
+        }
+        const curMStr = String(curM).padStart(2, '0');
+        return [{ value: curMStr, label: `${curMStr} min` }];
+    }
+    return allMins.map(m => ({ value: m, label: `${m} min` }));
+};
+
+const getValidSlotTime = (dateStr, currentSlotTime, todayStr) => {
+    const now = new Date();
+    const curH = now.getHours();
+    const curM = now.getMinutes();
+    const isToday = dateStr === todayStr;
+
+    if (!isToday) {
+        return currentSlotTime || '10:00';
+    }
+
+    let [h, m] = (currentSlotTime || '').split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) {
+        h = curH;
+        m = Math.ceil(curM / 5) * 5;
+    }
+
+    if (h < curH) {
+        h = curH;
+        m = Math.ceil(curM / 5) * 5;
+    } else if (h === curH && m < curM) {
+        m = Math.ceil(curM / 5) * 5;
+    }
+
+    if (m >= 60) {
+        h += 1;
+        m = 0;
+    }
+    if (h >= 24) h = 23;
+
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
 
 const RevisitSchedule = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -69,12 +149,15 @@ const RevisitSchedule = () => {
                 setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
                 setPatientSearchResults([]);
                 loadRevisits();
-                alert('✓ Revisit scheduled successfully!');
+                toast.success('Revisit scheduled successfully!');
             } else {
+                toast.error(res.message || 'Failed to schedule revisit');
                 setScheduleError(res.message || 'Failed to schedule revisit');
             }
         } catch (err) {
-            setScheduleError(err.response?.data?.message || err.message || 'Error scheduling revisit');
+            const msg = err.response?.data?.message || err.message || 'Error scheduling revisit';
+            toast.error(msg);
+            setScheduleError(msg);
         } finally {
             setSchedulingRevisit(false);
         }
@@ -99,6 +182,15 @@ const RevisitSchedule = () => {
     useEffect(() => {
         loadRevisits();
     }, [loadRevisits]);
+
+    const hasOpenModal = Boolean((bookModal.open && bookModal.appt) || newScheduleModal.open);
+
+    useEffect(() => {
+        updateModalScrollLock();
+        return () => {
+            updateModalScrollLock();
+        };
+    }, [hasOpenModal]);
 
     const handleOpenBook = (appt) => {
         const defaultDate = appt.followUpDate ? appt.followUpDate.split('T')[0] : todayStr;
@@ -144,15 +236,43 @@ const RevisitSchedule = () => {
             if (res.success) {
                 setBookModal({ open: false, appt: null, date: todayStr, time: '10:00', notes: '' });
                 loadRevisits();
-                alert('✓ Revisit appointment booked successfully!');
+                toast.success('Revisit appointment booked successfully!');
             } else {
+                toast.error(res.message || 'Failed to book revisit appointment');
                 setBookError(res.message || 'Failed to book revisit appointment');
             }
         } catch (err) {
-            setBookError(err.response?.data?.message || err.message || 'Error booking revisit');
+            const msg = err.response?.data?.message || err.message || 'Error booking revisit';
+            toast.error(msg);
+            setBookError(msg);
         } finally {
             setBooking(false);
         }
+    };
+
+    // Time slot calculations for Revisit Book Modal
+    const isRevisitToday = bookModal.date === todayStr;
+    const [revisitHourRaw, revisitMinuteRaw] = (bookModal.time || '10:00').split(':');
+    const revisitHourOptions = getAvailableHours(bookModal.date, todayStr);
+    const validRevisitHour = revisitHourOptions.some(h => h.value === revisitHourRaw)
+        ? revisitHourRaw
+        : (revisitHourOptions[0]?.value || '10');
+    const revisitMinuteOptions = getAvailableMinutes(bookModal.date, validRevisitHour, todayStr);
+    const validRevisitMinute = revisitMinuteOptions.some(m => m.value === revisitMinuteRaw)
+        ? revisitMinuteRaw
+        : (revisitMinuteOptions[0]?.value || '00');
+
+    const handleRevisitHourChange = (newHour) => {
+        const availMins = getAvailableMinutes(bookModal.date, newHour, todayStr);
+        let newMin = validRevisitMinute;
+        if (!availMins.some(m => m.value === newMin)) {
+            newMin = availMins[0]?.value || '00';
+        }
+        setBookModal(prev => ({ ...prev, time: `${newHour}:${newMin}` }));
+    };
+
+    const handleRevisitMinuteChange = (newMin) => {
+        setBookModal(prev => ({ ...prev, time: `${validRevisitHour}:${newMin}` }));
     };
 
     return (
@@ -286,22 +406,23 @@ const RevisitSchedule = () => {
             {/* ─────────────────────────────────────────────────────────────
                BOOK REVISIT APPOINTMENT MODAL
                ───────────────────────────────────────────────────────────── */}
-            {bookModal.open && bookModal.appt && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '480px' }}>
-                        <div className="pm-modal-header">
-                            <h3 className="pm-modal-title">Book Follow-up Revisit</h3>
+            {bookModal.open && bookModal.appt && createPortal(
+                <div className="rs-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rs-book-modal-title">
+                    <div className="rs-modal-card rs-modal-card--book">
+                        <div className="rs-modal-header">
+                            <h3 id="rs-book-modal-title" className="rs-modal-title">Book Follow-up Revisit</h3>
                             <button
                                 type="button"
-                                className="pm-modal-close-btn"
+                                className="rs-modal-close-btn"
+                                aria-label="Close modal"
                                 onClick={() => setBookModal({ open: false, appt: null, date: todayStr, time: '10:00', notes: '' })}
                             >
                                 <FiX />
                             </button>
                         </div>
 
-                        <form onSubmit={handleBookSubmit}>
-                            <div className="pm-modal-body">
+                        <form className="rs-modal-form" onSubmit={handleBookSubmit}>
+                            <div className="rs-modal-body" data-lenis-prevent>
                                 {bookError && (
                                     <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
                                         ⚠ {bookError}
@@ -338,13 +459,25 @@ const RevisitSchedule = () => {
                                     </div>
 
                                     <div>
-                                        <label className="pm-label">Appointment Time</label>
-                                        <input
-                                            type="time"
-                                            className="pm-input"
-                                            value={bookModal.time}
-                                            onChange={(e) => setBookModal({ ...bookModal, time: e.target.value })}
-                                        />
+                                        <label className="pm-label">
+                                            Appointment Time Slot * <span style={{ fontSize: '11px', color: '#0d9488', fontWeight: 600 }}>{isRevisitToday ? '(Current Time Onwards)' : '(Clinic Hours)'}</span>
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: '8px' }}>
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
+                                                value={validRevisitHour}
+                                                options={revisitHourOptions}
+                                                onChange={(e) => handleRevisitHourChange(e.target.value)}
+                                            />
+                                            <CustomSelect
+                                                className="custom-select-compact"
+                                                maxVisibleItems={4}
+                                                value={validRevisitMinute}
+                                                options={revisitMinuteOptions}
+                                                onChange={(e) => handleRevisitMinuteChange(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
 
                                     <div>
@@ -359,7 +492,7 @@ const RevisitSchedule = () => {
                                 </div>
                             </div>
 
-                            <div className="pm-modal-footer">
+                            <div className="rs-modal-footer">
                                 <button
                                     type="button"
                                     className="pm-btn-secondary"
@@ -377,32 +510,38 @@ const RevisitSchedule = () => {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
             {/* ─────────────────────────────────────────────────────────────
                SCHEDULE NEW REVISIT MODAL
                ───────────────────────────────────────────────────────────── */}
-            {newScheduleModal.open && (
-                <div className="pm-modal-overlay">
-                    <div className="pm-modal-card" style={{ maxWidth: '540px' }}>
-                        <div className="pm-modal-header">
+            {newScheduleModal.open && createPortal(
+                <div className="rs-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rs-schedule-modal-title">
+                    <div className="rs-modal-card">
+                        <div className="rs-modal-header">
                             <div>
-                                <h3 className="pm-modal-title" style={{ margin: 0 }}>Schedule Patient Revisit</h3>
-                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                                <h3 id="rs-schedule-modal-title" className="rs-modal-title">Schedule Patient Revisit</h3>
+                                <p className="rs-modal-subtitle">
                                     Set an upcoming follow-up visit for an existing patient
                                 </p>
                             </div>
                             <button
                                 type="button"
-                                className="pm-modal-close-btn"
-                                onClick={() => setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' })}
+                                className="rs-modal-close-btn"
+                                aria-label="Close modal"
+                                onClick={() => {
+                                    setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
+                                    setPatientSearchResults([]);
+                                    setScheduleError('');
+                                }}
                             >
                                 <FiX />
                             </button>
                         </div>
 
-                        <form onSubmit={handleCreateRevisitSchedule}>
-                            <div className="pm-modal-body">
+                        <form className="rs-modal-form" onSubmit={handleCreateRevisitSchedule}>
+                            <div className="rs-modal-body" data-lenis-prevent>
                                 {scheduleError && (
                                     <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
                                         ⚠ {scheduleError}
@@ -453,11 +592,11 @@ const RevisitSchedule = () => {
 
                                     {/* Revisit Date with Quick Buttons */}
                                     <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap', gap: '6px' }}>
                                             <label className="pm-label" style={{ margin: 0 }}>
                                                 Revisit Follow-up Date *
                                             </label>
-                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                                 <button
                                                     type="button"
                                                     style={{ fontSize: '11px', padding: '2px 6px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
@@ -526,11 +665,15 @@ const RevisitSchedule = () => {
                                 </div>
                             </div>
 
-                            <div className="pm-modal-footer">
+                            <div className="rs-modal-footer">
                                 <button
                                     type="button"
                                     className="pm-btn-secondary"
-                                    onClick={() => setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' })}
+                                    onClick={() => {
+                                        setNewScheduleModal({ open: false, query: '', patientId: '', patientName: '', date: todayStr, notes: '' });
+                                        setPatientSearchResults([]);
+                                        setScheduleError('');
+                                    }}
                                 >
                                     Cancel
                                 </button>
@@ -544,7 +687,8 @@ const RevisitSchedule = () => {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

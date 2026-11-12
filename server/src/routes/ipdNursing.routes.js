@@ -794,9 +794,21 @@ router.get('/admissions/:admissionId/intake-output', verifyToken, resolveTenant,
             .sort({ recordedAt: -1 })
             .lean();
 
-        for (let r of records) {
-            if (r.recordedBy) {
-                r.recordedBy = await User.findById(r.recordedBy).select('name email role').lean() || r.recordedBy;
+        const recorderIds = [...new Set(
+            records
+                .map(r => r.recordedBy)
+                .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+                .map(String)
+        )];
+        if (recorderIds.length > 0) {
+            const recorders = await User.find({ _id: { $in: recorderIds } })
+                .select('name employeeId email role')
+                .lean();
+            const recorderMap = new Map(recorders.map(u => [String(u._id), u]));
+            for (const r of records) {
+                if (r.recordedBy && recorderMap.has(String(r.recordedBy))) {
+                    r.recordedBy = recorderMap.get(String(r.recordedBy));
+                }
             }
         }
 

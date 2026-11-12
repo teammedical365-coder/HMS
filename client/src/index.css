@@ -512,6 +512,7 @@ body:has(.vm-modal-backdrop) .erp-page-content {
 }
 
 /* 3. Modal bodies and scrollable containers inside popups: MUST scroll smoothly */
+.pm-fullscreen-page-body,
 .pkg-modal-body,
 .vm-modal-body,
 .ha-bed-modal-box,

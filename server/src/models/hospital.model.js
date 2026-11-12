@@ -32,6 +32,11 @@ const brandingSchema = new mongoose.Schema({
         primary: { type: String, default: '#14b8a6' },
         secondary: { type: String, default: '#0a2647' },
         background: { type: String, default: '#ffffff' }
+    },
+    // Deprecated sub-field kept read-ignored for schema backward compatibility; authoritative NABH status lives on top-level hospital.accreditation controlled by Central Admin only
+    accreditation: {
+        enabled: { type: Boolean, default: false },
+        certNo:  { type: String, trim: true, default: '' }
     }
 }, { _id: false });
 
@@ -117,6 +122,26 @@ const hospitalSchema = new mongoose.Schema({
     abdm: {
         enabled: { type: Boolean, default: false },
         hipId:   { type: String, trim: true, unique: true, sparse: true },   // = HFR facility ID in production
+    },
+
+    // Central Admin controlled clinical accreditation status (e.g., NABH)
+    // Shared common asset /assets/nabh-logo.png is rendered only when enabled === true
+    accreditation: {
+        enabled:       { type: Boolean, default: false },
+        certNo:        { type: String, trim: true, default: '' },
+        updatedBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        updatedByName: { type: String, trim: true, default: '' },
+        updatedAt:     { type: Date, default: null },
+        auditTrail: [{
+            action:     { type: String, enum: ['ACTIVATED', 'DEACTIVATED', 'CERT_UPDATED'], required: true },
+            enabled:    { type: Boolean, required: true },
+            certNo:     { type: String, trim: true, default: '' },
+            adminId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+            adminName:  { type: String, trim: true, default: '' },
+            adminEmail: { type: String, trim: true, default: '' },
+            timestamp:  { type: Date, default: Date.now },
+            ip:         { type: String, default: '' }
+        }]
     },
 
     // Subscription plan specific to clinics

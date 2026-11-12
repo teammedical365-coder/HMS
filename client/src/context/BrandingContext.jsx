@@ -156,7 +156,13 @@ export const BrandingProvider = ({ children }) => {
         try {
             const res = await hospitalAPI.getBranding(hId);
             if (res.success) {
-                const merged = { ...DEFAULT_BRANDING, ...res.branding };
+                const merged = {
+                    ...DEFAULT_BRANDING,
+                    ...(res.branding || {}),
+                    hospitalId: hId,
+                    logoUrl: res.branding?.logoUrl || res.logo || DEFAULT_BRANDING.logoUrl,
+                    accreditation: res.accreditation || res.branding?.accreditation || { enabled: false }
+                };
                 setBranding(merged);
                 setHospitalName(res.hospitalName || 'Medical 365');
                 setHospitalId(hId);
@@ -238,6 +244,9 @@ export const BrandingProvider = ({ children }) => {
                             setBranding(merged);
                             const effectiveName = res.hospitalName || res.branding.appName || 'Medical 365';
                             setHospitalName(effectiveName);
+                            if (res.hospitalId || res.branding.hospitalId) {
+                                setHospitalId(res.hospitalId || res.branding.hospitalId);
+                            }
                             try { localStorage.setItem('hospitalBrandingName', effectiveName); } catch {}
                             setIsCustomBranded(true);
                             applyBrandingToCSS(merged);

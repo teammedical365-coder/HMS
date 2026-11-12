@@ -4,6 +4,7 @@ import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI,
 import AdminLabs from '../admin/AdminLabs';
 import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
+import NabhAccreditationModal from '../../components/NabhAccreditationModal';
 import HospitalAdminHUDForm from '../../components/HospitalAdminHUDForm';
 import confirmToast, { toast } from '../../utils/confirmToast';
 import '../administration/SuperAdmin.css';

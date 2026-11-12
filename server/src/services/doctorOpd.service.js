@@ -573,7 +573,23 @@ async function createAppointment({
         }
     }
 
-    // 3. Quota reservation (Atomic Phase 2 service)
+    // 3. Strict Validation: Prevent double booking at the same date and time slot
+    if (appointmentTime) {
+        const { startOfDay, endOfDay } = quotaService.getIstDayRange(appointmentDate);
+        const existingSlot = await Appointment.findOne({
+            hospitalId,
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+            appointmentTime: appointmentTime.trim(),
+            status: { $nin: ['cancelled', 'Cancelled'] }
+        });
+        if (existingSlot) {
+            const err = new Error(`Time slot ${appointmentTime} is already booked for this date. Please choose a different time slot.`);
+            err.statusCode = 400;
+            throw err;
+        }
+    }
+
+    // 4. Quota reservation (Atomic Phase 2 service)
     const quotaResult = await quotaService.reserveAppointmentSlot({
         hospitalId,
         doctorId,
@@ -691,6 +707,23 @@ async function rescheduleAppointment({ hospitalId, doctorId, appointmentId, newD
                 err.statusCode = 400;
                 throw err;
             }
+        }
+    }
+
+    // Strict Validation: Prevent double booking at the same date and time slot upon reschedule
+    if (newTime) {
+        const { startOfDay, endOfDay } = quotaService.getIstDayRange(newDate);
+        const existingSlot = await Appointment.findOne({
+            _id: { $ne: appt._id },
+            hospitalId,
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+            appointmentTime: newTime.trim(),
+            status: { $nin: ['cancelled', 'Cancelled'] }
+        });
+        if (existingSlot) {
+            const err = new Error(`Time slot ${newTime} is already booked for this date. Please choose a different time slot.`);
+            err.statusCode = 400;
+            throw err;
         }
     }
 

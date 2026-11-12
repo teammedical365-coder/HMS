@@ -16,6 +16,7 @@ import {
     FiCheckCircle,
     FiInfo
 } from 'react-icons/fi';
+import TPRChartModal from '../../components/ipd/TPRChartModal';
 import './NursePatientDocuments.css';
 
 const REPORT_CATEGORIES = [
@@ -30,6 +31,12 @@ const REPORT_CATEGORIES = [
 ];
 
 const CONSENT_TEMPLATES = [
+    {
+        value: 'TPR_CHART',
+        label: 'Dynamic TPR Bedside Chart (Vitals & Fluid)',
+        title: 'TPR – CHART (BEDSIDE VITALS & FLUID RECORD)',
+        description: 'Standard 10-column temperature, pulse, respiration, blood pressure, and fluid intake/output chart.'
+    },
     {
         value: 'GENERAL_ADMISSION',
         label: 'General Inpatient Admission',
@@ -134,6 +141,8 @@ const NursePatientDocuments = () => {
         file: null
     });
     const [uploadingConsent, setUploadingConsent] = useState(false);
+    const [tprModalOpen, setTprModalOpen] = useState(false);
+    const [tprBlankMode, setTprBlankMode] = useState(false);
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -323,7 +332,13 @@ const NursePatientDocuments = () => {
             return;
         }
 
-        const template = CONSENT_TEMPLATES.find(t => t.value === templateKey) || CONSENT_TEMPLATES[0];
+        if (templateKey === 'TPR_CHART') {
+            setTprBlankMode(isBlank);
+            setTprModalOpen(true);
+            return;
+        }
+
+        const template = CONSENT_TEMPLATES.find(t => t.value === templateKey) || CONSENT_TEMPLATES[1];
         const ptName = isBlank ? '______________________________' : (selectedPatient?.name || '—');
         const ptMRN = isBlank ? '___________________' : (selectedPatient?.patientId || selectedPatient?.mrn || 'N/A');
         const ptAge = isBlank ? '______' : getPatientAge(selectedPatient);
@@ -664,15 +679,30 @@ const NursePatientDocuments = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    className="npd-refresh-btn"
-                                    onClick={fetchPatientRecords}
-                                    title="Refresh patient documentation records"
-                                >
-                                    <FiRefreshCw size={14} className={loadingReports || loadingConsents ? 'spinning' : ''} />
-                                    <span>Sync</span>
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        className="npd-refresh-btn"
+                                        style={{ background: '#0d9488', borderColor: '#0d9488' }}
+                                        onClick={() => {
+                                            setTprBlankMode(false);
+                                            setTprModalOpen(true);
+                                        }}
+                                        title="View, Print & Download Dynamic TPR Chart"
+                                    >
+                                        <FiPrinter size={14} />
+                                        <span>TPR Chart</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="npd-refresh-btn"
+                                        onClick={fetchPatientRecords}
+                                        title="Refresh patient documentation records"
+                                    >
+                                        <FiRefreshCw size={14} className={loadingReports || loadingConsents ? 'spinning' : ''} />
+                                        <span>Sync</span>
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Sub-Tabs: Reports vs Consents */}
@@ -872,7 +902,9 @@ const NursePatientDocuments = () => {
                                                     value={selectedDownloadTemplate}
                                                     onChange={e => {
                                                         setSelectedDownloadTemplate(e.target.value);
-                                                        setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
+                                                        if (e.target.value !== 'TPR_CHART') {
+                                                            setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
+                                                        }
                                                     }}
                                                 >
                                                     {CONSENT_TEMPLATES.map(t => (
@@ -926,7 +958,7 @@ const NursePatientDocuments = () => {
                                                         value={consentForm.consentType}
                                                         onChange={e => setConsentForm({ ...consentForm, consentType: e.target.value })}
                                                     >
-                                                        {CONSENT_TEMPLATES.map(ct => (
+                                                        {CONSENT_TEMPLATES.filter(ct => ct.value !== 'TPR_CHART').map(ct => (
                                                             <option key={ct.value} value={ct.value}>{ct.label}</option>
                                                         ))}
                                                     </select>
@@ -1111,6 +1143,18 @@ const NursePatientDocuments = () => {
                     )}
                 </div>
             </div>
+
+            <TPRChartModal
+                isOpen={tprModalOpen}
+                onClose={() => {
+                    setTprModalOpen(false);
+                    setTprBlankMode(false);
+                }}
+                patient={selectedPatient}
+                admission={selectedPatient?.admission}
+                admissionId={selectedPatient?.admission?._id}
+                isBlank={tprBlankMode}
+            />
         </div>
     );
 };

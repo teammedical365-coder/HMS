@@ -16,6 +16,15 @@ import {
     FiUser
 } from 'react-icons/fi';
 import './MoneyTracker.css';
+import CustomSelect from '../../components/common/CustomSelect';
+
+const PAYMENT_FILTER_OPTIONS = [
+    { value: 'all', label: 'All Modes' },
+    { value: 'Cash', label: 'Cash' },
+    { value: 'UPI', label: 'UPI' },
+    { value: 'Card', label: 'Card' },
+    { value: 'Online', label: 'Online' },
+];
 
 const MoneyTracker = () => {
     const [summary, setSummary] = useState({
@@ -304,17 +313,15 @@ const MoneyTracker = () => {
                     </div>
 
                     {/* Payment Mode Selector */}
-                    <select
-                        className="mt-mode-select"
-                        value={selectedMethod}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
-                    >
-                        <option value="all">All Modes</option>
-                        <option value="Cash">Cash</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Card">Card</option>
-                        <option value="Online">Online</option>
-                    </select>
+                    <div style={{ minWidth: '140px' }}>
+                        <CustomSelect
+                            className="custom-select-compact"
+                            maxVisibleItems={4}
+                            value={selectedMethod}
+                            options={PAYMENT_FILTER_OPTIONS}
+                            onChange={(e) => setSelectedMethod(e.target.value)}
+                        />
+                    </div>
 
                     {/* Auto-Synced Payment Ledger (Manual Record Button Removed) */}
                 </div>

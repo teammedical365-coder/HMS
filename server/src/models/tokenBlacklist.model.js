@@ -8,4 +8,14 @@ const tokenBlacklistSchema = new mongoose.Schema({
     expireAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
 });
 
+// Automatically evict from memory cache whenever a token is blacklisted
+tokenBlacklistSchema.post('save', function (doc) {
+    if (doc?.jti) {
+        try {
+            const { invalidateAuthCache } = require('../middleware/auth.middleware');
+            invalidateAuthCache({ jti: doc.jti });
+        } catch (e) {}
+    }
+});
+
 module.exports = mongoose.model('TokenBlacklist', tokenBlacklistSchema);

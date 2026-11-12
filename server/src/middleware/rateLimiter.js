@@ -76,4 +76,59 @@ const passwordRecoveryLimiter = rateLimit({
     message: { success: false, message: 'Too many password recovery attempts. Please try again after 15 minutes.' },
 });
 
-module.exports = { loginLimiter, signupLimiter, otpLimiter, generalLimiter, emailOtpSendLimiter, emailOtpVerifyLimiter, passwordRecoveryLimiter };
+// Dedicated Public Configuration Limiter — 300 requests per 5 min per IP
+// Protects /branding, /tenant-config, /auth-config against flood/scraping while allowing normal frontend polling
+const publicConfigLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many configuration requests. Please slow down.' },
+});
+
+// Heavy AI Processing Limiter — 60 requests per 15 min per User/IP
+const aiWalletLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user?.id || req.user?.userId ? String(req.user.id || req.user.userId) : req.ip),
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'AI generation limit reached. Please wait a few moments.' },
+});
+
+// File Upload Limiter — 40 uploads per 10 min per User/IP
+const uploadLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 40,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user?.id || req.user?.userId ? String(req.user.id || req.user.userId) : req.ip),
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Upload limit reached. Please wait a few moments before trying again.' },
+});
+
+// Global Search Limiter — 120 searches per 5 min per User/IP
+const searchLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user?.id || req.user?.userId ? String(req.user.id || req.user.userId) : req.ip),
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Too many search queries. Please wait a moment.' },
+});
+
+module.exports = { 
+    loginLimiter, 
+    signupLimiter, 
+    otpLimiter, 
+    generalLimiter, 
+    emailOtpSendLimiter, 
+    emailOtpVerifyLimiter, 
+    passwordRecoveryLimiter,
+    publicConfigLimiter,
+    aiWalletLimiter,
+    uploadLimiter,
+    searchLimiter
+};

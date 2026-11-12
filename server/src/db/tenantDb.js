@@ -65,6 +65,7 @@ async function getTenantConnection(hospitalId) {
     if (connectionCache.has(dbName)) {
         const cached = connectionCache.get(dbName);
         if (cached.readyState !== 0) { // 0 = disconnected
+            cached.__lastUsedAt = Date.now();
             return cached;
         }
         connectionCache.delete(dbName);
@@ -91,8 +92,35 @@ async function getTenantConnection(hospitalId) {
     });
 
     console.log(`✅ Tenant DB connected: ${dbName}`);
+    connection.__lastUsedAt = Date.now();
 
     return connection;
+}
+
+// ── Idle Tenant Connection Reaper (Frees MongoDB Atlas pool connections) ──────
+const IDLE_CONNECTION_TTL_MS = 30 * 60 * 1000; // 30 minutes idle
+setInterval(() => {
+    const now = Date.now();
+    for (const [dbName, conn] of connectionCache.entries()) {
+        const lastUsed = conn.__lastUsedAt || 0;
+        if (now - lastUsed > IDLE_CONNECTION_TTL_MS) {
+            console.log(`💤 [TenantDb] Closing idle tenant DB connection: ${dbName}`);
+            try { conn.close(); } catch (e) {}
+            connectionCache.delete(dbName);
+        }
+    }
+}, 10 * 60 * 1000).unref(); // Run every 10 min without keeping process alive
+
+/**
+ * Close all tenant connections gracefully on server termination
+ */
+async function closeAllTenantConnections() {
+    for (const [dbName, conn] of connectionCache.entries()) {
+        try {
+            await conn.close();
+        } catch (e) {}
+    }
+    connectionCache.clear();
 }
 
 /**
@@ -146,4 +174,5 @@ module.exports = {
     getTenantDbName,
     getActiveConnections,
     removeTenantConnection,
+    closeAllTenantConnections,
 };

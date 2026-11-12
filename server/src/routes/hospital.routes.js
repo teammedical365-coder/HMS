@@ -26,6 +26,59 @@ const aiWalletService = require('../services/ai/aiWallet.service');
 
 const { JWT_SECRET } = require('../config/jwt');
 const validatePassword = require('../utils/validatePassword');
+const AuditLog = require('../models/auditLog.model');
+
+const COMMON_NABH_LOGO_PATH = '/assets/nabh-logo.png';
+
+const clearPublicBrandingCache = () => {
+    try {
+        const pub = require('./public.routes');
+        if (typeof pub.clearBrandingCache === 'function') pub.clearBrandingCache();
+    } catch (_) {}
+};
+
+const resolveAuthoritativeAccreditation = (hospital) => {
+    const topAcc = hospital?.accreditation?.toObject ? hospital.accreditation.toObject() : (hospital?.accreditation || {});
+    const enabled = topAcc?.enabled === true;
+    return {
+        enabled,
+        certNo: enabled && topAcc?.certNo ? String(topAcc.certNo).trim() : '',
+        logoUrl: enabled ? COMMON_NABH_LOGO_PATH : '',
+        updatedBy: topAcc?.updatedBy || null,
+        updatedByName: topAcc?.updatedByName || '',
+        updatedAt: topAcc?.updatedAt || null
+    };
+};
+
+const emitTenantBrandingUpdate = (req, hospital, mergedBranding) => {
+    const io = req.app.get('io');
+    if (io && hospital?._id) {
+        io.to(`hospital_${hospital._id}`).emit('branding_update', {
+            hospitalId: hospital._id,
+            branding: mergedBranding || buildMergedHospitalBranding(hospital),
+            accreditation: resolveAuthoritativeAccreditation(hospital),
+            hospitalName: hospital.name
+        });
+    }
+};
+
+const buildMergedHospitalBranding = (hospital) => {
+    const rawB = hospital.branding?.toObject ? hospital.branding.toObject() : (hospital.branding || {});
+    const rawBS = hospital.brandingSchema?.toObject ? hospital.brandingSchema.toObject() : (hospital.brandingSchema || {});
+    const merged = { ...rawBS, ...rawB };
+    for (const key of Object.keys(rawB)) {
+        if (rawB[key] !== undefined && rawB[key] !== '' && rawB[key] !== null) {
+            merged[key] = rawB[key];
+        }
+    }
+    if (!merged.appName && rawBS.appName) merged.appName = rawBS.appName;
+    if (!merged.logoUrl && rawBS.logoUrl) merged.logoUrl = rawBS.logoUrl;
+    if (!merged.logoUrl && hospital.logo) merged.logoUrl = hospital.logo;
+    if (!merged.address && hospital.address) merged.address = hospital.address;
+    if (!merged.supportPhone && hospital.phone) merged.supportPhone = hospital.phone;
+    merged.accreditation = resolveAuthoritativeAccreditation(hospital);
+    return merged;
+};
 
 /**
  * Central Admin middleware — only 'centraladmin' (or legacy 'superadmin') can access
@@ -33,7 +86,7 @@ const validatePassword = require('../utils/validatePassword');
 const verifyCentralAdmin = async (req, res, next) => {
     try {
         await verifyToken(req, res, () => {
-            const role = req.user.role;
+            const role = String(req.user._roleData?.name || req.user.role || '').toLowerCase();
             if (role === 'centraladmin' || role === 'superadmin') {
                 return next();
             }
@@ -50,7 +103,7 @@ const verifyCentralAdmin = async (req, res, next) => {
 const verifyHospitalAdmin = async (req, res, next) => {
     try {
         await verifyToken(req, res, () => {
-            const role = req.user.role;
+            const role = String(req.user._roleData?.name || req.user.role || '').toLowerCase();
             if (role === 'centraladmin' || role === 'superadmin' || role === 'hospitaladmin') {
                 return next();
             }
@@ -94,7 +147,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
             .populate('adminUserId', 'name email')
             .lean();
 
-        // Map legacy data so frontend receives expected plan names
+        // Map legacy data so frontend receives expected plan names and authoritative NABH status
         const mappedHospitals = hospitals.map(h => {
             const hospital = { ...h };
             if (!hospital.subscriptionPlan || hospital.subscriptionPlan === 'none') {
@@ -104,6 +157,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
                     hospital.subscriptionPlan = 'enterprise';
                 }
             }
+            hospital.accreditation = resolveAuthoritativeAccreditation(h);
             return hospital;
         });
 
@@ -163,7 +217,15 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             slug = `${baseSlug}-${counter++}`;
         }
 
-        const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [], whiteLabelEnabled, brandingSchema };
+        const safeBrandingSchema = (brandingSchema && typeof brandingSchema === 'object') ? { ...brandingSchema } : undefined;
+        if (safeBrandingSchema && 'accreditation' in safeBrandingSchema) {
+            delete safeBrandingSchema.accreditation;
+        }
+        const hospitalData = {
+            name, slug, address, city, state, phone, email, website, logo,
+            departments: departments || [], whiteLabelEnabled, brandingSchema: safeBrandingSchema,
+            accreditation: { enabled: false, certNo: '', auditTrail: [] }
+        };
         if (plan === 'free_doctor_opd') {
             hospitalData.subscriptionPlan = 'free_doctor_opd';
             hospitalData.tier = { maxDoctors: 1, maxStaff: 0, maxReceptionists: 0, maxDailyAppointments: 20 };
@@ -288,6 +350,12 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 const updateHospital = async (req, res) => {
     try {
         const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain, plan, whiteLabelEnabled, brandingSchema } = req.body;
+        if (req.body.accreditation !== undefined || req.body?.branding?.accreditation !== undefined || req.body?.brandingSchema?.accreditation !== undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'NABH accreditation status must be managed exclusively via /api/hospitals/:id/nabh so an audit trail is maintained.'
+            });
+        }
         const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -334,7 +402,11 @@ const updateHospital = async (req, res) => {
         if (departments !== undefined) hospital.departments = departments;
         if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) hospital.appointmentMode = appointmentMode;
         if (whiteLabelEnabled !== undefined) hospital.whiteLabelEnabled = whiteLabelEnabled;
-        if (brandingSchema !== undefined) hospital.brandingSchema = brandingSchema;
+        if (brandingSchema !== undefined && brandingSchema && typeof brandingSchema === 'object') {
+            const cleanedBS = { ...brandingSchema };
+            delete cleanedBS.accreditation;
+            hospital.brandingSchema = cleanedBS;
+        }
 
         if (plan === 'free_doctor_opd') {
             hospital.subscriptionPlan = 'free_doctor_opd';
@@ -351,6 +423,8 @@ const updateHospital = async (req, res) => {
         }
 
         await hospital.save();
+        clearPublicBrandingCache();
+        emitTenantBrandingUpdate(req, hospital);
         res.json({ success: true, message: 'Hospital updated successfully', hospital });
     } catch (err) {
         console.error("Error updating hospital:", err);
@@ -649,7 +723,7 @@ router.put('/my-hospital/upi-ids', verifyHospitalAdmin, async (req, res) => {
     }
 });
 
-// Get branding details for current hospital (Hospital Admin)
+// Get branding details for current hospital (Authenticated Tenant)
 router.get('/my-hospital/branding', verifyToken, async (req, res) => {
     try {
         const hospitalId = req.user.hospitalId;
@@ -657,6 +731,9 @@ router.get('/my-hospital/branding', verifyToken, async (req, res) => {
 
         const hospital = await Hospital.findById(hospitalId);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        const mergedBranding = buildMergedHospitalBranding(hospital);
+        const authoritativeAcc = resolveAuthoritativeAccreditation(hospital);
 
         res.json({
             success: true,
@@ -670,7 +747,8 @@ router.get('/my-hospital/branding', verifyToken, async (req, res) => {
                 state: hospital.state,
                 website: hospital.website,
                 logo: hospital.logo,
-                branding: hospital.branding || {},
+                accreditation: authoritativeAcc,
+                branding: mergedBranding,
                 brandingSchema: hospital.brandingSchema || {}
             }
         });
@@ -683,6 +761,18 @@ router.get('/my-hospital/branding', verifyToken, async (req, res) => {
 // Update branding & profile for current hospital (Hospital Admin)
 router.put('/my-hospital/branding', verifyHospitalAdmin, async (req, res) => {
     try {
+        // Security enforcement: hospital users/admins can NEVER activate or modify NABH accreditation
+        if (
+            req.body?.accreditation !== undefined ||
+            req.body?.branding?.accreditation !== undefined ||
+            req.body?.brandingSchema?.accreditation !== undefined
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: 'Forbidden: NABH accreditation status can only be modified by Medical365 Central Admin.'
+            });
+        }
+
         const hospitalId = req.user.hospitalId;
         if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context required' });
 
@@ -704,8 +794,9 @@ router.put('/my-hospital/branding', verifyHospitalAdmin, async (req, res) => {
         if (state !== undefined) hospital.state = state;
         if (website !== undefined) hospital.website = website;
 
-        // Merge branding fields
-        const currentBranding = hospital.branding || {};
+        // Merge branding fields (strict allowlist; never touches accreditation)
+        const currentBranding = hospital.branding?.toObject ? hospital.branding.toObject() : { ...(hospital.branding || {}) };
+        delete currentBranding.accreditation;
         const allowedBrandingKeys = [
             'appName', 'tagline', 'logoUrl', 'faviconUrl', 'emailDisplayName',
             'primaryColor', 'secondaryColor', 'accentColor', 'successColor',
@@ -727,12 +818,13 @@ router.put('/my-hospital/branding', verifyHospitalAdmin, async (req, res) => {
         hospital.branding = currentBranding;
         hospital.markModified('branding');
         await hospital.save();
+        clearPublicBrandingCache();
 
-        // Real-time live update notification via Socket.IO
-        const io = req.app.get('io');
-        if (io) {
-            io.emit('branding_update', { hospitalId: hospital._id, branding: hospital.branding, hospitalName: hospital.name });
-        }
+        const mergedBranding = buildMergedHospitalBranding(hospital);
+        const authoritativeAcc = resolveAuthoritativeAccreditation(hospital);
+
+        // Tenant-scoped real-time live update notification via Socket.IO
+        emitTenantBrandingUpdate(req, hospital, mergedBranding);
 
         res.json({
             success: true,
@@ -747,7 +839,8 @@ router.put('/my-hospital/branding', verifyHospitalAdmin, async (req, res) => {
                 state: hospital.state,
                 website: hospital.website,
                 logo: hospital.logo,
-                branding: hospital.branding
+                accreditation: authoritativeAcc,
+                branding: mergedBranding
             }
         });
     } catch (err) {
@@ -1179,10 +1272,23 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const totalPatients = uniquePatientIds.length;
         const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
+        const callerRole = String(req.user._roleData?.name || req.user.role || '').toLowerCase();
+        const isCentralCaller = callerRole === 'centraladmin' || callerRole === 'superadmin';
+        const authoritativeAcc = resolveAuthoritativeAccreditation(hospital);
+        const accPayload = isCentralCaller
+            ? {
+                ...authoritativeAcc,
+                auditTrail: Array.isArray(hospital.accreditation?.auditTrail)
+                    ? [...hospital.accreditation.auditTrail].reverse()
+                    : []
+            }
+            : authoritativeAcc;
+
         res.json({
             success: true,
             hospital: {
                 ...hospital,
+                accreditation: accPayload,
                 adminName: hospital.adminUserId?.name || null,
                 adminEmail: hospital.adminUserId?.email || null
             },
@@ -1226,9 +1332,21 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
  */
 router.get('/:id/branding', async (req, res) => {
     try {
-        const hospital = await Hospital.findById(req.params.id, 'name branding logo slug city').lean();
+        const hospital = await Hospital.findById(
+            req.params.id,
+            'name branding brandingSchema logo slug city address phone email website accreditation'
+        ).lean();
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
-        res.json({ success: true, branding: hospital.branding || {}, hospitalName: hospital.name, logo: hospital.logo });
+        const mergedBranding = buildMergedHospitalBranding(hospital);
+        mergedBranding.hospitalId = hospital._id;
+        res.json({
+            success: true,
+            branding: mergedBranding,
+            hospitalName: mergedBranding.appName || hospital.name,
+            hospitalId: hospital._id,
+            logo: hospital.logo,
+            accreditation: mergedBranding.accreditation || { enabled: false }
+        });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
@@ -1236,10 +1354,17 @@ router.get('/:id/branding', async (req, res) => {
 
 /**
  * PUT /api/hospitals/:id/branding — Central Admin only
- * Save / update the white-label branding config for a hospital
+ * Save / update the white-label branding config for a hospital (NABH status excluded)
  */
 router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
     try {
+        if (req.body?.accreditation !== undefined || req.body?.branding?.accreditation !== undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'NABH accreditation cannot be changed via Branding Studio. Use /api/hospitals/:id/nabh instead.'
+            });
+        }
+
         const {
             appName, tagline, logoUrl, faviconUrl,
             primaryColor, secondaryColor, accentColor, successColor,
@@ -1252,8 +1377,9 @@ router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
         const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
-        // Merge branding fields (only update what is provided)
-        const branding = hospital.branding || {};
+        // Merge branding fields (only update what is provided; never overwrite accreditation)
+        const branding = hospital.branding?.toObject ? hospital.branding.toObject() : { ...(hospital.branding || {}) };
+        delete branding.accreditation;
         if (appName !== undefined) branding.appName = appName;
         if (tagline !== undefined) branding.tagline = tagline;
         if (logoUrl !== undefined) branding.logoUrl = logoUrl;
@@ -1276,18 +1402,178 @@ router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
         hospital.branding = branding;
         hospital.markModified('branding');
         await hospital.save();
+        clearPublicBrandingCache();
 
-        // Emit socket event for real-time UI updates
-        const io = req.app.get('io');
-        if (io) {
-            io.emit('branding_update', { hospitalId: hospital._id, branding: hospital.branding });
-        }
+        const mergedBranding = buildMergedHospitalBranding(hospital);
+        const authoritativeAcc = resolveAuthoritativeAccreditation(hospital);
 
-        res.json({ success: true, message: 'Branding updated successfully', branding: hospital.branding });
+        // Tenant-scoped socket event for real-time UI updates
+        emitTenantBrandingUpdate(req, hospital, mergedBranding);
+
+        res.json({
+            success: true,
+            message: 'Branding updated successfully',
+            branding: mergedBranding,
+            accreditation: authoritativeAcc
+        });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
+
+// ==========================================
+// CENTRAL ADMIN: NABH ACCREDITATION CONTROL
+// Exclusive to Central Admin / Super Admin with persistent audit trail
+// ==========================================
+
+/**
+ * GET /api/hospitals/:id/nabh — Central Admin only
+ * View a specific hospital's NABH accreditation status, certificate number, and audit trail
+ */
+router.get('/:id/nabh', verifyCentralAdmin, async (req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid hospital ID' });
+        }
+
+        const hospital = await Hospital.findById(req.params.id, 'name slug accreditation').lean();
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital not found' });
+        }
+
+        const nabh = resolveAuthoritativeAccreditation(hospital);
+        const rawTrail = Array.isArray(hospital.accreditation?.auditTrail) ? hospital.accreditation.auditTrail : [];
+
+        res.json({
+            success: true,
+            hospitalId: hospital._id,
+            hospitalName: hospital.name,
+            nabh: {
+                ...nabh,
+                auditTrail: [...rawTrail].reverse()
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching hospital NABH status:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+/**
+ * PUT/PATCH /api/hospitals/:id/nabh — Central Admin only
+ * Activate, deactivate, or update verified NABH certificate number for a hospital
+ */
+const updateHospitalNabhStatus = async (req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid hospital ID' });
+        }
+
+        const { enabled, certNo } = req.body || {};
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({ success: false, message: 'enabled must be explicitly provided as a boolean (true or false)' });
+        }
+        if (req.body?.logoUrl !== undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Custom per-hospital NABH PNG upload/URL is disallowed. Activated hospitals use the shared Medical365 NABH logo asset.'
+            });
+        }
+
+        const hospital = await Hospital.findById(req.params.id);
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital not found' });
+        }
+
+        const prevAcc = hospital.accreditation?.toObject ? hospital.accreditation.toObject() : (hospital.accreditation || {});
+        const prevEnabled = prevAcc.enabled === true;
+        const cleanCertNo = certNo !== undefined
+            ? String(certNo).trim()
+            : (prevAcc.certNo ? String(prevAcc.certNo).trim() : '');
+
+        const adminId = req.user._id || req.user.userId;
+        const adminName = req.user.name || req.user.email || 'Central Admin';
+        const adminEmail = req.user.email || '';
+        const now = new Date();
+        const clientIp = req.ip || req.headers['x-forwarded-for'] || '';
+
+        let trailAction = 'CERT_UPDATED';
+        let auditEnumAction = 'NABH_ACCREDITATION_UPDATED';
+        if (!prevEnabled && enabled) {
+            trailAction = 'ACTIVATED';
+            auditEnumAction = 'NABH_ACCREDITATION_ACTIVATED';
+        } else if (prevEnabled && !enabled) {
+            trailAction = 'DEACTIVATED';
+            auditEnumAction = 'NABH_ACCREDITATION_DEACTIVATED';
+        }
+
+        const existingTrail = Array.isArray(prevAcc.auditTrail) ? prevAcc.auditTrail : [];
+        const newEntry = {
+            action: trailAction,
+            enabled,
+            certNo: enabled ? cleanCertNo : '',
+            adminId,
+            adminName,
+            adminEmail,
+            timestamp: now,
+            ip: String(clientIp)
+        };
+
+        hospital.accreditation = {
+            enabled,
+            certNo: cleanCertNo,
+            updatedBy: adminId,
+            updatedByName: adminName,
+            updatedAt: now,
+            auditTrail: [...existingTrail, newEntry].slice(-100)
+        };
+        hospital.markModified('accreditation');
+        await hospital.save();
+
+        // Persist immutable compliance entry in AuditLog as well
+        try {
+            await AuditLog.create({
+                clinicId: hospital._id,
+                userId: adminId,
+                userName: adminName,
+                role: req.user._roleData?.name || req.user.role || 'centraladmin',
+                action: auditEnumAction,
+                targetModel: 'Hospital',
+                targetId: hospital._id,
+                targetLabel: `${hospital.name} (NABH ${enabled ? 'Enabled' : 'Disabled'}${enabled && cleanCertNo ? ` — ${cleanCertNo}` : ''})`,
+                ip: String(clientIp),
+                userAgent: req.headers['user-agent'] || '',
+                success: true
+            });
+        } catch (auditErr) {
+            console.warn('Warning: Could not write NABH AuditLog record:', auditErr.message);
+        }
+
+        clearPublicBrandingCache();
+        const mergedBranding = buildMergedHospitalBranding(hospital);
+        const authoritativeAcc = resolveAuthoritativeAccreditation(hospital);
+
+        // Emit tenant-scoped update so ONLY this hospital updates live
+        emitTenantBrandingUpdate(req, hospital, mergedBranding);
+
+        res.json({
+            success: true,
+            message: `NABH accreditation ${enabled ? 'activated' : 'deactivated'} for ${hospital.name}`,
+            hospitalId: hospital._id,
+            hospitalName: hospital.name,
+            nabh: {
+                ...authoritativeAcc,
+                auditTrail: [...(hospital.accreditation.auditTrail || [])].reverse()
+            }
+        });
+    } catch (err) {
+        console.error('Error updating hospital NABH status:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+};
+
+router.put('/:id/nabh', verifyCentralAdmin, updateHospitalNabhStatus);
+router.patch('/:id/nabh', verifyCentralAdmin, updateHospitalNabhStatus);
 
 // ==========================================
 // DEPARTMENT-WISE UPI ACCOUNT MANAGEMENT
@@ -1547,4 +1833,6 @@ router.get('/my-hospital/staff-for-upi', verifyHospitalAdmin, async (req, res) =
 module.exports = router;
 module.exports.verifyCentralAdmin = verifyCentralAdmin;
 module.exports.verifyHospitalAdmin = verifyHospitalAdmin;
+module.exports.resolveAuthoritativeAccreditation = resolveAuthoritativeAccreditation;
+module.exports.COMMON_NABH_LOGO_PATH = COMMON_NABH_LOGO_PATH;
 

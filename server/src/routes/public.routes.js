@@ -3,6 +3,36 @@ const router = express.Router();
 const Service = require('../models/service.model');
 const Doctor = require('../models/doctor.model');
 
+// ── Bounded In-Memory Cache for Public Configuration & Branding ───────────────
+const publicConfigCache = new Map();
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL
+const CONFIG_CACHE_MAX_ENTRIES = 200;
+
+function getCachedConfig(key) {
+    const item = publicConfigCache.get(key);
+    if (item && item.expiresAt > Date.now()) {
+        return item.data;
+    }
+    if (item) publicConfigCache.delete(key);
+    return null;
+}
+
+function setCachedConfig(key, data) {
+    if (publicConfigCache.size >= CONFIG_CACHE_MAX_ENTRIES) {
+        const oldest = publicConfigCache.keys().next().value;
+        publicConfigCache.delete(oldest);
+    }
+    publicConfigCache.set(key, { data, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS });
+}
+
+function clearBrandingCache() {
+    for (const key of publicConfigCache.keys()) {
+        if (key.startsWith('branding_') || key.startsWith('tc_')) {
+            publicConfigCache.delete(key);
+        }
+    }
+}
+
 // Get all active services (public route)
 router.get('/services', async (req, res) => {
   try {
@@ -33,6 +63,13 @@ router.get('/tenant-config', async (req, res) => {
         const { domain, slug } = req.query;
         if (!domain && !slug) {
             return res.status(400).json({ success: false, message: 'Must provide domain or slug' });
+        }
+
+        const cacheKey = `tc_${domain || ''}_${slug || ''}`.toLowerCase();
+        const cached = getCachedConfig(cacheKey);
+        if (cached) {
+            res.set('Cache-Control', 'public, max-age=600');
+            return res.json(cached);
         }
 
         const Hospital = require('../models/hospital.model');
@@ -91,9 +128,7 @@ router.get('/tenant-config', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Tenant not found' });
         }
 
-        // Add short cache
-        res.set('Cache-Control', 'public, max-age=600');
-        res.json({
+        const payload = {
             success: true,
             tenant: {
                 id: hospital._id,
@@ -103,7 +138,11 @@ router.get('/tenant-config', async (req, res) => {
                 branding: hospital.branding || {},
                 subscriptionPlan: hospital.subscriptionPlan || 'none'
             }
-        });
+        };
+
+        setCachedConfig(cacheKey, payload);
+        res.set('Cache-Control', 'public, max-age=600');
+        res.json(payload);
     } catch (err) {
         console.error('Get tenant-config error:', err);
         res.status(500).json({ success: false, message: 'Internal Server Error' });
@@ -221,6 +260,13 @@ router.get('/branding', async (req, res) => {
             return res.status(400).json({ error: 'Please provide a domain, slug, tenantId, or packageId' });
         }
 
+        const cacheKey = `branding_${domain || ''}_${slug || ''}_${tenantId || ''}_${packageId || ''}`.toLowerCase();
+        const cached = getCachedConfig(cacheKey);
+        if (cached) {
+            res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+            return res.json(cached);
+        }
+
         const Hospital = require('../models/hospital.model');
         let query = {};
         
@@ -300,15 +346,26 @@ router.get('/branding', async (req, res) => {
         brandingData.slug = brandingData.slug || hospital.slug || '';
         brandingData.hospitalId = hospital._id;
         brandingData.packageId = hospital.appConfig?.androidPackageId || '';
+        const nabhEnabled = hospital.accreditation?.enabled === true;
+        brandingData.accreditation = {
+            enabled: nabhEnabled,
+            certNo: nabhEnabled && hospital.accreditation?.certNo ? String(hospital.accreditation.certNo).trim() : '',
+            logoUrl: nabhEnabled ? '/assets/nabh-logo.png' : ''
+        };
+        if (!brandingData.address && hospital.address) brandingData.address = hospital.address;
+        if (!brandingData.supportPhone && hospital.phone) brandingData.supportPhone = hospital.phone;
 
-        res.json({ 
+        const payload = { 
             success: true,
             hospitalName: brandingData.appName || hospital.name,
             hospitalId: hospital._id,
             slug: hospital.slug,
             packageId: hospital.appConfig?.androidPackageId || '',
+            accreditation: brandingData.accreditation,
             branding: brandingData 
-        });
+        };
+        setCachedConfig(cacheKey, payload);
+        res.json(payload);
     } catch (error) {
         res.status(500).json({ error: 'Server error fetching branding details' });
     }
@@ -393,5 +450,6 @@ const { signupLimiter } = require('../middleware/rateLimiter');
 router.post('/free-opd-signup', signupLimiter, freeOpdSignupController.signup);
 router.post('/free-opd-signup/resend-email', signupLimiter, freeOpdSignupController.resendWelcomeEmail);
 
+router.clearBrandingCache = clearBrandingCache;
 module.exports = router;
 

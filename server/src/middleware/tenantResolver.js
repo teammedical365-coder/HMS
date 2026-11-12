@@ -3,6 +3,15 @@ const Hospital = require('../models/hospital.model');
 // Simple TTL Cache for tenant domain resolution to prevent DB bottleneck
 const tenantCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
+const TENANT_CACHE_MAX_SIZE = 500;
+
+function setTenantCache(key, val) {
+    if (tenantCache.size >= TENANT_CACHE_MAX_SIZE) {
+        const oldestKey = tenantCache.keys().next().value;
+        tenantCache.delete(oldestKey);
+    }
+    tenantCache.set(key, val);
+}
 
 // Reserved base domains that should never be queried as custom domains
 const ADMIN_HOST = (process.env.ADMIN_HOST || 'admin.medical365.in').toLowerCase();
@@ -70,7 +79,7 @@ const tenantResolver = async (req, res, next) => {
             }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
 
             // Cache the result (even null, to prevent repeated DB queries for invalid slugs)
-            tenantCache.set(hostname, {
+            setTenantCache(hostname, {
                 tenant: hospital || null,
                 timestamp: now
             });
@@ -98,7 +107,7 @@ const tenantResolver = async (req, res, next) => {
         }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
 
         // 5. Update Cache
-        tenantCache.set(hostname, {
+        setTenantCache(hostname, {
             tenant: hospital || null,
             timestamp: now
         });

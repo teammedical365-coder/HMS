@@ -1,0 +1,330 @@
+.tpr-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.tpr-modal-container {
+    background: #ffffff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 960px;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    animation: tprFadeIn 0.2s ease-out;
+}
+
+@keyframes tprFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.tpr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.tpr-modal-header h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tpr-loading-tag {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.tpr-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tpr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.tpr-btn-download {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.tpr-btn-download:hover {
+    background: #0f766e;
+}
+
+.tpr-btn-print-action {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.tpr-btn-print-action:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.tpr-btn-close {
+    background: transparent;
+    color: #64748b;
+    padding: 6px;
+    font-size: 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tpr-btn-close:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* Modal Body: Scrollable Sheet Preview */
+.tpr-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    background: #64748b;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* Exact Reference A4 Paper Sheet */
+.tpr-sheet-paper {
+    background: #ffffff;
+    width: 100%;
+    max-width: 800px;
+    padding: 28px 36px 32px 36px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    font-family: 'Times New Roman', Times, serif;
+    color: #000000;
+    box-sizing: border-box;
+}
+
+/* 1. Top Patient Demographics Line (exact VITAL CHART.pdf deep blue serif regular) */
+.tpr-sheet-patient-line {
+    font-size: 13.5px;
+    font-weight: normal;
+    color: #0f2e7a;
+    margin-bottom: 14px;
+    line-height: 1.35;
+    padding-left: 4px;
+}
+
+.tpr-sheet-patient-line .tpr-sep {
+    display: inline-block;
+    width: 12px;
+}
+
+/* 2. Letterhead: Left Accreditation & Right Hospital Branding */
+.tpr-sheet-letterhead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    min-height: 70px;
+    padding: 0 4px;
+}
+
+.tpr-sheet-accreditation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.tpr-sheet-accred-img {
+    height: 54px;
+    width: auto;
+    object-fit: contain;
+}
+
+.tpr-sheet-cert-no {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8.5px;
+    font-weight: bold;
+    color: #b91c1c;
+    margin-top: 2px;
+    letter-spacing: 0.2px;
+}
+
+.tpr-sheet-hosp-branding {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: right;
+    margin-left: auto;
+}
+
+.tpr-sheet-hosp-logo {
+    height: 52px;
+    width: auto;
+    max-width: 96px;
+    object-fit: contain;
+}
+
+.tpr-sheet-hosp-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.tpr-sheet-hosp-name {
+    font-size: 27px;
+    font-weight: bold;
+    color: #0f172a;
+    line-height: 1.05;
+    letter-spacing: 0.2px;
+}
+
+.tpr-sheet-hosp-tagline {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+    text-align: center;
+}
+
+.tpr-sheet-hosp-contact {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 9px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* 3. Chart Heading directly above table top horizontal line */
+.tpr-sheet-title {
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11.5px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin: 8px 0 3px 0;
+    color: #111827;
+}
+
+/* 4. Exact 10-Column Vertical Grid Table (no outer left/right border, no inner row lines) */
+.tpr-sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: none;
+    table-layout: fixed;
+}
+
+.tpr-sheet-table th {
+    border-top: 1px solid #262626;
+    border-bottom: 1px solid #262626;
+    border-left: none;
+    border-right: 1px solid #262626;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    text-align: center;
+    padding: 5px 2px;
+    background: #ffffff;
+    color: #111827;
+}
+
+.tpr-sheet-table th:last-child {
+    border-right: none;
+}
+
+.tpr-sheet-table td {
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    border-right: 1px solid #262626;
+    font-size: 11px;
+    padding: 4px 3px;
+    vertical-align: top;
+    word-wrap: break-word;
+}
+
+.tpr-sheet-table td:last-child {
+    border-right: none;
+}
+
+.tpr-sheet-table tbody tr.tpr-data-row td {
+    height: 25px;
+}
+
+.tpr-sheet-table tbody tr:last-child td {
+    border-bottom: 1px solid #262626;
+}
+
+.tpr-col-center {
+    text-align: center;
+}
+
+.tpr-col-left {
+    text-align: left;
+    padding-left: 5px !important;
+}
+
+/* Exact Column Width Proportions matching VITAL CHART.pdf */
+.tpr-w-date   { width: 10.0%; }
+.tpr-w-time   { width: 8.8%;  }
+.tpr-w-bp     { width: 8.7%;  }
+.tpr-w-temp   { width: 8.8%;  }
+.tpr-w-pulse  { width: 8.7%;  }
+.tpr-w-rr     { width: 8.7%;  }
+.tpr-w-input  { width: 8.7%;  }
+.tpr-w-output { width: 8.8%;  }
+.tpr-w-remark { width: 11.3%; }
+.tpr-w-emp    { width: 17.5%; }
+
+@media (max-width: 768px) {
+    .tpr-modal-container {
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    .tpr-modal-body {
+        padding: 8px;
+    }
+    .tpr-sheet-paper {
+        padding: 16px 12px;
+    }
+    .tpr-sheet-table th, .tpr-sheet-table td {
+        font-size: 9.5px;
+        padding: 3px 1px;
+    }
+}

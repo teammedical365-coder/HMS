@@ -923,9 +923,21 @@ router.get('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requir
             .sort({ recordedAt: -1 })
             .lean();
 
-        for (let v of vitalsList) {
-            if (v.recordedBy) {
-                v.recordedBy = await User.findById(v.recordedBy).select('name').lean() || v.recordedBy;
+        const recorderIds = [...new Set(
+            vitalsList
+                .map(v => v.recordedBy)
+                .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+                .map(String)
+        )];
+        if (recorderIds.length > 0) {
+            const recorders = await User.find({ _id: { $in: recorderIds } })
+                .select('name employeeId patientId uhid role')
+                .lean();
+            const recorderMap = new Map(recorders.map(u => [String(u._id), u]));
+            for (const v of vitalsList) {
+                if (v.recordedBy && recorderMap.has(String(v.recordedBy))) {
+                    v.recordedBy = recorderMap.get(String(v.recordedBy));
+                }
             }
         }
 
@@ -958,8 +970,10 @@ router.get('/admissions/:admissionId/vitals/latest', verifyToken, resolveTenant,
             .sort({ recordedAt: -1 })
             .lean();
 
-        if (latest && latest.recordedBy) {
-            latest.recordedBy = await User.findById(latest.recordedBy).select('name').lean() || latest.recordedBy;
+        if (latest && latest.recordedBy && mongoose.Types.ObjectId.isValid(latest.recordedBy)) {
+            latest.recordedBy = await User.findById(latest.recordedBy)
+                .select('name employeeId patientId uhid role')
+                .lean() || latest.recordedBy;
         }
 
         res.json({ success: true, vitals: latest || null });

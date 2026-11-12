@@ -104,9 +104,9 @@ export const initModalScrollLock = () => {
   const handleWheel = (e) => {
     if (!isLocked) return;
 
-    // Check if target is inside an inner scrollable element (e.g. dropdown, textarea, table, modal body)
+    // Check if target is inside an inner scrollable element (e.g. dropdown, textarea, table, modal body, fullscreen profile)
     const innerScrollable = e.target.closest(
-      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
+      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-fullscreen-page-body, .pm-fullscreen-page, .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
     );
     if (innerScrollable) {
       // Allow inner scrollable elements to scroll freely with mouse wheel
@@ -115,7 +115,7 @@ export const initModalScrollLock = () => {
 
     // Check if target is inside a scrollable modal container
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
+      '.pm-fullscreen-page-body, .pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
     );
 
     // If mouse is directly on the blurred backdrop or non-scrollable area outside modal, stop scroll completely
@@ -124,8 +124,13 @@ export const initModalScrollLock = () => {
       return;
     }
 
+    // If modal has an inner scroll body (e.g. pm-fullscreen-page containing pm-fullscreen-page-body), use it
+    const activeScrollEl = scrollableModal.classList.contains('pm-fullscreen-page')
+      ? scrollableModal.querySelector('.pm-fullscreen-page-body, [data-scrollable="true"]') || scrollableModal
+      : scrollableModal;
+
     // Inside scrollable modal: prevent scroll chaining when reaching boundaries
-    const { scrollTop, scrollHeight, clientHeight } = scrollableModal;
+    const { scrollTop, scrollHeight, clientHeight } = activeScrollEl;
     const isScrollingUp = e.deltaY < 0;
     const isScrollingDown = e.deltaY > 0;
 
@@ -138,8 +143,10 @@ export const initModalScrollLock = () => {
         e.preventDefault();
       }
     } else {
-      // Content doesn't need scrolling, lock wheel
-      e.preventDefault();
+      // Content doesn't need scrolling, lock wheel only if strictly an overlay
+      if (!scrollableModal.classList.contains('pm-fullscreen-page')) {
+        e.preventDefault();
+      }
     }
   };
 
@@ -147,12 +154,12 @@ export const initModalScrollLock = () => {
   const handleTouchMove = (e) => {
     if (!isLocked) return;
     const innerScrollable = e.target.closest(
-      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
+      '.custom-select-dropdown, .custom-select-container, select, textarea, [data-scrollable="true"], [data-lenis-prevent], .pm-fullscreen-page-body, .pm-fullscreen-page, .pm-modal-body, .opd-modal-body, [class*="modal-body"], [class*="modal-content"], [class*="modal-scroll"]'
     );
     if (innerScrollable) return;
 
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
+      '.pm-fullscreen-page-body, .pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"], [data-scrollable="true"], [class*="modal-card"], [class*="modal-body"], .pm-modal-card, .pm-modal-body'
     );
     if (!scrollableModal) {
       e.preventDefault();

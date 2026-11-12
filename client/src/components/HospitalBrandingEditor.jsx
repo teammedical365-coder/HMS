@@ -59,7 +59,7 @@ const HospitalBrandingEditor = ({ hospital, onClose }) => {
         successColor: '#10b981', backgroundColor: '#f8fafc', textColor: '#1e293b',
         supportEmail: '', supportPhone: '', address: '',
         websiteUrl: '', instagramUrl: '', facebookUrl: '', twitterUrl: '',
-        footerText: '',
+        footerText: ''
     });
 
     // Load existing branding on mount
@@ -69,7 +69,11 @@ const HospitalBrandingEditor = ({ hospital, onClose }) => {
             try {
                 const res = await hospitalAPI.getBranding(hospital._id);
                 if (res.success && res.branding) {
-                    setForm(prev => ({ ...prev, ...res.branding }));
+                    const { accreditation: _ignoredAcc, ...brandingWithoutAcc } = res.branding;
+                    setForm(prev => ({
+                        ...prev,
+                        ...brandingWithoutAcc
+                    }));
                 }
             } catch (e) { /* branding may not exist yet */ }
             finally { setLoading(false); }
@@ -84,7 +88,8 @@ const HospitalBrandingEditor = ({ hospital, onClose }) => {
     const handleSave = async () => {
         setSaving(true); setError(''); setSuccess('');
         try {
-            const res = await hospitalAPI.updateBranding(hospital._id, form);
+            const { accreditation: _ignoredAcc, ...cleanPayload } = form;
+            const res = await hospitalAPI.updateBranding(hospital._id, cleanPayload);
             if (res.success) {
                 setSuccess('✅ Branding saved successfully!');
                 // Optionally apply the preview
@@ -102,7 +107,8 @@ const HospitalBrandingEditor = ({ hospital, onClose }) => {
         // Save then apply to current browser session
         setSaving(true);
         try {
-            const res = await hospitalAPI.updateBranding(hospital._id, form);
+            const { accreditation: _ignoredAcc, ...cleanPayload } = form;
+            const res = await hospitalAPI.updateBranding(hospital._id, cleanPayload);
             if (res.success) {
                 await loadBranding(hospital._id);
                 setPreviewing(true);
@@ -122,7 +128,7 @@ const HospitalBrandingEditor = ({ hospital, onClose }) => {
             supportEmail: hospital.email || '', supportPhone: hospital.phone || '',
             address: hospital.address || '', websiteUrl: hospital.website || '',
             instagramUrl: '', facebookUrl: '', twitterUrl: '',
-            footerText: `© ${new Date().getFullYear()} ${hospital.name}. All rights reserved.`,
+            footerText: `© ${new Date().getFullYear()} ${hospital.name}. All rights reserved.`
         });
     };
 

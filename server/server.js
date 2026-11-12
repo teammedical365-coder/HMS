@@ -18,6 +18,8 @@ const connectDB = require('./src/db/db');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('./src/config/jwt');
 
 const PORT = process.env.PORT || 3000;
 const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
@@ -28,8 +30,11 @@ connectDB();
 // 4. HTTP Server and Socket.io Setup
 const server = http.createServer(app);
 
+// Keep-alive timeouts optimized for Render reverse proxy (must exceed 60s)
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
 
-// Socket.io CORS logic
+// Socket.io CORS logic with strict origin verification
 const isAllowedOriginSocket = (origin) => {
     if (!origin) return true; 
     const clean = String(origin).trim().toLowerCase().replace(/\/+$/, '');
@@ -38,14 +43,14 @@ const isAllowedOriginSocket = (origin) => {
     if (clean.endsWith('.vercel.app') || clean.endsWith('.onrender.com') || clean.endsWith('.netlify.app')) return true;
     if (clean.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
     if (clean.startsWith('capacitor://') || clean.startsWith('http://capacitor') || clean.startsWith('ionic://')) return true;
-    return true; // Safe fallback for socket connection
+    return process.env.NODE_ENV !== 'production'; // Only fallback to true in development
 };
 
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
             if (isAllowedOriginSocket(origin)) return callback(null, true);
-            callback(null, true);
+            callback(new Error('CORS not allowed for Socket.IO origin'));
         },
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         credentials: true
@@ -58,27 +63,66 @@ const io = new Server(server, {
 
 app.set('io', io);
 
-io.on('connection', (socket) => {
-    console.log('New client connected', socket.id);
+// Socket.IO JWT Authentication Middleware
+io.use((socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token) {
+        // Allow unauthenticated connection for guest / public announcements if needed
+        return next();
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        socket.user = decoded;
+        next();
+    } catch (err) {
+        console.warn(`[Socket.io Auth Warning]: Rejected invalid token from ${socket.id}:`, err.message);
+        next(new Error('Authentication failed: Invalid token'));
+    }
+});
 
-    // Clients can join a room based on their user ID or role to receive targeted events
+io.on('connection', (socket) => {
+    // Automatically join server-derived authenticated rooms (prevents cross-tenant leaks)
+    if (socket.user) {
+        const uId = socket.user.userId || socket.user.id;
+        if (uId) {
+            socket.join(`user_${uId}`);
+        }
+        if (socket.user.hospitalId) {
+            socket.join(`hospital_${socket.user.hospitalId}`);
+        }
+    }
+
+    // Secure room joining: verify ownership or administrative permissions
     socket.on('join', (room) => {
-        socket.join(room);
-        console.log(`Socket ${socket.id} joined room ${room}`);
+        if (!room || typeof room !== 'string') return;
+        const uId = socket.user?.userId || socket.user?.id;
+        const isOwnRoom = uId && (room === `user_${uId}` || room === String(uId));
+        const isAdmin = socket.user?.role === 'superadmin' || socket.user?.role === 'centraladmin';
+        if (isOwnRoom || isAdmin) {
+            socket.join(room);
+        } else {
+            console.warn(`[Socket.io Security]: Unauthorized join attempt for room '${room}' by ${socket.id}`);
+        }
     });
 
-    // Hospital-scoped room for real-time AI Wallet updates
-    // All doctors from the same hospital join `hospital_${hospitalId}`
+    // Secure hospital room joining: strictly verify hospitalId matches user's authorized hospital
     socket.on('joinHospitalRoom', (hospitalId) => {
-        if (hospitalId) {
+        if (!hospitalId) return;
+        const isAuthorized = socket.user && (
+            String(socket.user.hospitalId) === String(hospitalId) ||
+            socket.user.role === 'superadmin' ||
+            socket.user.role === 'centraladmin'
+        );
+        if (isAuthorized) {
             const room = `hospital_${hospitalId}`;
             socket.join(room);
-            console.log(`Socket ${socket.id} joined hospital room ${room}`);
+        } else {
+            console.warn(`[Socket.io Security]: Blocked unauthorized hospital room join '${hospitalId}' by ${socket.id}`);
         }
     });
 
     socket.on('disconnect', () => {
-        console.log('Client disconnected', socket.id);
+        // Clean disconnect
     });
 });
 
@@ -122,4 +166,39 @@ server.listen(PORT, '0.0.0.0', () => {
         }
     }, 3000);
 });
+
+// 5. Graceful Process Termination (Handles SIGTERM/SIGINT from Render & Docker)
+const gracefulShutdown = async (signal) => {
+    console.log(`\n🛑 [${signal}] Graceful shutdown requested. Draining connections...`);
+    server.close(async () => {
+        console.log('✅ [HTTP Server] All incoming connections closed.');
+        try {
+            const { closeAllTenantConnections } = require('./src/db/tenantDb');
+            await closeAllTenantConnections();
+            console.log('✅ [Tenant DBs] All tenant connection pools closed.');
+        } catch (tErr) {
+            console.warn('⚠️ [Tenant DB Close Warning]:', tErr.message);
+        }
+
+        try {
+            const mongoose = require('mongoose');
+            if (mongoose.connection.readyState === 1) {
+                await mongoose.connection.close(false);
+                console.log('✅ [MongoDB Master] Connection closed cleanly.');
+            }
+        } catch (dbErr) {
+            console.error('⚠️ [MongoDB Close Error]:', dbErr.message);
+        }
+        process.exit(0);
+    });
+
+    // Force termination if connections don't drain within 10 seconds
+    setTimeout(() => {
+        console.error('⚠️ [Shutdown Timeout] Forcing process termination.');
+        process.exit(1);
+    }, 10000).unref();
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Trigger Restart

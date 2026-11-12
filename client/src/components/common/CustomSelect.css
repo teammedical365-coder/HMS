@@ -31,6 +31,20 @@
     border-color: #94a3b8;
 }
 
+/* Compact variant for forms, trays and grids */
+.custom-select-compact .custom-select-trigger {
+    min-height: 33px;
+    padding: 5px 8px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+.custom-select-compact .custom-select-option {
+    padding: 7px 10px;
+    font-size: 12px;
+    min-height: 34px;
+}
+
 .custom-select-trigger.open,
 .custom-select-trigger:focus-visible {
     outline: none;

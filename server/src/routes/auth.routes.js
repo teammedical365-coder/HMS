@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
 const { loginLimiter, signupLimiter } = require('../middleware/rateLimiter');
 const validatePassword = require('../utils/validatePassword');
-const { verifyToken } = require('../middleware/auth.middleware');
+const { verifyToken, invalidateAuthCache } = require('../middleware/auth.middleware');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
 const auditLog = require('../middleware/audit.middleware');
 const { v4: uuidv4 } = require('uuid');
@@ -266,6 +266,12 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
 
+    // Validate password FIRST to fail-fast on bad attempts without hitting Role DB queries
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
     // Dynamic validation: user must have a valid role assigned
     if (!user.role) {
       return res.status(403).json({ success: false, message: 'No role assigned. Contact admin.' });
@@ -283,19 +289,19 @@ router.post('/login', loginLimiter, async (req, res) => {
       };
     } else {
       if (mongoose.Types.ObjectId.isValid(user.role)) {
-        roleData = await Role.findById(user.role);
+        roleData = await Role.findById(user.role).lean();
       }
       // Fallback: legacy string like 'admin', 'doctor' — look up by name
       if (!roleData) {
         roleData = await Role.findOne({
           hospitalId: user.hospitalId || null,
           name: { $regex: new RegExp(`^${user.role}$`, 'i') }
-        });
+        }).lean();
         if (!roleData && user.hospitalId) {
           roleData = await Role.findOne({
             hospitalId: null,
             name: { $regex: new RegExp(`^${user.role}$`, 'i') }
-          });
+          }).lean();
         }
         // Auto-migrate to ObjectId
         if (roleData) {
@@ -309,11 +315,6 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     if (roleData.name && ['superadmin', 'centraladmin'].includes(roleData.name.toLowerCase())) {
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
-    }
-
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
@@ -339,9 +340,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     // If MFA is enabled, issue a short-lived pre-auth token instead of a full session token.
-    // The client must POST this + a TOTP code to /api/mfa/complete-login to get a real token.
-    const mfaUser = await require('../models/user.model').findById(user._id).select('mfaEnabled');
-    if (mfaUser?.mfaEnabled) {
+    // Check mfaEnabled directly from the already-fetched user document (eliminates redundant DB query)
+    if (user.mfaEnabled) {
       const preAuthToken = jwt.sign(
         { mfa_pending: true, userId: String(user._id) },
         JWT_SECRET,
@@ -457,6 +457,9 @@ router.post('/logout', verifyToken, auditLog('STAFF_LOGOUT'), async (req, res) =
                 { isActive: false, logoutTime: new Date() }
             );
         }
+
+        // Invalidate in-memory auth cache immediately
+        invalidateAuthCache({ userId: decoded?.userId, jti: decoded?.jti, token });
 
         res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
