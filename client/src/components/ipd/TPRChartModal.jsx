@@ -33,8 +33,13 @@ const TPRChartModal = ({
     const [intakeOutputList, setIntakeOutputList] = useState(initialIntakeOutput || []);
     const [tenantHospital, setTenantHospital] = useState(null);
     const [downloading, setDownloading] = useState(false);
+    const [hospLogoFailed, setHospLogoFailed] = useState(false);
 
     const effectiveAdmissionId = admissionId || initialAdmission?._id || null;
+
+    useEffect(() => {
+        setHospLogoFailed(false);
+    }, [isOpen, tenantHospital]);
 
     useEffect(() => {
         setAdmission(initialAdmission || null);
@@ -236,23 +241,18 @@ const TPRChartModal = ({
                             </div>
 
                             <div className="tpr-sheet-hosp-branding">
-                                {hospitalObj.logoUrl && (
+                                {hospitalObj.logoUrl && !hospLogoFailed ? (
                                     <img
                                         className="tpr-sheet-hosp-logo"
                                         src={hospitalObj.logoUrl}
                                         alt={hospitalObj.name}
-                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                        onError={() => setHospLogoFailed(true)}
                                     />
+                                ) : (
+                                    <div className="tpr-sheet-hosp-text">
+                                        <div className="tpr-sheet-hosp-name">{hospitalObj.name}</div>
+                                    </div>
                                 )}
-                                <div className="tpr-sheet-hosp-text">
-                                    <div className="tpr-sheet-hosp-name">{hospitalObj.name}</div>
-                                    {hospitalObj.tagline && (
-                                        <div className="tpr-sheet-hosp-tagline">{hospitalObj.tagline}</div>
-                                    )}
-                                    {hospitalObj.contactLine && (
-                                        <div className="tpr-sheet-hosp-contact">{hospitalObj.contactLine}</div>
-                                    )}
-                                </div>
                             </div>
                         </div>
 

@@ -168,57 +168,52 @@ const NabhAccreditationModal = ({ hospital, onClose, onUpdated }) => {
                     </div>
                 ) : (
                     <form onSubmit={handleSave}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                            <button
-                                type="button"
-                                onClick={() => setEnabled(true)}
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                padding: '14px 16px',
+                                borderRadius: '10px',
+                                border: `2px solid ${enabled ? '#16a34a' : '#cbd5e1'}`,
+                                background: enabled ? '#f0fdf4' : '#f8fafc',
+                                marginBottom: '14px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={enabled}
+                                onChange={(e) => setEnabled(e.target.checked)}
                                 style={{
-                                    padding: '12px 14px',
-                                    borderRadius: '10px',
-                                    border: `2px solid ${enabled ? '#16a34a' : '#e2e8f0'}`,
-                                    background: enabled ? '#f0fdf4' : '#ffffff',
-                                    textAlign: 'left',
+                                    width: '18px',
+                                    height: '18px',
+                                    marginTop: '2px',
+                                    accentColor: '#16a34a',
                                     cursor: 'pointer'
                                 }}
-                            >
-                                <div style={{ fontWeight: 700, fontSize: '13.5px', color: enabled ? '#15803d' : '#1e293b' }}>
-                                    ✓ Activate NABH
+                            />
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '14px', color: enabled ? '#15803d' : '#1e293b' }}>
+                                    {enabled ? 'NABH Accreditation Active (Checked)' : 'Activate NABH Accreditation for this Hospital'}
                                 </div>
-                                <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '3px' }}>
-                                    Show shared NABH logo on this hospital&apos;s TPR Charts
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
+                                    {enabled
+                                        ? 'The shared Medical365 NABH seal and configured certificate number appear on this hospital\'s TPR Chart and In-Patient Clinical Notes letterheads.'
+                                        : 'Unchecked: Neither NABH logo nor certificate number will appear on this hospital\'s IPD documents.'}
                                 </div>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setEnabled(false)}
-                                style={{
-                                    padding: '12px 14px',
-                                    borderRadius: '10px',
-                                    border: `2px solid ${!enabled ? '#dc2626' : '#e2e8f0'}`,
-                                    background: !enabled ? '#fef2f2' : '#ffffff',
-                                    textAlign: 'left',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <div style={{ fontWeight: 700, fontSize: '13.5px', color: !enabled ? '#b91c1c' : '#1e293b' }}>
-                                    ✕ Deactivate NABH
-                                </div>
-                                <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '3px' }}>
-                                    Hide NABH logo and certificate number on TPR Charts
-                                </div>
-                            </button>
-                        </div>
+                            </div>
+                        </label>
 
                         <div style={{ marginBottom: '14px' }}>
                             <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                                Verified Certificate Number (Optional)
+                                NABH Certificate Number (Manual Entry)
                             </label>
                             <input
                                 type="text"
                                 value={certNo}
                                 onChange={(e) => setCertNo(e.target.value)}
-                                placeholder="e.g. Cert. No. : H-2026-001"
+                                placeholder="e.g. Cert. No. : H-2026-001 or H-2014-0251"
                                 maxLength={80}
                                 style={{
                                     width: '100%',
@@ -230,7 +225,7 @@ const NabhAccreditationModal = ({ hospital, onClose, onUpdated }) => {
                                 }}
                             />
                             <p style={{ margin: '5px 0 0', fontSize: '11.5px', color: '#64748b' }}>
-                                Security Note: Hospitals cannot upload custom NABH seals or enable NABH from Hospital Branding Studio.
+                                Shared static PNG (<code>/assets/nabh-logo.png</code>) is used across all accredited hospitals. Hospitals cannot upload custom NABH seals or enable NABH from Hospital Branding Studio.
                             </p>
                         </div>
 

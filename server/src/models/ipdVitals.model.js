@@ -16,7 +16,11 @@ const ipdVitalsSchema = new mongoose.Schema({
     respiratoryRate: { type: Number },
     painScore: { type: Number, min: 0, max: 10 },
 
-    notes: { type: String, default: '', trim: true }
+    remark: { type: String, default: '', trim: true },
+    notes: { type: String, default: '', trim: true },
+    remarkUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    remarkUpdatedByName: { type: String, default: '' },
+    remarkUpdatedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 // Compound indexes for time-series history retrieval

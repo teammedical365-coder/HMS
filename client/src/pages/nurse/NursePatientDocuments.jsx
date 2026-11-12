@@ -17,6 +17,7 @@ import {
     FiInfo
 } from 'react-icons/fi';
 import TPRChartModal from '../../components/ipd/TPRChartModal';
+import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import './NursePatientDocuments.css';
 
 const REPORT_CATEGORIES = [
@@ -36,6 +37,12 @@ const CONSENT_TEMPLATES = [
         label: 'Dynamic TPR Bedside Chart (Vitals & Fluid)',
         title: 'TPR – CHART (BEDSIDE VITALS & FLUID RECORD)',
         description: 'Standard 10-column temperature, pulse, respiration, blood pressure, and fluid intake/output chart.'
+    },
+    {
+        value: 'IN_PATIENT_CLINICAL_NOTES',
+        label: 'In-Patient Clinical Notes (2-Page IPD Form)',
+        title: 'IN PATIENT CLINICAL NOTES',
+        description: 'Official two-page inpatient clinical notes document with History, Examination, Investigations, Discharge & Follow-up, plus Patient & Nurse Communication.'
     },
     {
         value: 'GENERAL_ADMISSION',
@@ -143,6 +150,8 @@ const NursePatientDocuments = () => {
     const [uploadingConsent, setUploadingConsent] = useState(false);
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [tprBlankMode, setTprBlankMode] = useState(false);
+    const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
+    const [clinicalNotesBlankMode, setClinicalNotesBlankMode] = useState(false);
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -335,6 +344,12 @@ const NursePatientDocuments = () => {
         if (templateKey === 'TPR_CHART') {
             setTprBlankMode(isBlank);
             setTprModalOpen(true);
+            return;
+        }
+
+        if (templateKey === 'IN_PATIENT_CLINICAL_NOTES') {
+            setClinicalNotesBlankMode(isBlank);
+            setClinicalNotesModalOpen(true);
             return;
         }
 
@@ -902,7 +917,7 @@ const NursePatientDocuments = () => {
                                                     value={selectedDownloadTemplate}
                                                     onChange={e => {
                                                         setSelectedDownloadTemplate(e.target.value);
-                                                        if (e.target.value !== 'TPR_CHART') {
+                                                        if (e.target.value !== 'TPR_CHART' && e.target.value !== 'IN_PATIENT_CLINICAL_NOTES') {
                                                             setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
                                                         }
                                                     }}
@@ -958,7 +973,7 @@ const NursePatientDocuments = () => {
                                                         value={consentForm.consentType}
                                                         onChange={e => setConsentForm({ ...consentForm, consentType: e.target.value })}
                                                     >
-                                                        {CONSENT_TEMPLATES.filter(ct => ct.value !== 'TPR_CHART').map(ct => (
+                                                        {CONSENT_TEMPLATES.filter(ct => ct.value !== 'TPR_CHART' && ct.value !== 'IN_PATIENT_CLINICAL_NOTES').map(ct => (
                                                             <option key={ct.value} value={ct.value}>{ct.label}</option>
                                                         ))}
                                                     </select>
@@ -1154,6 +1169,18 @@ const NursePatientDocuments = () => {
                 admission={selectedPatient?.admission}
                 admissionId={selectedPatient?.admission?._id}
                 isBlank={tprBlankMode}
+            />
+
+            <InpatientClinicalNotesModal
+                isOpen={clinicalNotesModalOpen}
+                onClose={() => {
+                    setClinicalNotesModalOpen(false);
+                    setClinicalNotesBlankMode(false);
+                }}
+                patient={selectedPatient}
+                admission={selectedPatient?.admission}
+                admissionId={selectedPatient?.admission?._id}
+                isBlank={clinicalNotesBlankMode}
             />
         </div>
     );

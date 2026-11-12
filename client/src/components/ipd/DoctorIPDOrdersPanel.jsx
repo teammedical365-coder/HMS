@@ -25,6 +25,7 @@ import {
 import './DoctorIPDOrdersPanel.css';
 import CustomSelect from '../common/CustomSelect';
 import TPRChartModal from './TPRChartModal';
+import InpatientClinicalNotesModal from './InpatientClinicalNotesModal';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -170,6 +171,7 @@ const DoctorIPDOrdersPanel = ({
     const [activeAdmission, setActiveAdmission] = useState(null);
     const [loadingAdmission, setLoadingAdmission] = useState(true);
     const [tprModalOpen, setTprModalOpen] = useState(false);
+    const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
 
     // Hospitalize Modal State
     const [hospitalizeModalOpen, setHospitalizeModalOpen] = useState(false);
@@ -883,6 +885,27 @@ const DoctorIPDOrdersPanel = ({
                             >
                                 <FiPrinter size={14} />
                                 <span>TPR Chart</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setClinicalNotesModalOpen(true)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    background: '#0f2e7a',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                                title="2-Page In-Patient Clinical Notes & Patient Communication"
+                            >
+                                <FiFileText size={14} />
+                                <span>Clinical Notes</span>
                             </button>
                             <div className="ipd-status-card admitted">
                                 <span className="ipd-pulse-dot green"></span>
@@ -2184,6 +2207,14 @@ const DoctorIPDOrdersPanel = ({
             <TPRChartModal
                 isOpen={tprModalOpen}
                 onClose={() => setTprModalOpen(false)}
+                admissionId={activeAdmission?._id}
+                admission={activeAdmission}
+                patient={patient || activeAdmission?.patientId}
+            />
+
+            <InpatientClinicalNotesModal
+                isOpen={clinicalNotesModalOpen}
+                onClose={() => setClinicalNotesModalOpen(false)}
                 admissionId={activeAdmission?._id}
                 admission={activeAdmission}
                 patient={patient || activeAdmission?.patientId}

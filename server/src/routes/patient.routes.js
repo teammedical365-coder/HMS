@@ -189,7 +189,7 @@ router.get('/search', verifyToken, resolveTenant, async (req, res) => {
         }
 
         const patients = await MasterUser.find({ $and: queryAnd })
-            .select('name phone patientId mrn dob gender city avatar')
+            .select('name phone patientId mrn uhid dob age gender city avatar')
             .sort({ createdAt: -1 })
             .limit(20)
             .lean();

@@ -424,7 +424,7 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
         for (let adm of admissions) {
             try {
                 if (adm.patientId) {
-                    adm.patientId = await User.findById(adm.patientId).select('name phone patientId mrn gender dob').lean() || adm.patientId;
+                    adm.patientId = await User.findById(adm.patientId).select('name phone patientId mrn uhid gender dob age').lean() || adm.patientId;
                 }
             } catch (err) {}
             try {
@@ -540,7 +540,7 @@ router.get('/:id', verifyAdmissionAccess, async (req, res) => {
 
         try {
             if (admission.patientId) {
-                admission.patientId = await User.findById(admission.patientId).select('name phone patientId mrn gender dob').lean() || admission.patientId;
+                admission.patientId = await User.findById(admission.patientId).select('name phone patientId mrn uhid gender dob age').lean() || admission.patientId;
             }
         } catch (err) {}
         try {

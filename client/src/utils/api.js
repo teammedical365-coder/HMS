@@ -1662,6 +1662,7 @@ export const ipdClinicalAPI = {
 
     // Inpatient Vitals
     recordVitals: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/vitals`, data)).data,
+    updateVitalsRemark: async (admissionId, vitalsId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/vitals/${vitalsId}`, data)).data,
     getVitalsHistory: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals`)).data,
     getLatestVitals: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals/latest`)).data,
 
@@ -1669,6 +1670,15 @@ export const ipdClinicalAPI = {
     createDischargeOrder: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/discharge-order`, data)).data,
     saveDischargeSummary: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/discharge-summary`, data)).data,
     getDischargeSummary: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/discharge-summary`)).data,
+
+    // Exact 2-Page In-Patient Clinical Notes
+    getInpatientClinicalNotes: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/clinical-notes`)).data,
+    saveInpatientClinicalNotes: async (admissionId, data) => (await apiClient.put(`/api/ipd-clinical/admissions/${admissionId}/clinical-notes`, data)).data,
+
+    // Patient & Nurse Interaction Notes / Communication (chronological + audit trail)
+    getPatientNurseCommunication: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/communication`)).data,
+    addPatientNurseCommunication: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/communication`, data)).data,
+    editPatientNurseCommunication: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/communication/${noteId}`, data)).data,
 };
 
 // ── IPD Nursing Workflow APIs ──

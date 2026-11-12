@@ -24,7 +24,7 @@ export const TPR_COLUMN_DEFS = [
     { key: 'emp', label: 'Emp. Name & ID', widthMm: 32.2, pct: '17.5%', align: 'left' }
 ];
 
-const escapeHtml = (val) => {
+export const escapeHtml = (val) => {
     if (val === undefined || val === null) return '';
     return String(val)
         .replace(/&/g, '&amp;')
@@ -34,7 +34,7 @@ const escapeHtml = (val) => {
         .replace(/'/g, '&#39;');
 };
 
-const sanitizeImageUrl = (url) => {
+export const sanitizeImageUrl = (url) => {
     if (!url || typeof url !== 'string') return '';
     const trimmed = url.trim();
     if (
@@ -49,39 +49,79 @@ const sanitizeImageUrl = (url) => {
 };
 
 /**
+ * Parse DOB strings flexibly (ISO, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, or timestamps)
+ */
+export const parseFlexibleDate = (rawVal) => {
+    if (!rawVal) return null;
+    if (rawVal instanceof Date) return isNaN(rawVal.getTime()) ? null : rawVal;
+    if (typeof rawVal === 'number') {
+        const dt = new Date(rawVal);
+        return isNaN(dt.getTime()) ? null : dt;
+    }
+
+    const str = String(rawVal).trim();
+    if (!str) return null;
+
+    // DD/MM/YYYY or DD-MM-YYYY
+    const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmy) {
+        const day = Number(dmy[1]);
+        const month = Number(dmy[2]);
+        const year = Number(dmy[3]);
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2150) {
+            const dt = new Date(year, month - 1, day);
+            if (!isNaN(dt.getTime()) && dt.getFullYear() === year && dt.getMonth() === month - 1 && dt.getDate() === day) {
+                return dt;
+            }
+        }
+    }
+
+    // YYYY-MM-DD (avoid timezone off-by-one)
+    const ymd = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (ymd) {
+        const year = Number(ymd[1]);
+        const month = Number(ymd[2]);
+        const day = Number(ymd[3]);
+        const dt = new Date(year, month - 1, day);
+        if (!isNaN(dt.getTime())) return dt;
+    }
+
+    const dt = new Date(str);
+    return isNaN(dt.getTime()) ? null : dt;
+};
+
+/**
  * Format patient age in the exact "Y Y, M M, D D" or "Y Y" format
  */
 export const formatPatientAge = (patient) => {
     if (!patient) return '—';
     if (typeof patient === 'string') return patient;
 
-    const rawDob = patient.dob || patient.dateOfBirth || patient.birthDate;
-    if (rawDob) {
-        try {
-            const bDate = new Date(rawDob);
-            if (!isNaN(bDate.getTime())) {
-                const now = new Date();
-                let y = now.getFullYear() - bDate.getFullYear();
-                let m = now.getMonth() - bDate.getMonth();
-                let d = now.getDate() - bDate.getDate();
-                if (d < 0) {
-                    m -= 1;
-                    const prevMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
-                    d += prevMonthLastDay;
-                }
-                if (m < 0) {
-                    y -= 1;
-                    m += 12;
-                }
-                if (y >= 0) {
-                    return `${y} Y, ${m} M, ${d} D`;
-                }
-            }
-        } catch (_) {}
+    const pt = (patient.patientId && typeof patient.patientId === 'object') ? patient.patientId : patient;
+    const rawDob = pt.dob || pt.dateOfBirth || pt.birthDate || patient.dob || patient.dateOfBirth || patient.birthDate;
+    const bDate = parseFlexibleDate(rawDob);
+    if (bDate) {
+        const now = new Date();
+        let y = now.getFullYear() - bDate.getFullYear();
+        let m = now.getMonth() - bDate.getMonth();
+        let d = now.getDate() - bDate.getDate();
+        if (d < 0) {
+            m -= 1;
+            const prevMonthLastDay = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+            d += prevMonthLastDay;
+        }
+        if (m < 0) {
+            y -= 1;
+            m += 12;
+        }
+        if (y >= 0) {
+            return `${y} Y, ${m} M, ${d} D`;
+        }
     }
 
-    if (patient.age !== undefined && patient.age !== null && patient.age !== '') {
-        const ageStr = String(patient.age).trim();
+    const fallbackAge = pt.age ?? patient.age;
+    if (fallbackAge !== undefined && fallbackAge !== null && fallbackAge !== '') {
+        const ageStr = String(fallbackAge).trim();
         if (/[a-zA-Z]/.test(ageStr)) return ageStr;
         return `${ageStr} Y`;
     }
@@ -195,41 +235,6 @@ export const resolveHospitalChartBranding = ({
         ''
     );
 
-    const rawCtxTagline = cleanPlatformDefault(validCtxBranding.tagline, ['Healthcare Suite']);
-    const explicitTagline =
-        fetchedB.tagline?.trim() ||
-        fetchedBS.tagline?.trim() ||
-        rawCtxTagline ||
-        '';
-
-    const configuredAddress =
-        fetchedB.address?.trim() ||
-        fetchedBS.address?.trim() ||
-        [validTenantDoc?.address, validTenantDoc?.city].filter(Boolean).join(', ') ||
-        validCtxBranding.address?.trim() ||
-        user?.hospitalAddress?.trim() ||
-        '';
-
-    const configuredPhone =
-        fetchedB.supportPhone?.trim() ||
-        fetchedBS.supportPhone?.trim() ||
-        validTenantDoc?.phone?.trim() ||
-        validCtxBranding.supportPhone?.trim() ||
-        '';
-
-    const contactParts = [];
-    if (configuredAddress && configuredAddress !== explicitTagline) contactParts.push(configuredAddress);
-    if (configuredPhone) contactParts.push(`Ph: ${configuredPhone}`);
-    const contactLine = contactParts.join(' | ');
-
-    // Display tagline if configured; otherwise fall back to configured contact details only if present
-    const tagline = explicitTagline || contactLine;
-    const secondaryContactLine = explicitTagline && (fetchedB.address?.trim() || fetchedB.supportPhone?.trim())
-        ? [fetchedB.address?.trim(), fetchedB.supportPhone?.trim() ? `Ph: ${fetchedB.supportPhone.trim()}` : '']
-            .filter(Boolean)
-            .join(' | ')
-        : '';
-
     // Format verified Certificate Number cleanly when configured by Central Admin
     const formatCertNumber = (rawCert) => {
         if (!rawCert) return '';
@@ -252,14 +257,44 @@ export const resolveHospitalChartBranding = ({
     return {
         name,
         logoUrl,
-        tagline,
-        contactLine: secondaryContactLine,
+        tagline: '',
+        contactLine: '',
         accreditation: {
             enabled: isAccredited,
             certNo: accCertNo,
             logoUrl: accLogo
         }
     };
+};
+
+export const loadImageForPdf = (url) => {
+    return new Promise((resolve) => {
+        if (!url || typeof Image === 'undefined') return resolve(null);
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            try {
+                if (typeof document !== 'undefined') {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || img.width || 200;
+                    canvas.height = img.naturalHeight || img.height || 200;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0);
+                        const dataUrl = canvas.toDataURL('image/png');
+                        return resolve({
+                            dataUrl,
+                            naturalWidth: img.naturalWidth || img.width,
+                            naturalHeight: img.naturalHeight || img.height
+                        });
+                    }
+                }
+            } catch (_) {}
+            resolve(img);
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
 };
 
 const extractStaffDisplay = (recordedBy) => {
@@ -403,8 +438,6 @@ export const downloadTPRChartPdf = async ({
 
         const ptDetails = resolvePatientChartDetails({ patient, admission, isBlank });
         const hospitalName = hospital.name || hospital.appName || 'Hospital';
-        const hospitalTagline = hospital.tagline || '';
-        const hospitalContactLine = hospital.contactLine || '';
         const hospitalLogo = sanitizeImageUrl(hospital.logoUrl || hospital.logo || '');
 
         const accreditation = hospital.accreditation || {};
@@ -415,39 +448,9 @@ export const downloadTPRChartPdf = async ({
             : '';
         const accreditationLogo = isAccredited ? COMMON_NABH_LOGO_URL : '';
 
-        const loadImage = (url) => {
-            return new Promise((resolve) => {
-                if (!url || typeof Image === 'undefined') return resolve(null);
-                const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.onload = () => {
-                    try {
-                        if (typeof document !== 'undefined') {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.naturalWidth || img.width || 200;
-                            canvas.height = img.naturalHeight || img.height || 200;
-                            const ctx = canvas.getContext('2d');
-                            if (ctx) {
-                                ctx.drawImage(img, 0, 0);
-                                const dataUrl = canvas.toDataURL('image/png');
-                                return resolve({
-                                    dataUrl,
-                                    naturalWidth: img.naturalWidth || img.width,
-                                    naturalHeight: img.naturalHeight || img.height
-                                });
-                            }
-                        }
-                    } catch (_) {}
-                    resolve(img);
-                };
-                img.onerror = () => resolve(null);
-                img.src = url;
-            });
-        };
-
         const [hospImg, accredImg] = await Promise.all([
-            hospitalLogo ? loadImage(hospitalLogo) : Promise.resolve(null),
-            isAccredited && accreditationLogo ? loadImage(accreditationLogo) : Promise.resolve(null)
+            hospitalLogo ? loadImageForPdf(hospitalLogo) : Promise.resolve(null),
+            isAccredited && accreditationLogo ? loadImageForPdf(accreditationLogo) : Promise.resolve(null)
         ]);
 
         const drawHeader = () => {
@@ -484,47 +487,42 @@ export const downloadTPRChartPdf = async ({
                 }
             }
 
-            // 3. Right side: Hospital Logo + Hospital Display Name + Tagline/Configured contact
+            // 3. Right side: Show ONLY the hospital's configured logo (clean, balanced, right-aligned).
+            // Fall back to hospital name text ONLY if no hospital logo URL is configured/loadable.
             const rightEdge = pageWidth - marginRight - 1;
-            doc.setFont('times', 'bold');
-            let nameFontSize = 21;
-            doc.setFontSize(nameFontSize);
-            let nameWidth = doc.getTextWidth(hospitalName);
-            const maxNameAreaWidth = printableWidth * 0.56;
-            if (nameWidth > maxNameAreaWidth && nameWidth > 0) {
-                nameFontSize = Math.max(12, Math.floor((nameFontSize * maxNameAreaWidth) / nameWidth));
-                doc.setFontSize(nameFontSize);
-                nameWidth = doc.getTextWidth(hospitalName);
-            }
-
-            const logoSize = 15;
+            let logoRendered = false;
             if (hospImg) {
-                const logoX = rightEdge - nameWidth - logoSize - 3.5;
                 try {
+                    const maxLogoH = 17.5;
+                    const maxLogoW = printableWidth * 0.48;
                     const aspect = hospImg.naturalWidth && hospImg.naturalHeight
                         ? hospImg.naturalWidth / hospImg.naturalHeight
-                        : 1;
-                    const drawW = aspect >= 1 ? logoSize : logoSize * aspect;
-                    const drawH = aspect >= 1 ? logoSize / aspect : logoSize;
-                    doc.addImage(hospImg.dataUrl || hospImg, 'PNG', logoX, 15 + (logoSize - drawH) / 2, drawW, drawH);
+                        : 2.2;
+                    let drawH = maxLogoH;
+                    let drawW = drawH * aspect;
+                    if (drawW > maxLogoW) {
+                        drawW = maxLogoW;
+                        drawH = drawW / aspect;
+                    }
+                    const logoX = rightEdge - drawW;
+                    const logoY = 14.5 + (maxLogoH - drawH) / 2;
+                    doc.addImage(hospImg.dataUrl || hospImg, 'PNG', logoX, logoY, drawW, drawH);
+                    logoRendered = true;
                 } catch (_) {}
             }
 
-            doc.setTextColor(15, 23, 42);
-            doc.text(hospitalName, rightEdge, 24.5, { align: 'right' });
-
-            const nameCenterX = rightEdge - nameWidth / 2;
-            if (hospitalTagline) {
-                doc.setFont('times', 'normal');
-                doc.setFontSize(9);
-                doc.setTextColor(100, 116, 139);
-                doc.text(hospitalTagline, nameCenterX, 29.5, { align: 'center', maxWidth: Math.max(nameWidth + 14, 70) });
-            }
-            if (hospitalContactLine) {
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(7.5);
-                doc.setTextColor(100, 116, 139);
-                doc.text(hospitalContactLine, rightEdge, 33.5, { align: 'right', maxWidth: 110 });
+            if (!logoRendered) {
+                doc.setFont('times', 'bold');
+                let nameFontSize = 21;
+                doc.setFontSize(nameFontSize);
+                let nameWidth = doc.getTextWidth(hospitalName);
+                const maxNameAreaWidth = printableWidth * 0.56;
+                if (nameWidth > maxNameAreaWidth && nameWidth > 0) {
+                    nameFontSize = Math.max(12, Math.floor((nameFontSize * maxNameAreaWidth) / nameWidth));
+                    doc.setFontSize(nameFontSize);
+                }
+                doc.setTextColor(15, 23, 42);
+                doc.text(hospitalName, rightEdge, 24.5, { align: 'right' });
             }
 
             // 4. Centered Heading: "TPR – CHART" right above table top line
@@ -641,8 +639,6 @@ export const printTPRChart = ({
 }) => {
     const ptDetails = resolvePatientChartDetails({ patient, admission, isBlank });
     const hospitalName = hospital.name || hospital.appName || 'Hospital';
-    const hospitalTagline = hospital.tagline || '';
-    const hospitalContactLine = hospital.contactLine || '';
     const hospitalLogo = sanitizeImageUrl(hospital.logoUrl || hospital.logo || '');
 
     const accreditation = hospital.accreditation || {};
@@ -799,9 +795,9 @@ export const printTPRChart = ({
                     margin-left: auto;
                 }
                 .tpr-hosp-logo {
-                    height: 50px;
+                    height: 54px;
                     width: auto;
-                    max-width: 90px;
+                    max-width: 280px;
                     object-fit: contain;
                 }
                 .tpr-hosp-text {
@@ -953,12 +949,10 @@ export const printTPRChart = ({
                                     </div>
 
                                     <div class="tpr-hosp-branding">
-                                        ${hospitalLogo ? `<img class="tpr-hosp-logo" src="${escapeHtml(hospitalLogo)}" alt="${escapeHtml(hospitalName)}" onerror="this.style.display='none'" />` : ''}
-                                        <div class="tpr-hosp-text">
-                                            <div class="tpr-hosp-name">${escapeHtml(hospitalName)}</div>
-                                            ${hospitalTagline ? `<div class="tpr-hosp-tagline">${escapeHtml(hospitalTagline)}</div>` : ''}
-                                            ${hospitalContactLine ? `<div class="tpr-hosp-contact">${escapeHtml(hospitalContactLine)}</div>` : ''}
-                                        </div>
+                                        ${hospitalLogo
+                                            ? `<img class="tpr-hosp-logo" src="${escapeHtml(hospitalLogo)}" alt="${escapeHtml(hospitalName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" /><div class="tpr-hosp-text" style="display:none;"><div class="tpr-hosp-name">${escapeHtml(hospitalName)}</div></div>`
+                                            : `<div class="tpr-hosp-text"><div class="tpr-hosp-name">${escapeHtml(hospitalName)}</div></div>`
+                                        }
                                     </div>
                                 </div>
 

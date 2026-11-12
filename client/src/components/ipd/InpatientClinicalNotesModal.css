@@ -1,0 +1,560 @@
+.ipn-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 16px;
+}
+
+.ipn-modal-container {
+    background: #ffffff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 1020px;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.ipn-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ipn-modal-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ipn-modal-title-group h3 {
+    margin: 0;
+    font-size: 16.5px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ipn-modal-subtitle {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.ipn-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ipn-tab-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ipn-tabs-left {
+    display: flex;
+    gap: 8px;
+}
+
+.ipn-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.ipn-tab-btn.active {
+    background: #0f2e7a;
+    border-color: #0f2e7a;
+    color: #ffffff;
+}
+
+.ipn-mode-toggle {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.ipn-mode-pill {
+    border: none;
+    background: transparent;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 6px;
+    color: #475569;
+    cursor: pointer;
+}
+
+.ipn-mode-pill.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.ipn-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+}
+
+.ipn-btn-save {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.ipn-btn-save:hover {
+    background: #0f766e;
+}
+
+.ipn-btn-outline {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.ipn-btn-outline:hover {
+    background: #f1f5f9;
+}
+
+.ipn-btn-close {
+    background: transparent;
+    color: #64748b;
+    border: none;
+    padding: 6px;
+    font-size: 19px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.ipn-btn-close:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.ipn-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #64748b;
+}
+
+.ipn-sheets-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Exact A4 Paper Preview Styles (matching IN PATIENT NOTES.pdf) */
+.ipn-sheet-paper {
+    background: #ffffff;
+    width: 100%;
+    max-width: 794px;
+    padding: 18px 24px 22px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    color: #111827;
+    font-family: Arial, Helvetica, sans-serif;
+    box-sizing: border-box;
+}
+
+.ipn-doc-banner {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13px;
+    color: #0f2e7a;
+    margin-bottom: 10px;
+    padding-left: 4px;
+    line-height: 1.35;
+}
+
+.ipn-doc-banner .ipn-sep {
+    display: inline-block;
+    width: 11px;
+}
+
+.ipn-doc-box {
+    border: 1.5px solid #111827;
+    width: 100%;
+}
+
+.ipn-doc-letterhead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    border-bottom: 1px solid #111827;
+    min-height: 76px;
+}
+
+.ipn-doc-nabh {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ipn-doc-nabh img {
+    height: 52px;
+    width: auto;
+    object-fit: contain;
+}
+
+.ipn-doc-cert {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #b91c1c;
+    margin-top: 2px;
+}
+
+.ipn-doc-hosp img {
+    height: 56px;
+    max-width: 260px;
+    width: auto;
+    object-fit: contain;
+}
+
+.ipn-doc-hosp-name {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 25px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.ipn-doc-title {
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: 700;
+    text-decoration: underline;
+    margin: 10px 0 8px;
+    letter-spacing: 0.4px;
+}
+
+.ipn-doc-meta-rows {
+    padding: 0 10px 8px;
+    font-size: 11.5px;
+}
+
+.ipn-doc-meta-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 9px;
+    align-items: baseline;
+}
+
+.ipn-doc-field {
+    display: flex;
+    align-items: baseline;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+}
+
+.ipn-doc-field-val {
+    flex: 1;
+    border-bottom: 1px dotted #475569;
+    min-height: 15px;
+    font-weight: 600;
+    font-size: 11.5px;
+    padding: 0 3px;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ipn-doc-sec-hdr {
+    background: #d6d9de;
+    border-top: 1px solid #1f2937;
+    border-bottom: 1px solid #1f2937;
+    padding: 3.5px 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.ipn-doc-ruled-lines {
+    display: flex;
+    flex-direction: column;
+}
+
+.ipn-doc-ruled-line {
+    border-bottom: 1px solid #374151;
+    height: 22px;
+    padding: 3px 8px 0;
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ipn-doc-split-row {
+    display: grid;
+    grid-template-columns: 68% 32%;
+}
+
+.ipn-doc-split-left {
+    border-right: 1px solid #1f2937;
+}
+
+.ipn-doc-gen-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid #1f2937;
+}
+
+.ipn-doc-gen-cell {
+    border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ipn-doc-gen-cell:nth-child(3n) {
+    border-right: none;
+}
+
+.ipn-doc-gen-cell:nth-child(n+4) {
+    border-bottom: none;
+}
+
+.ipn-doc-gen-lbl {
+    font-weight: 700;
+    min-width: 44px;
+}
+
+.ipn-doc-footer-sign {
+    display: flex;
+    gap: 10px;
+    padding: 16px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    align-items: baseline;
+}
+
+/* Digital Form Editor Panel */
+.ipn-editor-card {
+    background: #ffffff;
+    border-radius: 12px;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 24px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.ipn-editor-section-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f2e7a;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin: 16px 0 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ipn-editor-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.ipn-editor-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.ipn-editor-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.ipn-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.ipn-form-field label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.ipn-form-field input,
+.ipn-form-field textarea,
+.ipn-form-field select {
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #0f172a;
+    background: #ffffff;
+}
+
+.ipn-form-field textarea {
+    resize: vertical;
+}
+
+/* Patient & Nurse Communication Panel (Part 4) */
+.ipn-comm-wrapper {
+    background: #ffffff;
+    border-radius: 12px;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 24px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.ipn-comm-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ipn-comm-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+    max-height: 390px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ipn-comm-item {
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #0d9488;
+    border-radius: 9px;
+    padding: 11px 14px;
+    background: #f8fafc;
+}
+
+.ipn-comm-item.role-patient {
+    border-left-color: #2563eb;
+    background: #eff6ff;
+}
+
+.ipn-comm-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+
+.ipn-comm-sender {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.ipn-comm-role-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #ccfbf1;
+    color: #0f766e;
+}
+
+.ipn-comm-item.role-patient .ipn-comm-role-pill {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.ipn-comm-time {
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+.ipn-comm-msg {
+    font-size: 13.5px;
+    color: #1e293b;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+.ipn-comm-edit-meta {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ipn-comm-history-list {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: #ffffff;
+    border: 1px dashed #cbd5e1;
+    font-size: 11.5px;
+    color: #475569;
+}
+
+.ipn-comm-composer {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 14px;
+}
+
+@media (max-width: 720px) {
+    .ipn-editor-grid-3,
+    .ipn-editor-grid-4,
+    .ipn-editor-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+

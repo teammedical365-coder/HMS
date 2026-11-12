@@ -10,6 +10,8 @@ const MasterAdmission = require('../models/admission.model');
 const MasterInpatientOrder = require('../models/inpatientOrder.model');
 const MasterMARRecord = require('../models/marRecord.model');
 const MasterIPDVitals = require('../models/ipdVitals.model');
+const MasterInpatientClinicalNote = require('../models/inpatientClinicalNote.model');
+const MasterPatientNurseNote = require('../models/patientNurseNote.model');
 const MasterUser = require('../models/user.model');
 const AuditLog = require('../models/auditLog.model');
 
@@ -49,6 +51,8 @@ const getModels = (req) => {
         InpatientOrder: MasterInpatientOrder,
         MARRecord: MasterMARRecord,
         IPDVitals: MasterIPDVitals,
+        InpatientClinicalNote: MasterInpatientClinicalNote,
+        PatientNurseNote: MasterPatientNurseNote,
         User: MasterUser,
     };
 };
@@ -848,6 +852,7 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
             spo2,
             respiratoryRate,
             painScore,
+            remark,
             notes
         } = req.body;
 
@@ -864,6 +869,9 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
             return res.status(400).json({ success: false, message: 'Cannot record vitals for a discharged patient' });
         }
 
+        const cleanRemark = remark !== undefined ? String(remark).trim() : '';
+        const cleanNotes = notes !== undefined ? String(notes).trim() : cleanRemark;
+
         // Create append-only time-series vitals entry
         const vitalEntry = new IPDVitals({
             hospitalId,
@@ -878,7 +886,8 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
             spo2: spo2 ? Number(spo2) : undefined,
             respiratoryRate: respiratoryRate ? Number(respiratoryRate) : undefined,
             painScore: painScore !== undefined && painScore !== '' ? Number(painScore) : undefined,
-            notes: notes ? String(notes).trim() : ''
+            remark: cleanRemark,
+            notes: cleanNotes
         });
 
         await vitalEntry.save();
@@ -944,6 +953,69 @@ router.get('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requir
         res.json({ success: true, vitals: vitalsList });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error fetching vitals' });
+    }
+});
+
+// PATCH /api/ipd-clinical/admissions/:admissionId/vitals/:vitalsId — Edit remark/observation on an existing vitals row (Nurse/Doctor/Admin)
+router.patch('/admissions/:admissionId/vitals/:vitalsId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, vitalsId } = req.params;
+        const { remark, notes } = req.body || {};
+
+        if (!mongoose.Types.ObjectId.isValid(vitalsId)) {
+            return res.status(400).json({ success: false, message: 'Invalid vitalsId format' });
+        }
+
+        const { IPDVitals, Admission } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        const vitalsDoc = await IPDVitals.findOne({ _id: vitalsId, hospitalId });
+        if (!vitalsDoc) {
+            return res.status(404).json({ success: false, message: 'Vitals record not found in this hospital' });
+        }
+
+        // Ensure vitalsDoc belongs to the requested admission/patient scope
+        const admMatch = validAdmId && vitalsDoc.admissionId && String(vitalsDoc.admissionId) === String(validAdmId);
+        const ptMatch = validPtId && vitalsDoc.patientId && String(vitalsDoc.patientId) === String(validPtId);
+        if (!admMatch && !ptMatch) {
+            return res.status(403).json({ success: false, message: 'Vitals record does not belong to this admission' });
+        }
+
+        const cleanRemark = remark !== undefined ? String(remark).trim() : (notes !== undefined ? String(notes).trim() : '');
+        const cleanNotes = notes !== undefined ? String(notes).trim() : cleanRemark;
+
+        vitalsDoc.remark = cleanRemark;
+        vitalsDoc.notes = cleanNotes;
+        vitalsDoc.remarkUpdatedBy = req.user._id || req.user.userId || null;
+        vitalsDoc.remarkUpdatedByName = req.user.name || 'Staff';
+        vitalsDoc.remarkUpdatedAt = new Date();
+        await vitalsDoc.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'VITALS_UPDATED',
+            targetModel: 'IPDVitals',
+            targetId: vitalsDoc._id,
+            targetLabel: `Updated vitals remark (${cleanRemark || 'Cleared'})`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('vitals_recorded', {
+                vitalsId: vitalsDoc._id,
+                admissionId: vitalsDoc.admissionId,
+                patientId: vitalsDoc.patientId,
+                timestamp: new Date()
+            });
+        }
+
+        res.json({ success: true, message: 'Vitals remark updated successfully', vitals: vitalsDoc });
+    } catch (err) {
+        console.error('Update vitals remark error:', err);
+        res.status(500).json({ success: false, message: 'Error updating vitals remark' });
     }
 });
 
@@ -1536,6 +1608,402 @@ router.get('/admissions/:admissionId/discharge-summary', verifyToken, resolveTen
         res.status(500).json({ success: false, message: err.message || 'Error fetching discharge summary' });
     }
 });
+
+// ============================================================================
+// SECTION E: TWO-PAGE IN-PATIENT CLINICAL NOTES & PATIENT-NURSE COMMUNICATION
+// ============================================================================
+
+const isStaffClinicalUser = (req) => {
+    const role = getUserRole(req);
+    const perms = req.user._roleData?.permissions || [];
+    return (
+        NURSE_ROLES.includes(role) ||
+        perms.includes('*') ||
+        perms.includes('nurse_access') ||
+        perms.includes('doctor_access') ||
+        perms.includes('clinical_manage') ||
+        perms.includes('ipd_view')
+    );
+};
+
+const requirePatientOrClinicalAccess = (req, res, next) => {
+    if (isStaffClinicalUser(req)) return next();
+    const role = getUserRole(req);
+    if (role === 'patient') return next();
+    return res.status(403).json({ success: false, message: 'Patient or Clinical authorization required' });
+};
+
+const deriveCommunicationSenderRole = (req, requestedRole) => {
+    const rawRole = getUserRole(req);
+    if (rawRole === 'patient') return 'Patient';
+    if (['nurse', 'staffnurse', 'headnurse'].includes(rawRole)) {
+        return requestedRole === 'Patient' ? 'Patient' : 'Nurse';
+    }
+    if (['doctor', 'clinicdoctor', 'clinic doctor', 'surgeon', 'consultant', 'physician'].includes(rawRole)) {
+        return requestedRole === 'Patient' ? 'Patient' : 'Doctor';
+    }
+    if (requestedRole === 'Patient') return 'Patient';
+    return 'Authorized Staff';
+};
+
+// GET /api/ipd-clinical/admissions/:admissionId/clinical-notes
+router.get('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+
+        const { Admission, InpatientClinicalNote, IPDVitals, User } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        }
+
+        if (admission.patientId) {
+            admission.patientId = await (User || MasterUser)
+                .findById(admission.patientId)
+                .select('name phone patientId mrn uhid gender dob age')
+                .lean() || admission.patientId;
+        }
+        if (admission.doctorId) {
+            admission.doctorId = await (User || MasterUser)
+                .findById(admission.doctorId)
+                .select('name email specialization department')
+                .lean() || admission.doctorId;
+        }
+
+        const [noteDoc, latestVitals] = await Promise.all([
+            InpatientClinicalNote.findOne({ hospitalId, admissionId: admission._id }).lean(),
+            IPDVitals.findOne({ hospitalId, admissionId: admission._id }).sort({ recordedAt: -1 }).lean()
+        ]);
+
+        res.json({
+            success: true,
+            clinicalNote: noteDoc || null,
+            admission,
+            latestVitals: latestVitals || null
+        });
+    } catch (err) {
+        console.error('Fetch inpatient clinical notes error:', err);
+        res.status(500).json({ success: false, message: 'Error fetching in-patient clinical notes' });
+    }
+});
+
+// POST / PUT /api/ipd-clinical/admissions/:admissionId/clinical-notes
+const saveInpatientClinicalNoteHandler = async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+
+        const { Admission, InpatientClinicalNote } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        }
+
+        const payload = req.body || {};
+        const actorId = req.user._id || req.user.userId;
+        const actorName = req.user.name || req.user.email || 'Clinical Staff';
+        const actorRole = req.user._roleData?.name || req.user.role || 'Staff';
+
+        const strVal = (v) => (v !== undefined && v !== null ? String(v) : '');
+        const cleanStr = (v) => strVal(v).trim();
+        const genExamInput = payload.generalExamination || {};
+        const footerInput = payload.footer || {};
+
+        let noteDoc = await InpatientClinicalNote.findOne({ hospitalId, admissionId: admission._id });
+        const isUpdate = Boolean(noteDoc);
+
+        if (!noteDoc) {
+            noteDoc = new InpatientClinicalNote({
+                hospitalId,
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                createdBy: actorId,
+                createdByName: actorName,
+                createdByRole: actorRole
+            });
+        }
+
+        const fieldKeys = [
+            'patientName', 'age', 'sex', 'regdNo', 'ipdNo', 'noteDate', 'noteTime', 'ward', 'bedNo', 'consultantName',
+            'historyAndComplaints', 'relevantPhysicalExamination', 'historyOfPresentIllness',
+            'pastMedicalSurgicalHistory', 'personalSocialHistory', 'anyDrugAllergy',
+            'systemicExamination', 'provisionalDiagnosis', 'investigations', 'dischargeAndFollowUp'
+        ];
+        for (const key of fieldKeys) {
+            if (payload[key] !== undefined) {
+                noteDoc[key] = ['historyAndComplaints', 'relevantPhysicalExamination', 'historyOfPresentIllness', 'pastMedicalSurgicalHistory', 'personalSocialHistory', 'anyDrugAllergy', 'systemicExamination', 'provisionalDiagnosis', 'investigations', 'dischargeAndFollowUp'].includes(key)
+                    ? strVal(payload[key])
+                    : cleanStr(payload[key]);
+            }
+        }
+
+        if (payload.generalExamination !== undefined) {
+            noteDoc.generalExamination = {
+                bp: cleanStr(genExamInput.bp),
+                temp: cleanStr(genExamInput.temp),
+                pallor: cleanStr(genExamInput.pallor),
+                pulse: cleanStr(genExamInput.pulse),
+                spo2: cleanStr(genExamInput.spo2),
+                pain: cleanStr(genExamInput.pain)
+            };
+        }
+
+        if (payload.footer !== undefined) {
+            noteDoc.footer = {
+                consultantName: cleanStr(footerInput.consultantName),
+                signature: cleanStr(footerInput.signature),
+                signDate: cleanStr(footerInput.signDate),
+                signTime: cleanStr(footerInput.signTime)
+            };
+        }
+
+        noteDoc.updatedBy = actorId;
+        noteDoc.updatedByName = actorName;
+        noteDoc.updatedByRole = actorRole;
+
+        const existingHistory = Array.isArray(noteDoc.editHistory) ? noteDoc.editHistory : [];
+        noteDoc.editHistory = [
+            ...existingHistory,
+            {
+                editedBy: actorId,
+                editedByName: actorName,
+                editedByRole: actorRole,
+                editedAt: new Date(),
+                summary: isUpdate ? 'Updated In-Patient Clinical Notes' : 'Created In-Patient Clinical Notes'
+            }
+        ].slice(-50);
+
+        await noteDoc.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'IPD_CLINICAL_NOTE_SAVED',
+            targetModel: 'InpatientClinicalNote',
+            targetId: noteDoc._id,
+            targetLabel: `In-Patient Clinical Notes (${noteDoc.ipdNo || admission._id})`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('ipd_clinical_note_updated', {
+                admissionId: admission._id,
+                noteId: noteDoc._id,
+                updatedByName: actorName,
+                timestamp: new Date()
+            });
+        }
+
+        res.status(isUpdate ? 200 : 201).json({
+            success: true,
+            message: isUpdate ? 'In-Patient Clinical Notes updated' : 'In-Patient Clinical Notes saved',
+            clinicalNote: noteDoc
+        });
+    } catch (err) {
+        console.error('Save inpatient clinical notes error:', err);
+        res.status(500).json({ success: false, message: 'Error saving in-patient clinical notes' });
+    }
+};
+
+router.post('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant, requireNurseOrDoctorAccess, saveInpatientClinicalNoteHandler);
+router.put('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant, requireNurseOrDoctorAccess, saveInpatientClinicalNoteHandler);
+
+// GET /api/ipd-clinical/admissions/:admissionId/communication — Patient & Nurse interaction notes timeline
+router.get('/admissions/:admissionId/communication', verifyToken, resolveTenant, requirePatientOrClinicalAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+
+        const { Admission, PatientNurseNote } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        }
+
+        // Strict patient ownership check when accessed by a patient account
+        if (!isStaffClinicalUser(req)) {
+            const actorId = String(req.user._id || req.user.userId || '');
+            if (!admission.patientId || String(admission.patientId) !== actorId) {
+                return res.status(403).json({ success: false, message: 'Access denied for this admission communication thread' });
+            }
+        }
+
+        const messages = await PatientNurseNote.find({ hospitalId, admissionId: admission._id })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        res.json({ success: true, messages });
+    } catch (err) {
+        console.error('Fetch patient-nurse communication error:', err);
+        res.status(500).json({ success: false, message: 'Error fetching communication notes' });
+    }
+});
+
+// POST /api/ipd-clinical/admissions/:admissionId/communication — Add communication entry
+router.post('/admissions/:admissionId/communication', verifyToken, resolveTenant, requirePatientOrClinicalAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        const { message, senderRole: requestedRole, senderName: requestedSenderName } = req.body || {};
+
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+        if (!message || !String(message).trim()) {
+            return res.status(400).json({ success: false, message: 'Message text is required' });
+        }
+
+        const { Admission, PatientNurseNote } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        }
+
+        const staffUser = isStaffClinicalUser(req);
+        const actorId = req.user._id || req.user.userId;
+        if (!staffUser && (!admission.patientId || String(admission.patientId) !== String(actorId))) {
+            return res.status(403).json({ success: false, message: 'Patients can only post messages for their own admission' });
+        }
+
+        const senderRole = deriveCommunicationSenderRole(req, requestedRole);
+        const senderName = (staffUser && senderRole === 'Patient' && requestedSenderName && String(requestedSenderName).trim())
+            ? String(requestedSenderName).trim()
+            : (req.user.name || req.user.email || (senderRole === 'Patient' ? 'Patient' : 'Clinical Staff'));
+
+        const noteDoc = new PatientNurseNote({
+            hospitalId,
+            admissionId: admission._id,
+            patientId: admission.patientId,
+            senderId: actorId,
+            senderName,
+            senderRole,
+            message: String(message).trim(),
+            editHistory: []
+        });
+
+        await noteDoc.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'PATIENT_NURSE_NOTE_ADDED',
+            targetModel: 'PatientNurseNote',
+            targetId: noteDoc._id,
+            targetLabel: `${senderRole} communication note (${admission._id})`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('patient_nurse_communication_updated', {
+                admissionId: admission._id,
+                noteId: noteDoc._id,
+                action: 'CREATED'
+            });
+        }
+
+        res.status(201).json({ success: true, message: 'Communication note added', entry: noteDoc });
+    } catch (err) {
+        console.error('Add patient-nurse communication error:', err);
+        res.status(500).json({ success: false, message: 'Error saving communication note' });
+    }
+});
+
+// PATCH / PUT /api/ipd-clinical/admissions/:admissionId/communication/:noteId — Edit note preserving original author & audit history
+const editPatientNurseNoteHandler = async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, noteId } = req.params;
+        const { message } = req.body || {};
+
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(noteId)) {
+            return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        }
+        if (!message || !String(message).trim()) {
+            return res.status(400).json({ success: false, message: 'Updated message text cannot be empty' });
+        }
+
+        const { PatientNurseNote } = getModels(req);
+        const noteDoc = await PatientNurseNote.findOne({ _id: noteId, admissionId, hospitalId });
+        if (!noteDoc) {
+            return res.status(404).json({ success: false, message: 'Communication entry not found in this hospital' });
+        }
+
+        const staffUser = isStaffClinicalUser(req);
+        const actorId = req.user._id || req.user.userId;
+        // Patients can only edit their own 'Patient' note; clinical staff can edit within their hospital with full audit trail
+        if (!staffUser && (String(noteDoc.senderId) !== String(actorId) || noteDoc.senderRole !== 'Patient')) {
+            return res.status(403).json({ success: false, message: 'Not authorized to edit this communication entry' });
+        }
+
+        const cleanNewMsg = String(message).trim();
+        const actorName = req.user.name || req.user.email || 'Staff';
+        const actorRole = deriveCommunicationSenderRole(req);
+
+        if (noteDoc.message !== cleanNewMsg) {
+            const prevHistory = Array.isArray(noteDoc.editHistory) ? noteDoc.editHistory : [];
+            noteDoc.editHistory = [
+                ...prevHistory,
+                {
+                    previousMessage: noteDoc.message,
+                    editedBy: actorId,
+                    editedByName: actorName,
+                    editedByRole: actorRole,
+                    editedAt: new Date()
+                }
+            ].slice(-50);
+
+            noteDoc.message = cleanNewMsg;
+            noteDoc.editedBy = actorId;
+            noteDoc.editedByName = actorName;
+            noteDoc.editedAt = new Date();
+            noteDoc.editedByRole = actorRole;
+            await noteDoc.save();
+
+            await logClinicalAudit({
+                hospitalId,
+                user: req.user,
+                action: 'PATIENT_NURSE_NOTE_EDITED',
+                targetModel: 'PatientNurseNote',
+                targetId: noteDoc._id,
+                targetLabel: `Edited ${noteDoc.senderRole} communication note (${admissionId})`,
+                req
+            });
+
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`hospital_${hospitalId}`).emit('patient_nurse_communication_updated', {
+                    admissionId,
+                    noteId: noteDoc._id,
+                    action: 'EDITED'
+                });
+            }
+        }
+
+        res.json({ success: true, message: 'Communication note updated with audit trail', entry: noteDoc });
+    } catch (err) {
+        console.error('Edit patient-nurse communication error:', err);
+        res.status(500).json({ success: false, message: 'Error updating communication note' });
+    }
+};
+
+router.patch('/admissions/:admissionId/communication/:noteId', verifyToken, resolveTenant, requirePatientOrClinicalAccess, editPatientNurseNoteHandler);
+router.put('/admissions/:admissionId/communication/:noteId', verifyToken, resolveTenant, requirePatientOrClinicalAccess, editPatientNurseNoteHandler);
 
 router.ensureMARForAdmission = ensureMARForAdmission;
 router.generateMARRecordsForOrder = generateMARRecordsForOrder;

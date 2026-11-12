@@ -197,8 +197,35 @@ const CentralAdminDashboard = () => {
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
-    // Branding Editor
+    // Branding Editor & NABH Control
     const [brandingHospital, setBrandingHospital] = useState(null);
+    const [nabhHospital, setNabhHospital] = useState(null);
+    const [nabhQuickSavingId, setNabhQuickSavingId] = useState(null);
+
+    const handleQuickNabhCheckbox = async (hospital, nextEnabled) => {
+        if (!hospital?._id) return;
+        setNabhQuickSavingId(hospital._id);
+        setError('');
+        try {
+            const res = await hospitalAPI.updateNabhStatus(hospital._id, {
+                enabled: Boolean(nextEnabled),
+                certNo: hospital.accreditation?.certNo || ''
+            });
+            if (res?.success) {
+                setHospitals(prev => prev.map(item =>
+                    String(item._id) === String(hospital._id)
+                        ? { ...item, accreditation: res.nabh || { enabled: Boolean(nextEnabled), certNo: hospital.accreditation?.certNo || '' } }
+                        : item
+                ));
+                setSuccess(res.message || `NABH accreditation ${nextEnabled ? 'activated' : 'deactivated'} for ${hospital.name}`);
+                setTimeout(() => setSuccess(''), 3500);
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update NABH accreditation status');
+        } finally {
+            setNabhQuickSavingId(null);
+        }
+    };
     const hospitalFormRef = useRef(null);
     const [deptDropdownOpen, setDeptDropdownOpen] = useState(false);
     const deptDropdownRef = useRef(null);
@@ -3795,6 +3822,36 @@ const CentralAdminDashboard = () => {
                                                                             🌐 {h.customDomain}
                                                                         </a>
                                                                     )}
+                                                                    <label
+                                                                        onClick={e => e.stopPropagation()}
+                                                                        style={{
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'center',
+                                                                            gap: '6px',
+                                                                            padding: '4px 10px',
+                                                                            borderRadius: '8px',
+                                                                            border: `1px solid ${h.accreditation?.enabled ? '#86efac' : '#cbd5e1'}`,
+                                                                            background: h.accreditation?.enabled ? '#f0fdf4' : '#f8fafc',
+                                                                            color: h.accreditation?.enabled ? '#15803d' : '#475569',
+                                                                            fontSize: '12px',
+                                                                            fontWeight: 600,
+                                                                            cursor: nabhQuickSavingId === h._id ? 'wait' : 'pointer',
+                                                                            marginTop: '6px'
+                                                                        }}
+                                                                        title="Central Admin Only: Toggle NABH accreditation for this hospital"
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={h.accreditation?.enabled === true}
+                                                                            disabled={nabhQuickSavingId === h._id}
+                                                                            onChange={(e) => handleQuickNabhCheckbox(h, e.target.checked)}
+                                                                            style={{ accentColor: '#16a34a', width: '14px', height: '14px', cursor: 'pointer' }}
+                                                                        />
+                                                                        <span>
+                                                                            {h.accreditation?.enabled ? 'NABH Accredited' : 'NABH Accreditation'}
+                                                                            {h.accreditation?.enabled && h.accreditation?.certNo ? ` (${h.accreditation.certNo})` : ''}
+                                                                        </span>
+                                                                    </label>
                                                                     <WhiteLabelBuilder hospital={h} />
                                                                 </div>
                                                             </div>
@@ -3802,6 +3859,15 @@ const CentralAdminDashboard = () => {
                                                             <div className="cad-hospital-card-footer">
                                                                 <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
                                                                 <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="cad-btn-sm-branding"
+                                                                        style={{ background: h.accreditation?.enabled ? '#ecfdf5' : '#f1f5f9', color: h.accreditation?.enabled ? '#047857' : '#334155', borderColor: h.accreditation?.enabled ? '#6ee7b7' : '#cbd5e1' }}
+                                                                        onClick={() => setNabhHospital(h)}
+                                                                        title="Configure NABH Checkbox & Certificate Number"
+                                                                    >
+                                                                        🏅 NABH
+                                                                    </button>
                                                                     <button className="cad-btn-sm-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
                                                                     <button className="cad-btn-sm-edit" onClick={() => openEditHospital(h)}>Edit</button>
                                                                     <button className="cad-btn-sm-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
@@ -4743,6 +4809,24 @@ const CentralAdminDashboard = () => {
                 <HospitalBrandingEditor
                     hospital={brandingHospital}
                     onClose={() => { setBrandingHospital(null); fetchHospitals(); }}
+                />
+            )}
+
+            {/* 🏅 Central Admin NABH Accreditation Modal */}
+            {nabhHospital && (
+                <NabhAccreditationModal
+                    hospital={nabhHospital}
+                    onClose={() => setNabhHospital(null)}
+                    onUpdated={(res) => {
+                        if (res?.hospitalId) {
+                            setHospitals(prev => prev.map(item =>
+                                String(item._id) === String(res.hospitalId)
+                                    ? { ...item, accreditation: res.nabh || item.accreditation }
+                                    : item
+                            ));
+                        }
+                        fetchHospitals(true);
+                    }}
                 />
             )}
         </div>

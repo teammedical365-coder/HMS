@@ -391,6 +391,8 @@ function getTenantModels(tenantDb) {
     const { migrationTemplateSchema } = require('../models/migrationTemplate.model');
     const { customFieldDefinitionSchema } = require('../models/customFieldDefinition.model');
     const { migrationRecordSchema } = require('../models/migrationRecord.model');
+    const { inpatientClinicalNoteSchema } = require('../models/inpatientClinicalNote.model');
+    const { patientNurseNoteSchema } = require('../models/patientNurseNote.model');
 
     const models = {
         User: model('User', userSchema),
@@ -424,6 +426,8 @@ function getTenantModels(tenantDb) {
         MigrationTemplate: model('MigrationTemplate', migrationTemplateSchema),
         CustomFieldDefinition: model('CustomFieldDefinition', customFieldDefinitionSchema),
         MigrationRecord: model('MigrationRecord', migrationRecordSchema),
+        InpatientClinicalNote: model('InpatientClinicalNote', inpatientClinicalNoteSchema),
+        PatientNurseNote: model('PatientNurseNote', patientNurseNoteSchema),
         SyncEvent: require('../models/syncEvent.model'),
         LocalInstallation: require('../models/localInstallation.model'),
         SyncConflict: require('../models/syncConflict.model'),

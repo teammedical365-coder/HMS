@@ -11,6 +11,7 @@ import {
     FiSearch
 } from 'react-icons/fi';
 import './AppointmentManagement.css';
+import './PatientMonitoring.css';
 import './RevisitSchedule.css';
 import toast from 'react-hot-toast';
 import CustomSelect from '../../components/common/CustomSelect';
@@ -319,7 +320,7 @@ const RevisitSchedule = () => {
                     }}
                 >
                     <FiPlus />
-                    <span>+ Schedule New Revisit</span>
+                    <span>Schedule New Revisit</span>
                 </button>
             </div>
 

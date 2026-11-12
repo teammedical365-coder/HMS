@@ -37,6 +37,7 @@ import {
     FiPrinter
 } from 'react-icons/fi';
 import TPRChartModal from '../../components/ipd/TPRChartModal';
+import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import './NursePatientWorkspace.css';
 
 // ── Tab definitions ──
@@ -59,6 +60,7 @@ const VITALS_INIT = {
     spo2: '',
     respiratoryRate: '',
     painScore: '',
+    remark: '',
     notes: ''
 };
 
@@ -116,6 +118,10 @@ const NursePatientWorkspace = () => {
     const [notesFilter, setNotesFilter] = useState('ALL');
     const [clarifyModal, setClarifyModal] = useState({ open: false, order: null, question: '' });
     const [tprModalOpen, setTprModalOpen] = useState(false);
+    const [clinicalNotesModal, setClinicalNotesModal] = useState({ open: false, tab: 'notes' });
+    const [editingVitalsId, setEditingVitalsId] = useState(null);
+    const [editingRemarkText, setEditingRemarkText] = useState('');
+    const [savingRemark, setSavingRemark] = useState(false);
 
     // History filter
     const [historyFilter, setHistoryFilter] = useState('All');
@@ -413,6 +419,7 @@ const NursePatientWorkspace = () => {
         e.preventDefault();
         setSubmitting(true);
         try {
+            const cleanRemark = (vitalsForm.remark || vitalsForm.notes || '').trim();
             await ipdClinicalAPI.recordVitals(admissionId, {
                 systolicBP: vitalsForm.systolicBP ? Number(vitalsForm.systolicBP) : undefined,
                 diastolicBP: vitalsForm.diastolicBP ? Number(vitalsForm.diastolicBP) : undefined,
@@ -421,7 +428,8 @@ const NursePatientWorkspace = () => {
                 spo2: vitalsForm.spo2 ? Number(vitalsForm.spo2) : undefined,
                 respiratoryRate: vitalsForm.respiratoryRate ? Number(vitalsForm.respiratoryRate) : undefined,
                 painScore: vitalsForm.painScore ? Number(vitalsForm.painScore) : undefined,
-                notes: vitalsForm.notes.trim()
+                remark: cleanRemark,
+                notes: cleanRemark
             });
             showToast('Patient vitals recorded successfully', 'success');
             setVitalsModalOpen(false);
@@ -431,6 +439,25 @@ const NursePatientWorkspace = () => {
             showToast(err.response?.data?.message || 'Failed to record vitals', 'error');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleSaveVitalsRemark = async (vitalsId) => {
+        if (!vitalsId) return;
+        setSavingRemark(true);
+        try {
+            await ipdClinicalAPI.updateVitalsRemark(admissionId, vitalsId, {
+                remark: editingRemarkText.trim(),
+                notes: editingRemarkText.trim()
+            });
+            showToast('Vitals remark updated', 'success');
+            setEditingVitalsId(null);
+            setEditingRemarkText('');
+            fetchPatientData(true);
+        } catch (err) {
+            showToast(err.response?.data?.message || 'Failed to update remark', 'error');
+        } finally {
+            setSavingRemark(false);
         }
     };
 
@@ -565,6 +592,15 @@ const NursePatientWorkspace = () => {
                             title="View, Print & Download TPR Chart"
                         >
                             <FiPrinter size={13} /> TPR Chart
+                        </button>
+                        <button
+                            type="button"
+                            className="npw-btn-outline"
+                            style={{ borderColor: '#0f2e7a', color: '#0f2e7a', fontWeight: 700 }}
+                            onClick={() => setClinicalNotesModal({ open: true, tab: 'notes' })}
+                            title="2-Page In-Patient Clinical Notes & Patient Communication"
+                        >
+                            <FiFileText size={13} /> Clinical Notes
                         </button>
                     </div>
                 </div>
@@ -1425,12 +1461,14 @@ const NursePatientWorkspace = () => {
                                                         <th>RR</th>
                                                         <th>Pain</th>
                                                         <th>Recorded By</th>
-                                                        <th>Notes</th>
+                                                        <th>Remark</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {vitalsHistory.map(v => {
                                                         const nurse = typeof v.recordedBy === 'object' ? v.recordedBy?.name : (v.recordedBy || 'Nurse');
+                                                        const currentRemark = (v.remark || v.notes || '').trim();
+                                                        const isEditing = editingVitalsId === v._id;
                                                         return (
                                                             <tr key={v._id}>
                                                                 <td><strong>{formatTime(v.recordedAt || v.createdAt)}</strong> <span className="npw-muted">({formatDate(v.recordedAt || v.createdAt)})</span></td>
@@ -1445,7 +1483,50 @@ const NursePatientWorkspace = () => {
                                                                 <td>{v.respiratoryRate || '—'}</td>
                                                                 <td>{v.painScore !== undefined ? v.painScore : '—'}</td>
                                                                 <td>{nurse}</td>
-                                                                <td>{v.notes || '—'}</td>
+                                                                <td>
+                                                                    {isEditing ? (
+                                                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', minWidth: '180px' }}>
+                                                                            <input
+                                                                                type="text"
+                                                                                value={editingRemarkText}
+                                                                                onChange={e => setEditingRemarkText(e.target.value)}
+                                                                                placeholder="Enter clinical remark..."
+                                                                                style={{ padding: '4px 8px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={savingRemark}
+                                                                                onClick={() => handleSaveVitalsRemark(v._id)}
+                                                                                style={{ padding: '4px 8px', fontSize: '11.5px', fontWeight: 700, background: '#0d9488', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                            >
+                                                                                Save
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                disabled={savingRemark}
+                                                                                onClick={() => { setEditingVitalsId(null); setEditingRemarkText(''); }}
+                                                                                style={{ padding: '4px 7px', fontSize: '11.5px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
+                                                                            >
+                                                                                Cancel
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                                                            <span>{currentRemark || '—'}</span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setEditingVitalsId(v._id);
+                                                                                    setEditingRemarkText(currentRemark);
+                                                                                }}
+                                                                                style={{ padding: '2px 7px', fontSize: '11px', fontWeight: 600, background: '#f8fafc', color: '#0f766e', border: '1px solid #cbd5e1', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                title="Edit remark for this vitals entry"
+                                                                            >
+                                                                                Edit
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </td>
                                                             </tr>
                                                         );
                                                     })}
@@ -1652,12 +1733,12 @@ const NursePatientWorkspace = () => {
                                     </div>
                                 </div>
                                 <div className="npw-form-group full">
-                                    <label>Clinical Observations / Notes</label>
+                                    <label>Remark (Clinical Observation / TPR Chart Remark)</label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Patient resting comfortably, regular sinus rhythm"
-                                        value={vitalsForm.notes}
-                                        onChange={e => setVitalsForm({ ...vitalsForm, notes: e.target.value })}
+                                        placeholder="e.g. Patient resting comfortably, afebrile, vitals stable"
+                                        value={vitalsForm.remark}
+                                        onChange={e => setVitalsForm({ ...vitalsForm, remark: e.target.value, notes: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -1856,6 +1937,16 @@ const NursePatientWorkspace = () => {
                 admission={admission}
                 patient={admission?.patientId}
                 vitals={vitalsHistory}
+            />
+
+            {/* ── 2-Page In-Patient Clinical Notes & Patient Communication Modal ── */}
+            <InpatientClinicalNotesModal
+                isOpen={clinicalNotesModal.open}
+                onClose={() => setClinicalNotesModal(prev => ({ ...prev, open: false }))}
+                admissionId={admissionId}
+                admission={admission}
+                patient={admission?.patientId}
+                initialTab={clinicalNotesModal.tab}
             />
         </div>
     );
