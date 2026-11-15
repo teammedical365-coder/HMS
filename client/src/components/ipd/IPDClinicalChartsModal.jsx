@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../store/hooks';
 import { useBranding } from '../../context/BrandingContext';
 import { ipdClinicalAPI, admissionAPI, hospitalAPI } from '../../utils/api';
@@ -21,6 +21,8 @@ import {
     DRUG_CHART_MAR_BLOCKS_PER_PAGE,
     DRUG_CHART_PAGE2_SUBCOLS_MM,
     DRUG_CHART_PAGE2_SLOT_MM,
+    STAT_COLS,
+    IV_COLS,
     toLocalDateKey,
     formatDateDisplay,
     formatShortTime,
@@ -49,8 +51,16 @@ import {
     FiChevronLeft,
     FiChevronRight,
     FiEye,
-    FiDroplet
+    FiDroplet,
+    FiMic,
+    FiEdit3,
+    FiTrash2,
+    FiRotateCcw,
+    FiRotateCw,
+    FiZap
 } from 'react-icons/fi';
+import TabletPenCanvas from './TabletPenCanvas';
+import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import toast from 'react-hot-toast';
 import './IPDClinicalChartsModal.css';
 
@@ -76,14 +86,18 @@ const IPDClinicalChartsModal = ({
     admissionId,
     admission: initialAdmission,
     patient: initialPatient,
-    initialTab = 'progress_notes', // 'progress_notes' | 'drug_stat_iv' | 'drug_mar'
+    initialTab = 'progress_notes', // 'progress_notes' | 'drug_chart'
     isBlank = false
 }) => {
     const { user } = useAuth();
     const { branding, hospitalName: brandingHospitalName } = useBranding();
 
-    const [activeTab, setActiveTab] = useState(initialTab);
-    const [viewMode, setViewMode] = useState(isBlank ? 'preview' : 'workspace'); // 'workspace' | 'preview'
+    const normalizeTab = (tab) => {
+        if (tab === 'drug_stat_iv' || tab === 'drug_mar' || tab === 'drug_chart') return 'drug_chart';
+        return 'progress_notes';
+    };
+
+    const [activeTab, setActiveTab] = useState(normalizeTab(initialTab));
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState(false);
 
@@ -92,6 +106,45 @@ const IPDClinicalChartsModal = ({
 
     // Progress Notes State
     const [progressNotes, setProgressNotes] = useState([]);
+    const [manualExtraPages, setManualExtraPages] = useState(0);
+    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
+
+    // Master Inline Editor Toolbar state
+    const [activeTool, setActiveTool] = useState('type'); // 'type' | 'pen' | 'eraser'
+    const [penColor, setPenColor] = useState('#1d4ed8');
+    const [penWidth, setPenWidth] = useState(2);
+    const [penStrokes, setPenStrokes] = useState({});
+    const [undoStack, setUndoStack] = useState([]);
+    const [redoStack, setRedoStack] = useState([]);
+    const [activeLineKey, setActiveLineKey] = useState(null);
+    const [activeFocusedKey, setActiveFocusedKey] = useState(null);
+    const [dictatingKey, setDictatingKey] = useState(null);
+    const lineDictationRef = useRef(null);
+    const inputsRef = useRef({});
+    const [dirtyNotes, setDirtyNotes] = useState(false);
+
+    // Drug Chart Direct Inline Editing State
+    const [editableStatRows, setEditableStatRows] = useState([]);
+    const [editableIvRows, setEditableIvRows] = useState([]);
+    const [dirtyDrugChart, setDirtyDrugChart] = useState(false);
+    const [savingDrugChart, setSavingDrugChart] = useState(false);
+
+    const handleUndo = useCallback(() => {
+        if (undoStack.length === 0) return;
+        const prev = undoStack[undoStack.length - 1];
+        setRedoStack(r => [...r, progressNotes]);
+        setUndoStack(u => u.slice(0, -1));
+        setProgressNotes(prev);
+    }, [undoStack, progressNotes]);
+
+    const handleRedo = useCallback(() => {
+        if (redoStack.length === 0) return;
+        const next = redoStack[redoStack.length - 1];
+        setUndoStack(u => [...u, progressNotes]);
+        setRedoStack(r => r.slice(0, -1));
+        setProgressNotes(next);
+    }, [redoStack, progressNotes]);
+
     const [newProgressForm, setNewProgressForm] = useState({
         recordedAt: toDateTimeLocalValue(),
         sheetNo: '1',
@@ -152,7 +205,18 @@ const IPDClinicalChartsModal = ({
     const [savingMarCell, setSavingMarCell] = useState(false);
     const [expandedMarAudit, setExpandedMarAudit] = useState(false);
 
-    const effectiveAdmissionId = admissionId || initialAdmission?._id || null;
+    // Drug Chart Inline CRUD State (Page 1 & Page 2)
+    const [deletedStatIds, setDeletedStatIds] = useState([]);
+    const [deletedIvIds, setDeletedIvIds] = useState([]);
+    const [editableMedBlocks, setEditableMedBlocks] = useState([]);
+    const [discontinuedOrderIds, setDiscontinuedOrderIds] = useState([]);
+    const [manualExtraDrugPages, setManualExtraDrugPages] = useState(0);
+
+    const rawAdmissionId = admissionId || initialAdmission?._id || initialAdmission?.id || admission?._id || null;
+    const effectiveAdmissionId = (typeof rawAdmissionId === 'object' && rawAdmissionId)
+        ? String(rawAdmissionId._id || rawAdmissionId.id || '')
+        : (rawAdmissionId ? String(rawAdmissionId) : null);
+    const isValidAdmission = Boolean(effectiveAdmissionId && effectiveAdmissionId !== 'undefined' && effectiveAdmissionId !== 'null' && effectiveAdmissionId.trim().length === 24);
 
     // Derive Role Flags accurately from user object
     const sanitizedRole = useMemo(() => {
@@ -161,8 +225,13 @@ const IPDClinicalChartsModal = ({
     }, [user]);
 
     const userPerms = useMemo(() => user?._roleData?.permissions || [], [user]);
+    const isDoctorUser = useMemo(() => (
+        ['doctor', 'clinicdoctor', 'surgeon', 'consultant', 'physician', 'resident', 'residentdoctor'].includes(sanitizedRole) ||
+        (userPerms.includes('doctor_access') && !['nurse', 'staffnurse', 'headnurse', 'assistant', 'doctorassistant'].includes(sanitizedRole))
+    ), [sanitizedRole, userPerms]);
+
     const isDoctorOrAdmin = useMemo(() => (
-        ['doctor', 'clinicdoctor', 'surgeon', 'consultant', 'physician', 'doctorassistant', 'assistant', 'clinicalassistant', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin'].includes(sanitizedRole) ||
+        ['doctor', 'clinicdoctor', 'surgeon', 'consultant', 'physician', 'doctorassistant', 'assistant', 'clinicalassistant', 'resident', 'residentdoctor', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin'].includes(sanitizedRole) ||
         userPerms.includes('*') ||
         userPerms.includes('doctor_access') ||
         userPerms.includes('clinical_manage')
@@ -177,23 +246,45 @@ const IPDClinicalChartsModal = ({
 
     useEffect(() => {
         if (isOpen) {
-            setActiveTab(initialTab || 'progress_notes');
-            setViewMode(isBlank ? 'preview' : 'workspace');
+            setActiveTab(normalizeTab(initialTab));
             setNewProgressForm({ recordedAt: toDateTimeLocalValue(), sheetNo: '1', note: '' });
             setStatForm(prev => ({
                 ...prev,
                 date: todayDateDisplay(),
                 time: nowTime12h(),
-                doctorName: user?.name ? (isDoctorOrAdmin ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : '') : ''
+                doctorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : '') : ''
             }));
             setIvForm(prev => ({
                 ...prev,
                 date: todayDateDisplay(),
                 timeStart: nowTime12h(),
-                doctorName: user?.name ? (isDoctorOrAdmin ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : '') : ''
+                doctorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : '') : ''
             }));
         }
-    }, [isOpen, initialTab, isBlank, user?.name, isDoctorOrAdmin]);
+    }, [isOpen, initialTab, isBlank, user?.name, isDoctorUser]);
+
+    // Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                if (e.shiftKey) {
+                    e.preventDefault();
+                    handleRedo();
+                } else {
+                    e.preventDefault();
+                    handleUndo();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                handleRedo();
+            }
+        };
+
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [isOpen, undoStack, redoStack]);
 
     const loadAllData = useCallback(async () => {
         if (!isOpen) return;
@@ -203,7 +294,7 @@ const IPDClinicalChartsModal = ({
                 ? hospitalAPI.getMyBranding().catch(() => null)
                 : Promise.resolve(null);
 
-            if (!effectiveAdmissionId || isBlank) {
+            if (!isValidAdmission || isBlank) {
                 const brandRes = await brandingPromise;
                 if (brandRes?.hospital) setTenantHospital(brandRes.hospital);
                 return;
@@ -283,8 +374,41 @@ const IPDClinicalChartsModal = ({
         [initialPatient, admission, isBlank]
     );
 
-    const combinedStatRows = useMemo(() => buildCombinedStatRows(drugChart, orders), [drugChart, orders]);
-    const combinedIvRows = useMemo(() => buildCombinedIVFluidRows(drugChart, orders), [drugChart, orders]);
+    const combinedStatRows = useMemo(() => buildCombinedStatRows(drugChart, orders, admission), [drugChart, orders, admission]);
+    const combinedIvRows = useMemo(() => buildCombinedIVFluidRows(drugChart, orders, admission), [drugChart, orders, admission]);
+
+    const admissionDoctorName = useMemo(() => {
+        const docObj = (admission && typeof admission.doctorId === 'object' ? admission.doctorId : null) || {};
+        const apptObj = (admission && typeof admission.appointmentId === 'object' ? admission.appointmentId : null) || {};
+        const admittedByObj = (admission && typeof admission.admittedBy === 'object' ? admission.admittedBy : null) || {};
+        const raw = docObj.name || 
+            apptObj.doctorName || 
+            (typeof admission?.doctorName === 'string' ? admission.doctorName : '') ||
+            admittedByObj.name ||
+            headerData.consultant ||
+            '';
+        if (!raw) return '';
+        return /^dr\.?\s*/i.test(raw) ? raw : `Dr. ${raw}`;
+    }, [admission, headerData.consultant]);
+
+    const defaultPrescribingDoctor = useMemo(() => {
+        if (isDoctorUser) {
+            return user?.name ? (/^dr\.?\s*/i.test(user.name) ? user.name : `Dr. ${user.name}`) : '';
+        }
+        // If nurse or assistant or staff: NEVER auto-fill nurse's name into doctor column!
+        return admissionDoctorName || '';
+    }, [isDoctorUser, user?.name, admissionDoctorName]);
+
+    const sanitizeDisplayDoctor = useCallback((docName, givenByName) => {
+        const d = String(docName || '').trim();
+        const g = String(givenByName || '').trim();
+        const isNurse = ['nurse', 'staffnurse', 'headnurse'].includes(sanitizedRole);
+        if (!d) return admissionDoctorName || '';
+        if (g && d.toLowerCase() === g.toLowerCase()) return admissionDoctorName || '';
+        if (isNurse && user?.name && d.toLowerCase() === user.name.toLowerCase()) return admissionDoctorName || '';
+        if (/\(nurse\)/i.test(d)) return admissionDoctorName || '';
+        return /^dr\.?\s*/i.test(d) ? d : `Dr. ${d}`;
+    }, [sanitizedRole, user?.name, admissionDoctorName]);
 
     // Scheduled MAR orders (exclude STAT orders unless they already have MAR entries)
     const marOrders = useMemo(() => (orders || []).filter(o => {
@@ -325,6 +449,559 @@ const IPDClinicalChartsModal = ({
         });
         return map;
     }, [marRecords]);
+
+    // ==================== DRUG CHART ROW SYNC & INLINE EDITING ====================
+    useEffect(() => {
+        if (!dirtyDrugChart) {
+            const rows = [...combinedStatRows].map(s => ({
+                ...s,
+                doctorName: sanitizeDisplayDoctor(s.doctorName, s.givenByName)
+            }));
+            while (rows.length < DRUG_CHART_STAT_ROWS_PER_PAGE) {
+                rows.push({
+                    _id: null,
+                    date: todayDateDisplay(),
+                    time: nowTime12h(),
+                    drugName: '',
+                    dose: '',
+                    route: 'IV',
+                    doctorName: defaultPrescribingDoctor,
+                    givenByName: !isDoctorUser ? (user?.name || '') : '',
+                    checkedByName: '',
+                    remarks: '',
+                    status: 'PENDING',
+                    isNew: true
+                });
+            }
+            setEditableStatRows(rows);
+        }
+    }, [combinedStatRows, dirtyDrugChart, defaultPrescribingDoctor, sanitizeDisplayDoctor, isDoctorUser, user?.name]);
+
+    useEffect(() => {
+        if (!dirtyDrugChart) {
+            const rows = [...combinedIvRows].map(iv => ({
+                ...iv,
+                doctorName: sanitizeDisplayDoctor(iv.doctorName, iv.adminByName)
+            }));
+            while (rows.length < DRUG_CHART_IV_ROWS_PER_PAGE) {
+                rows.push({
+                    _id: null,
+                    date: todayDateDisplay(),
+                    fluidName: '',
+                    volume: '',
+                    timeStart: nowTime12h(),
+                    infusionTimeHrs: '',
+                    doctorName: defaultPrescribingDoctor,
+                    adminByName: !isDoctorUser ? (user?.name || '') : '',
+                    remarks: '',
+                    status: 'PENDING',
+                    isNew: true
+                });
+            }
+            setEditableIvRows(rows);
+        }
+    }, [combinedIvRows, dirtyDrugChart, defaultPrescribingDoctor, sanitizeDisplayDoctor, isDoctorUser, user?.name]);
+
+    useEffect(() => {
+        if (!dirtyDrugChart) {
+            const blocks = [];
+            (marOrders || []).forEach(ord => {
+                const doseStr = `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim();
+                const drRaw = ord.doctorId?.name || ord.prescribedByName || '';
+                const drStr = drRaw ? (/^dr/i.test(drRaw) ? drRaw : `Dr. ${drRaw}`) : '';
+                const startStr = ord.startDate ? formatDateDisplay(ord.startDate) : '';
+
+                blocks.push({
+                    _id: String(ord._id),
+                    orderId: ord._id,
+                    medicineName: ord.medicineName || '',
+                    startDate: startStr,
+                    route: ord.route || 'Oral',
+                    dose: doseStr,
+                    doctorName: drStr,
+                    status: ord.status || 'ACTIVE',
+                    instructions: ord.instructions || '',
+                    isNew: false
+                });
+            });
+
+            const defaultDoc = defaultPrescribingDoctor;
+            const minBlockCount = Math.max(DRUG_CHART_MAR_BLOCKS_PER_PAGE, (1 + manualExtraDrugPages) * DRUG_CHART_MAR_BLOCKS_PER_PAGE);
+            while (blocks.length < minBlockCount) {
+                blocks.push({
+                    _id: null,
+                    orderId: null,
+                    medicineName: '',
+                    startDate: todayDateDisplay(),
+                    route: 'Oral',
+                    dose: '',
+                    doctorName: defaultDoc,
+                    status: 'ACTIVE',
+                    instructions: '',
+                    isNew: true
+                });
+            }
+            setEditableMedBlocks(blocks);
+        }
+    }, [marOrders, dirtyDrugChart, isDoctorOrAdmin, user?.name, manualExtraDrugPages]);
+
+    // ==================== LINE-LEVEL MICROPHONE DICTATION ====================
+    const handleToggleLineDictation = (targetKey, currentValue, onChangeCallback, isNumeric = false) => {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            toast.error('Web Speech API is not supported in this browser. Please use Chrome/Edge or AI Voice Scribe.');
+            return;
+        }
+
+        if (dictatingKey === targetKey) {
+            if (lineDictationRef.current) {
+                lineDictationRef.current.stop();
+                lineDictationRef.current = null;
+            }
+            setDictatingKey(null);
+            return;
+        }
+
+        if (lineDictationRef.current) {
+            lineDictationRef.current.stop();
+            lineDictationRef.current = null;
+        }
+
+        try {
+            const recognition = new SpeechRec();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-IN';
+
+            recognition.onstart = () => {
+                setDictatingKey(targetKey);
+                toast('Listening for speech...', { icon: '🎙️', duration: 1500 });
+            };
+
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                }
+                if (transcript.trim()) {
+                    let spoken = transcript.trim();
+                    if (isNumeric) {
+                        const numMatch = spoken.match(/\d+(\.\d+)?/);
+                        if (numMatch) spoken = numMatch[0];
+                    }
+                    const updatedVal = currentValue ? `${currentValue} ${spoken}`.trim() : spoken;
+                    onChangeCallback(updatedVal);
+                }
+            };
+
+            recognition.onerror = (e) => {
+                console.warn('Line dictation error:', e?.error);
+                setDictatingKey(null);
+                lineDictationRef.current = null;
+            };
+
+            recognition.onend = () => {
+                setDictatingKey(null);
+                lineDictationRef.current = null;
+            };
+
+            lineDictationRef.current = recognition;
+            recognition.start();
+        } catch (err) {
+            console.error('Line dictation failed to start:', err);
+            setDictatingKey(null);
+        }
+    };
+
+    // ==================== DRUG CHART INLINE CELL HANDLERS ====================
+    const handleStatCellChange = (rIdx, colKey, val) => {
+        setDirtyDrugChart(true);
+        setEditableStatRows(prev => {
+            const copy = [...prev];
+            copy[rIdx] = { ...copy[rIdx], [colKey]: val };
+            return copy;
+        });
+    };
+
+    const handleIvCellChange = (rIdx, colKey, val) => {
+        setDirtyDrugChart(true);
+        setEditableIvRows(prev => {
+            const copy = [...prev];
+            copy[rIdx] = { ...copy[rIdx], [colKey]: val };
+            return copy;
+        });
+    };
+
+    const handleDeleteStatRow = (rIdx) => {
+        const target = editableStatRows[rIdx];
+        if (target?._id && !String(target._id).startsWith('order-') && !target.isNew) {
+            setDeletedStatIds(prev => [...prev, String(target._id)]);
+        }
+        setDirtyDrugChart(true);
+        setEditableStatRows(prev => {
+            const copy = prev.filter((_, idx) => idx !== rIdx);
+            const defaultDoc = defaultPrescribingDoctor;
+            while (copy.length < DRUG_CHART_STAT_ROWS_PER_PAGE) {
+                copy.push({
+                    _id: null,
+                    date: todayDateDisplay(),
+                    time: nowTime12h(),
+                    drugName: '',
+                    dose: '',
+                    route: 'IV',
+                    doctorName: defaultDoc,
+                    givenByName: !isDoctorUser ? (user?.name || '') : '',
+                    checkedByName: '',
+                    remarks: '',
+                    status: 'PENDING',
+                    isNew: true
+                });
+            }
+            return copy;
+        });
+    };
+
+    const handleDeleteIvRow = (rIdx) => {
+        const target = editableIvRows[rIdx];
+        if (target?._id && !String(target._id).startsWith('ivorder-') && !target.isNew) {
+            setDeletedIvIds(prev => [...prev, String(target._id)]);
+        }
+        setDirtyDrugChart(true);
+        setEditableIvRows(prev => {
+            const copy = prev.filter((_, idx) => idx !== rIdx);
+            const defaultDoc = defaultPrescribingDoctor;
+            while (copy.length < DRUG_CHART_IV_ROWS_PER_PAGE) {
+                copy.push({
+                    _id: null,
+                    date: todayDateDisplay(),
+                    fluidName: '',
+                    volume: '',
+                    timeStart: nowTime12h(),
+                    infusionTimeHrs: '',
+                    doctorName: defaultDoc,
+                    adminByName: !isDoctorUser ? (user?.name || '') : '',
+                    remarks: '',
+                    status: 'PENDING',
+                    isNew: true
+                });
+            }
+            return copy;
+        });
+    };
+
+    const handleMedBlockChange = (bIdx, field, val) => {
+        setDirtyDrugChart(true);
+        setEditableMedBlocks(prev => {
+            const copy = [...prev];
+            copy[bIdx] = { ...copy[bIdx], [field]: val };
+            return copy;
+        });
+    };
+
+    const handleDiscontinueOrder = (bIdx) => {
+        const block = editableMedBlocks[bIdx];
+        if (block?.orderId) {
+            setDiscontinuedOrderIds(prev => [...prev, String(block.orderId)]);
+            setDirtyDrugChart(true);
+            setEditableMedBlocks(prev => {
+                const copy = [...prev];
+                copy[bIdx] = { ...copy[bIdx], status: 'CANCELLED' };
+                return copy;
+            });
+            toast.info(`Marked ${block.medicineName || 'Medication'} as Discontinued`);
+        } else {
+            // Draft block: reset back to empty
+            setEditableMedBlocks(prev => {
+                const copy = [...prev];
+                const defaultDoc = defaultPrescribingDoctor;
+                copy[bIdx] = {
+                    _id: null,
+                    orderId: null,
+                    medicineName: '',
+                    startDate: todayDateDisplay(),
+                    route: 'Oral',
+                    dose: '',
+                    doctorName: defaultDoc,
+                    status: 'ACTIVE',
+                    instructions: '',
+                    isNew: true
+                };
+                return copy;
+            });
+        }
+    };
+
+    const handleCellNav = (e, section, rIdx, colKey) => {
+        const statCols = ['date', 'drugName', 'dose', 'route', 'time', 'doctorName', 'givenByName', 'checkedByName', 'remarks'];
+        const ivCols = ['date', 'fluidName', 'volume', 'timeStart', 'infusionTimeHrs', 'doctorName', 'adminByName', 'remarks'];
+        const cols = section === 'stat' ? statCols : ivCols;
+        const colIdx = cols.indexOf(colKey);
+
+        if (e.key === 'Tab') {
+            if (!e.shiftKey && colIdx === cols.length - 1) {
+                e.preventDefault();
+                const nextKey = `${section}_${rIdx + 1}_${cols[0]}`;
+                inputsRef.current[nextKey]?.focus();
+            } else if (e.shiftKey && colIdx === 0 && rIdx > 0) {
+                e.preventDefault();
+                const prevKey = `${section}_${rIdx - 1}_${cols[cols.length - 1]}`;
+                inputsRef.current[prevKey]?.focus();
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const nextRowKey = `${section}_${rIdx + 1}_${colKey}`;
+            inputsRef.current[nextRowKey]?.focus();
+        } else if (e.key === 'Escape') {
+            e.target.blur();
+        }
+    };
+
+    const handleSaveDrugChartInline = async () => {
+        if (!effectiveAdmissionId) return;
+        setSavingDrugChart(true);
+        try {
+            const newOrdersToCreate = editableMedBlocks
+                .filter(b => b.isNew && b.medicineName && b.medicineName.trim())
+                .map(b => ({
+                    medicineName: b.medicineName.trim(),
+                    dose: b.dose,
+                    route: b.route,
+                    startDate: b.startDate,
+                    doctorName: b.doctorName
+                }));
+
+            const payload = {
+                drugAllergies: allergyForm,
+                statDoses: editableStatRows.filter(s => s && s.drugName && s.drugName.trim()),
+                ivFluids: editableIvRows.filter(iv => iv && iv.fluidName && iv.fluidName.trim()),
+                deletedStatIds,
+                deletedIvIds,
+                newRegularOrders: newOrdersToCreate,
+                discontinuedOrderIds
+            };
+            const res = await ipdClinicalAPI.updateDrugChart(effectiveAdmissionId, payload);
+            if (res?.drugChart) {
+                setDrugChart(res.drugChart);
+                setDirtyDrugChart(false);
+                setDeletedStatIds([]);
+                setDeletedIvIds([]);
+                setDiscontinuedOrderIds([]);
+                toast.success('Drug Chart (STAT, IV Fluids, Regular Orders & Allergies) saved successfully');
+                await loadAllData();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to save Drug Chart');
+        } finally {
+            setSavingDrugChart(false);
+        }
+    };
+
+    // ==================== AI VOICE SCRIBE & INLINE EDITING HANDLERS ====================
+    const handleSaveStrokes = (pageKey, newStrokes) => {
+        setPenStrokes(prev => ({
+            ...prev,
+            [pageKey]: newStrokes
+        }));
+    };
+
+    const handleProgressRowTextChange = (pageIdx, rowIdx, newText, r) => {
+        setDirtyNotes(true);
+        setUndoStack(u => [...u.slice(-20), progressNotes]);
+
+        if (r && r.noteId && !r.isSigRow) {
+            // Editing a specific line of an existing note
+            setProgressNotes(prev => prev.map(n => {
+                if (String(n._id) === String(r.noteId)) {
+                    const lines = String(n.note || '').split('\n');
+                    while (lines.length <= (r.lineIdx || 0)) lines.push('');
+                    lines[r.lineIdx || 0] = newText;
+                    return { ...n, note: lines.join('\n') };
+                }
+                return n;
+            }));
+        } else {
+            // Writing into a blank line (starts or continues the active draft note)
+            const sheetNum = String(pageIdx + 1);
+            setProgressNotes(prev => {
+                const activeDraftIdx = prev.findIndex(n => n.isNew);
+                if (activeDraftIdx >= 0) {
+                    const copy = [...prev];
+                    const draft = copy[activeDraftIdx];
+                    const lines = String(draft.note || '').split('\n');
+                    lines[lines.length - 1] = newText;
+                    copy[activeDraftIdx] = { ...draft, note: lines.join('\n') };
+                    return copy;
+                } else {
+                    const newEntry = {
+                        _id: `draft_${Date.now()}`,
+                        recordedAt: new Date().toISOString(),
+                        sheetNo: sheetNum,
+                        note: newText,
+                        authorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name.replace(/^dr\.?\s*/i, '')) : 'Clinical Staff',
+                        authorRole: user?._roleData?.name || user?.role || 'Clinician',
+                        isNew: true
+                    };
+                    return [...prev, newEntry];
+                }
+            });
+        }
+    };
+
+    const handleProgressRowKeyDown = (e, pageIdx, rowIdx, r) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            setDirtyNotes(true);
+            if (r && r.noteId && !r.isSigRow) {
+                // Split or add a new line inside this note
+                setProgressNotes(prev => {
+                    setUndoStack(u => [...u.slice(-20), prev]);
+                    return prev.map(n => {
+                        if (String(n._id) === String(r.noteId)) {
+                            const lines = String(n.note || '').split('\n');
+                            const curIdx = r.lineIdx !== undefined ? r.lineIdx : lines.length - 1;
+                            lines.splice(curIdx + 1, 0, '');
+                            return { ...n, note: lines.join('\n') };
+                        }
+                        return n;
+                    });
+                });
+            } else {
+                // Typing in active draft: append newline
+                setProgressNotes(prev => {
+                    const activeDraft = prev.find(n => n.isNew);
+                    if (activeDraft) {
+                        return prev.map(n => n._id === activeDraft._id ? { ...n, note: `${n.note}\n` } : n);
+                    }
+                    return prev;
+                });
+            }
+            setTimeout(() => {
+                const nextKey = `${pageIdx}_${rowIdx + 1}`;
+                inputsRef.current[nextKey]?.focus();
+            }, 50);
+        } else if (e.key === 'Backspace' && (!e.target.value || e.target.value.length === 0)) {
+            if (r && r.noteId && !r.isSigRow && (r.lineIdx || 0) > 0) {
+                e.preventDefault();
+                setProgressNotes(prev => prev.map(n => {
+                    if (String(n._id) === String(r.noteId)) {
+                        const lines = String(n.note || '').split('\n');
+                        if (lines.length > 1 && lines[r.lineIdx] === '') {
+                            lines.splice(r.lineIdx, 1);
+                            return { ...n, note: lines.join('\n') };
+                        }
+                    }
+                    return n;
+                }));
+                setTimeout(() => {
+                    const prevKey = `${pageIdx}_${rowIdx - 1}`;
+                    inputsRef.current[prevKey]?.focus();
+                }, 50);
+            } else if (rowIdx > 0) {
+                const prevKey = `${pageIdx}_${rowIdx - 1}`;
+                inputsRef.current[prevKey]?.focus();
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextKey = `${pageIdx}_${rowIdx + 1}`;
+            inputsRef.current[nextKey]?.focus();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prevKey = `${pageIdx}_${rowIdx - 1}`;
+            inputsRef.current[prevKey]?.focus();
+        }
+    };
+
+    const handleProgressRowFocus = (pageIdx, rowIdx) => {
+        setActiveLineKey(`${pageIdx}_${rowIdx}`);
+        setActiveFocusedKey(`pn_${pageIdx}_${rowIdx}`);
+    };
+
+    const handleSaveAllInline = async () => {
+        if (!effectiveAdmissionId) return;
+        setSavingProgress(true);
+        try {
+            // 1. Create all newly written notes
+            const newEntries = progressNotes.filter(n => n.isNew && n.note && n.note.trim());
+            for (const n of newEntries) {
+                await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
+                    recordedAt: n.recordedAt || new Date().toISOString(),
+                    sheetNo: n.sheetNo || '1',
+                    note: n.note.trim()
+                });
+            }
+
+            // 2. Update modified existing notes
+            const modifiedEntries = progressNotes.filter(n => !n.isNew && n._id && n.note);
+            for (const n of modifiedEntries) {
+                await ipdClinicalAPI.updateProgressNote(effectiveAdmissionId, n._id, {
+                    note: n.note.trim(),
+                    recordedAt: n.recordedAt,
+                    sheetNo: n.sheetNo || '1',
+                    editReason: 'Inline clinical documentation update'
+                }).catch(() => null);
+            }
+
+            setDirtyNotes(false);
+            toast.success('Clinical progress notes saved successfully');
+            await loadAllData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message || 'Failed to save notes');
+        } finally {
+            setSavingProgress(false);
+        }
+    };
+
+    const handleApproveVoiceScribe = ({ sections, session }) => {
+        const parts = [];
+        if (sections) {
+            Object.entries(sections).forEach(([key, val]) => {
+                if (!val) return;
+                if (typeof val === 'string' && val.trim()) {
+                    parts.push(val.trim());
+                } else if (typeof val === 'object' && Object.keys(val).length > 0) {
+                    const subParts = Object.entries(val).filter(([, v]) => Boolean(v)).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(', ');
+                    if (subParts) parts.push(subParts);
+                }
+            });
+        }
+        const textToInsert = parts.length > 0 ? parts.join('\n') : (session?.rawTranscript || '');
+
+        if (textToInsert) {
+            if (activeTab === 'progress_notes') {
+                const newEntry = {
+                    _id: `draft_${Date.now()}`,
+                    recordedAt: new Date().toISOString(),
+                    sheetNo: String(progressPages.length || 1),
+                    note: textToInsert,
+                    authorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name.replace(/^dr\.?\s*/i, '')) : 'Clinical Staff',
+                    authorRole: user?._roleData?.name || user?.role || 'Clinician',
+                    isNew: true
+                };
+                setProgressNotes(prev => [...prev, newEntry]);
+                setDirtyNotes(true);
+                toast.success('Gemini AI consultation structured into Progress Notes!');
+            } else if (activeTab === 'drug_chart') {
+                setDirtyDrugChart(true);
+                setEditableStatRows(prev => {
+                    const copy = [...prev];
+                    const firstEmpty = copy.findIndex(r => !r.remarks || !r.remarks.trim());
+                    const targetIdx = firstEmpty >= 0 ? firstEmpty : 0;
+                    if (copy[targetIdx]) {
+                        copy[targetIdx] = {
+                            ...copy[targetIdx],
+                            remarks: copy[targetIdx].remarks ? `${copy[targetIdx].remarks}; ${textToInsert}` : textToInsert
+                        };
+                    }
+                    return copy;
+                });
+                toast.success('Gemini AI consultation inserted into Drug Chart!');
+            } else {
+                toast.success('Gemini AI transcription captured');
+            }
+        }
+    };
 
     // ==================== PROGRESS NOTES HANDLERS ====================
     const handleAddProgressNote = async (e) => {
@@ -611,6 +1288,7 @@ const IPDClinicalChartsModal = ({
                     patient: initialPatient || admission?.patientId,
                     admission,
                     progressNotes,
+                    manualExtraSheets: manualExtraPages,
                     isBlank
                 });
                 toast.success('Progress Notes PDF downloaded');
@@ -641,6 +1319,7 @@ const IPDClinicalChartsModal = ({
                 patient: initialPatient || admission?.patientId,
                 admission,
                 progressNotes,
+                manualExtraSheets: manualExtraPages,
                 isBlank
             });
         } else {
@@ -660,8 +1339,8 @@ const IPDClinicalChartsModal = ({
     if (!isOpen) return null;
 
     const progressPages = isBlank
-        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE)
-        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE);
+        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE, manualExtraPages)
+        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE, manualExtraPages);
 
     const isAccredited = hospitalObj.accreditation?.enabled === true;
     const rawCert = isAccredited && hospitalObj.accreditation?.certNo ? String(hospitalObj.accreditation.certNo).trim() : '';
@@ -669,19 +1348,24 @@ const IPDClinicalChartsModal = ({
     const hospLogoUrl = hospitalObj.logoUrl || hospitalObj.logo || '';
     const hospName = hospitalObj.name || hospitalObj.appName || 'Hospital';
 
-    const renderPatientStrip = () => (
-        <div className="ipdc-banner">
-            <span>Patient Name : {ptDetails.name}</span>
-            <span className="ipdc-sep">|</span>
-            <span>UHID : {ptDetails.uhid}</span>
-            <span className="ipdc-sep">|</span>
-            <span>IPD : {ptDetails.ipdNumber}</span>
-            <span className="ipdc-sep">|</span>
-            <span>Gender : {ptDetails.gender}</span>
-            <span className="ipdc-sep">|</span>
-            <span>Age : {ptDetails.age}</span>
-        </div>
-    );
+    const renderPatientStrip = () => {
+        const totalChars =
+            String(ptDetails.name || '').length +
+            String(ptDetails.uhid || '').length +
+            String(ptDetails.ipdNumber || '').length +
+            String(ptDetails.gender || '').length +
+            String(ptDetails.age || '').length;
+        const dynamicFontPx = totalChars > 72 ? 10 : totalChars > 56 ? 11 : 12.2;
+        return (
+            <div className="ipdc-banner dc-p2-banner" style={{ fontSize: `${dynamicFontPx}px` }}>
+                <span>Patient Name : {ptDetails.name}</span>
+                <span>UHID : {ptDetails.uhid}</span>
+                <span>IPD : {ptDetails.ipdNumber}</span>
+                <span>Gender : {ptDetails.gender}</span>
+                <span>Age : {ptDetails.age}</span>
+            </div>
+        );
+    };
 
     const renderDrugPage2PatientStrip = () => {
         const totalChars =
@@ -797,22 +1481,14 @@ const IPDClinicalChartsModal = ({
 
                     <div className="ipdc-header-actions">
                         {!isBlank && (
-                            <div className="ipdc-mode-switch">
-                                <button
-                                    type="button"
-                                    className={`ipdc-mode-btn ${viewMode === 'workspace' ? 'active' : ''}`}
-                                    onClick={() => setViewMode('workspace')}
-                                >
-                                    <FiEdit2 size={13} /> Edit Workspace
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`ipdc-mode-btn ${viewMode === 'preview' ? 'active' : ''}`}
-                                    onClick={() => setViewMode('preview')}
-                                >
-                                    <FiEye size={13} /> Exact A4 Preview
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                className="ipdc-btn-scribe"
+                                onClick={() => setIsScribeModalOpen(true)}
+                                title="AI Voice Scribe & Dictation (Gemini 3.6 Flash)"
+                            >
+                                <FiZap size={14} /> <span>AI Voice Scribe</span>
+                            </button>
                         )}
                         <button type="button" className="ipdc-btn-outline" onClick={handlePrint}>
                             <FiPrinter size={14} /> <span>Print</span>
@@ -839,7 +1515,7 @@ const IPDClinicalChartsModal = ({
                     </div>
                 )}
 
-                {/* ── 3 Required Clinical Tabs ── */}
+                {/* ── 2 Unified Clinical Document Tabs ── */}
                 <div className="ipdc-tabs">
                     <button
                         type="button"
@@ -851,170 +1527,189 @@ const IPDClinicalChartsModal = ({
                     </button>
                     <button
                         type="button"
-                        className={`ipdc-tab ${activeTab === 'drug_stat_iv' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('drug_stat_iv')}
+                        className={`ipdc-tab ${activeTab === 'drug_chart' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('drug_chart')}
                     >
                         <FiDroplet size={14} />
-                        <span>2. Drug Chart — STAT &amp; IV Fluids</span>
-                    </button>
-                    <button
-                        type="button"
-                        className={`ipdc-tab ${activeTab === 'drug_mar' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('drug_mar')}
-                    >
-                        <FiShield size={14} />
-                        <span>3. Drug Chart — Medication Administration ({marOrders.length})</span>
+                        <span>2. Drug Chart (Page 1 &amp; Page 2)</span>
                     </button>
                 </div>
+
+                {/* ── Master Document Editing Toolbar (Word-like inline editing) ── */}
+                {!isBlank && (
+                    <div className="ipdc-doc-toolbar">
+                        <div className="ipdc-toolbar-group">
+                            <button
+                                type="button"
+                                className={`ipdc-tool-btn ${activeTool === 'type' ? 'active' : ''}`}
+                                onClick={() => setActiveTool('type')}
+                                title="Type directly on ruled lines and document cells"
+                            >
+                                <FiEdit2 size={13} />
+                                <span>Type Mode</span>
+                            </button>
+                            <button
+                                type="button"
+                                className={`ipdc-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                                onClick={() => setActiveTool('pen')}
+                                title="Tablet pen / Stylus ink handwriting"
+                            >
+                                <span>✍️ Pen</span>
+                            </button>
+                            <button
+                                type="button"
+                                className={`ipdc-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                                onClick={() => setActiveTool('eraser')}
+                                title="Erase handwriting ink strokes"
+                            >
+                                <span>🧹 Eraser</span>
+                            </button>
+
+                            {activeTool === 'pen' && (
+                                <div className="ipdc-toolbar-group" style={{ marginLeft: '4px', gap: '6px' }}>
+                                    <div
+                                        className={`ipdc-color-dot ${penColor === '#1d4ed8' ? 'selected' : ''}`}
+                                        style={{ background: '#1d4ed8' }}
+                                        onClick={() => setPenColor('#1d4ed8')}
+                                        title="Medical Blue"
+                                    />
+                                    <div
+                                        className={`ipdc-color-dot ${penColor === '#0f172a' ? 'selected' : ''}`}
+                                        style={{ background: '#0f172a' }}
+                                        onClick={() => setPenColor('#0f172a')}
+                                        title="Black"
+                                    />
+                                    <div
+                                        className={`ipdc-color-dot ${penColor === '#dc2626' ? 'selected' : ''}`}
+                                        style={{ background: '#dc2626' }}
+                                        onClick={() => setPenColor('#dc2626')}
+                                        title="Red Alert"
+                                    />
+                                    <select
+                                        value={penWidth}
+                                        onChange={(e) => setPenWidth(Number(e.target.value))}
+                                        style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                    >
+                                        <option value={1.5}>Fine (1.5px)</option>
+                                        <option value={2.5}>Medium (2.5px)</option>
+                                        <option value={4}>Bold (4px)</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="ipdc-toolbar-group">
+                            <button
+                                type="button"
+                                className="ipdc-tool-btn ipdc-tool-btn-ai"
+                                onClick={() => setIsScribeModalOpen(true)}
+                                title="AI Voice Scribe (Gemini 3.6 Flash)"
+                            >
+                                <FiZap size={13} />
+                                <span>AI Voice Scribe</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                className="ipdc-tool-btn"
+                                onClick={handleUndo}
+                                disabled={undoStack.length === 0}
+                                title="Undo (Ctrl+Z)"
+                            >
+                                <FiRotateCcw size={12} />
+                                <span>Undo</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="ipdc-tool-btn"
+                                onClick={handleRedo}
+                                disabled={redoStack.length === 0}
+                                title="Redo (Ctrl+Y)"
+                            >
+                                <FiRotateCw size={12} />
+                                <span>Redo</span>
+                            </button>
+
+                            {activeTab === 'progress_notes' && (
+                                <button
+                                    type="button"
+                                    className="ipdc-tool-btn"
+                                    onClick={() => {
+                                        setManualExtraPages(p => p + 1);
+                                        toast.success(`Continuation Sheet ${progressPages.length + 1} added`);
+                                    }}
+                                    title="Add Continuation Sheet"
+                                >
+                                    <FiPlus size={12} />
+                                    <span>+ Add Sheet</span>
+                                </button>
+                            )}
+
+                            {activeTab === 'drug_chart' && (
+                                <button
+                                    type="button"
+                                    className="ipdc-tool-btn"
+                                    onClick={() => {
+                                        setManualExtraDrugPages(p => p + 1);
+                                        toast.success('Continuation Sheet added to Drug Chart');
+                                    }}
+                                    title="Add Continuation Sheet (MAR Page 2) to Drug Chart"
+                                >
+                                    <FiPlus size={12} />
+                                    <span>+ Add Sheet</span>
+                                </button>
+                            )}
+
+                            {activeTab === 'progress_notes' && (
+                                <button
+                                    type="button"
+                                    className="ipdc-btn-save-inline"
+                                    onClick={handleSaveAllInline}
+                                    disabled={savingProgress || !dirtyNotes}
+                                    title="Save Clinical Progress Notes to database"
+                                >
+                                    <FiSave size={13} />
+                                    <span>{savingProgress ? 'Saving…' : dirtyNotes ? 'Save Changes ●' : 'Notes Saved'}</span>
+                                </button>
+                            )}
+
+                            {activeTab === 'drug_chart' && (
+                                <button
+                                    type="button"
+                                    className="ipdc-btn-save-inline"
+                                    onClick={handleSaveDrugChartInline}
+                                    disabled={savingDrugChart || !dirtyDrugChart}
+                                    title="Save Drug Chart (STAT, IV Fluids & Allergies) to database"
+                                >
+                                    <FiSave size={13} />
+                                    <span>{savingDrugChart ? 'Saving…' : dirtyDrugChart ? 'Save Drug Chart ●' : 'Drug Chart Saved'}</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Main Content Body ── */}
                 <div className="ipdc-body">
                     {loading && <div className="ipdc-loading">Loading clinical chart records…</div>}
 
                     {/* =========================================================
-                        TAB 1: PROGRESS NOTES (WORKSPACE OR EXACT PDF PREVIEW)
+                        TAB 1: PROGRESS NOTES (MASTER INLINE RULED EDITOR)
                        ========================================================= */}
-                    {!loading && activeTab === 'progress_notes' && viewMode === 'workspace' && !isBlank && (
-                        <div className="ipdc-workspace-grid">
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header">
-                                    <h4><FiPlus /> Add Clinical Progress Note</h4>
-                                    <span className="ipdc-pill">Sheet No. {progressPages.length}</span>
-                                </div>
-                                <form onSubmit={handleAddProgressNote} className="ipdc-form">
-                                    <div className="ipdc-form-row-2">
-                                        <div className="ipdc-field">
-                                            <label>Date &amp; Time *</label>
-                                            <input
-                                                type="datetime-local"
-                                                value={newProgressForm.recordedAt}
-                                                onChange={(e) => setNewProgressForm(p => ({ ...p, recordedAt: e.target.value }))}
-                                                required
-                                            />
-                                        </div>
-                                        <div className="ipdc-field">
-                                            <label>Sheet No.</label>
-                                            <input
-                                                type="text"
-                                                value={newProgressForm.sheetNo}
-                                                onChange={(e) => setNewProgressForm(p => ({ ...p, sheetNo: e.target.value }))}
-                                                placeholder="1"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="ipdc-field">
-                                        <label>Clinical Progress Observation *</label>
-                                        <textarea
-                                            rows={4}
-                                            value={newProgressForm.note}
-                                            onChange={(e) => setNewProgressForm(p => ({ ...p, note: e.target.value }))}
-                                            placeholder="Record patient clinical status, physical examination findings, response to therapy, vitals review, and next clinical plan..."
-                                            required
-                                        />
-                                    </div>
-                                    <div className="ipdc-form-actions">
-                                        <button type="submit" className="ipdc-btn-primary" disabled={savingProgress || !newProgressForm.note.trim()}>
-                                            <FiSave size={14} /> <span>{savingProgress ? 'Saving…' : 'Save Progress Note'}</span>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header">
-                                    <h4><FiClock /> Chronological Clinical Progress History ({progressNotes.length})</h4>
-                                </div>
-                                {progressNotes.length === 0 ? (
-                                    <div className="ipdc-empty">No progress notes recorded yet for this admission.</div>
-                                ) : (
-                                    <div className="ipdc-table-scroll">
-                                        <table className="ipdc-data-table">
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ width: '150px' }}>Date &amp; Time</th>
-                                                    <th>Clinical Progress Notes</th>
-                                                    <th style={{ width: '90px' }}>Sheet</th>
-                                                    <th style={{ width: '190px' }}>Author &amp; Audit</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {progressNotes.map((entry) => {
-                                                    const edits = Array.isArray(entry.editHistory) ? entry.editHistory : [];
-                                                    const isHistOpen = Boolean(expandedProgressHistory[entry._id]);
-                                                    return (
-                                                        <tr key={entry._id}>
-                                                            <td>
-                                                                <div className="dt-main">{formatDateDisplay(entry.recordedAt)}</div>
-                                                                <div className="dt-sub">{new Date(entry.recordedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
-                                                            </td>
-                                                            <td>
-                                                                <div className="note-body">{entry.note}</div>
-                                                                {edits.length > 0 && (
-                                                                    <div className="audit-links">
-                                                                        <button
-                                                                            type="button"
-                                                                            className="ipdc-link-btn"
-                                                                            onClick={() => setExpandedProgressHistory(prev => ({ ...prev, [entry._id]: !prev[entry._id] }))}
-                                                                        >
-                                                                            <FiClock size={12} /> {isHistOpen ? 'Hide' : 'View'} Edit History ({edits.length})
-                                                                        </button>
-                                                                        {isHistOpen && (
-                                                                            <div className="audit-box">
-                                                                                {edits.map((ed, idx) => (
-                                                                                    <div key={ed._id || idx} className="audit-item">
-                                                                                        <div className="audit-meta">
-                                                                                            <strong>{ed.editedByName}</strong> ({ed.editedByRole || 'Staff'}) • {new Date(ed.editedAt).toLocaleString('en-IN')}
-                                                                                            {ed.editReason && <span> • Reason: <em>{ed.editReason}</em></span>}
-                                                                                        </div>
-                                                                                        <div className="audit-prev">Previous Note: &ldquo;{ed.previousNote}&rdquo;</div>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </td>
-                                                            <td className="c">{entry.sheetNo || '1'}</td>
-                                                            <td>
-                                                                <div className="author-info">
-                                                                    <strong>{entry.authorName}</strong>
-                                                                    <span>{entry.authorRole}</span>
-                                                                    <small>Created: {new Date(entry.createdAt).toLocaleString('en-IN')}</small>
-                                                                    {edits.length > 0 && (
-                                                                        <small className="edited-tag">Edited by {entry.updatedByName} ({new Date(entry.updatedAt).toLocaleString('en-IN')})</small>
-                                                                    )}
-                                                                </div>
-                                                                {canEditProgressEntry(entry) && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ipdc-mini-btn"
-                                                                        onClick={() => setEditingProgress({
-                                                                            _id: entry._id,
-                                                                            recordedAt: toDateTimeLocalValue(entry.recordedAt),
-                                                                            sheetNo: entry.sheetNo || '1',
-                                                                            note: entry.note,
-                                                                            editReason: ''
-                                                                        })}
-                                                                    >
-                                                                        <FiEdit2 size={12} /> Edit
-                                                                    </button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {!loading && activeTab === 'progress_notes' && (viewMode === 'preview' || isBlank) && (
+                    {!loading && activeTab === 'progress_notes' && (
                         <div className="ipdc-sheets-stack">
                             {progressPages.map((pg, idx) => (
-                                <div key={idx} className="ipdc-a4-sheet">
+                                <div key={idx} className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
+                                    {/* Tablet Stylus Pen & Eraser Overlay */}
+                                    <TabletPenCanvas
+                                        pageKey={`pn_page_${idx}`}
+                                        strokes={penStrokes[`pn_page_${idx}`] || []}
+                                        activeTool={activeTool}
+                                        penColor={penColor}
+                                        penWidth={penWidth}
+                                        onSaveStrokes={(newStrokes) => handleSaveStrokes(`pn_page_${idx}`, newStrokes)}
+                                    />
+
                                     {renderPatientStrip()}
                                     {renderExactLetterhead()}
                                     <table className="pn-exact-table">
@@ -1032,12 +1727,52 @@ const IPDClinicalChartsModal = ({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {pg.rows.map((r, rIdx) => (
-                                                <tr key={rIdx}>
-                                                    <td className="pn-col-dt">{isBlank ? '' : r.dateTimeText}</td>
-                                                    <td className={r.isMeta ? 'pn-meta-cell' : ''}>{isBlank ? '' : r.noteText}</td>
-                                                </tr>
-                                            ))}
+                                            {pg.rows.map((r, rIdx) => {
+                                                const lineKey = `${idx}_${rIdx}`;
+                                                return (
+                                                    <tr key={rIdx} className="pn-ruled-tr">
+                                                        <td className="pn-col-dt">
+                                                            {isBlank ? '' : (r.dateTimeText || (rIdx === 0 && !r.isMeta ? todayDateDisplay() : ''))}
+                                                        </td>
+                                                        {isBlank ? (
+                                                            <td className="pn-dt-blank">&nbsp;</td>
+                                                        ) : r.isMeta ? (
+                                                            <td className="pn-meta-cell">
+                                                                <span className="pn-meta-text">{r.noteText}</span>
+                                                            </td>
+                                                        ) : (
+                                                            <td className="pn-input-cell">
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[lineKey] = el; }}
+                                                                    className="pn-line-input"
+                                                                    value={r.noteText || ''}
+                                                                    placeholder={rIdx === 0 && !r.noteText ? 'Click here to write clinical progress note directly on line...' : ''}
+                                                                    onChange={(e) => handleProgressRowTextChange(idx, rIdx, e.target.value, r)}
+                                                                    onKeyDown={(e) => handleProgressRowKeyDown(e, idx, rIdx, r)}
+                                                                    onFocus={() => handleProgressRowFocus(idx, rIdx)}
+                                                                />
+                                                                {activeFocusedKey === `pn_${idx}_${rIdx}` && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className={`line-mic-pill ${dictatingKey === `pn_${idx}_${rIdx}` ? 'listening' : ''}`}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleToggleLineDictation(
+                                                                                `pn_${idx}_${rIdx}`,
+                                                                                r.noteText || '',
+                                                                                (v) => handleProgressRowTextChange(idx, rIdx, v, r)
+                                                                            );
+                                                                        }}
+                                                                        title="Dictate directly into this line"
+                                                                    >
+                                                                        <FiMic size={10} />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                     <div className="pn-exact-footer">Progress Sheet Cond ......</div>
@@ -1047,376 +1782,648 @@ const IPDClinicalChartsModal = ({
                     )}
 
                     {/* =========================================================
-                        TAB 2: DRUG CHART — ALLERGY, STAT & IV FLUIDS
+                        TAB 2: DRUG CHART (CONTINUOUS 2-PAGE DOCUMENT)
                        ========================================================= */}
-                    {!loading && activeTab === 'drug_stat_iv' && viewMode === 'workspace' && !isBlank && (
-                        <div className="ipdc-workspace-grid">
-                            {/* Section A: DRUG ALLERGY */}
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header">
-                                    <h4><FiAlertTriangle color="#b91c1c" /> Section A — Drug Allergy &amp; Sheet Number</h4>
-                                    {existingAllergies.combinedSuggestions?.length > 0 && (
-                                        <span className="ipdc-allergy-hint">
-                                            Known Record: <strong>{existingAllergies.combinedSuggestions.join(', ')}</strong>
-                                        </span>
-                                    )}
-                                </div>
-                                <form onSubmit={handleSaveAllergy} className="ipdc-allergy-form">
-                                    <div className="ipdc-field">
-                                        <label>1. Drug Allergy</label>
-                                        <input
-                                            type="text"
-                                            value={allergyForm.slot1}
-                                            onChange={(e) => setAllergyForm(p => ({ ...p, slot1: e.target.value }))}
-                                            placeholder={existingAllergies.combinedSuggestions?.[0] || 'e.g. Penicillin / NKDA'}
-                                        />
-                                    </div>
-                                    <div className="ipdc-field">
-                                        <label>2. Drug Allergy</label>
-                                        <input
-                                            type="text"
-                                            value={allergyForm.slot2}
-                                            onChange={(e) => setAllergyForm(p => ({ ...p, slot2: e.target.value }))}
-                                            placeholder={existingAllergies.combinedSuggestions?.[1] || 'e.g. Sulfa drugs (if applicable)'}
-                                        />
-                                    </div>
-                                    <div className="ipdc-field sm">
-                                        <label>Sheet No.</label>
-                                        <input
-                                            type="text"
-                                            value={allergyForm.sheetNo}
-                                            onChange={(e) => setAllergyForm(p => ({ ...p, sheetNo: e.target.value }))}
-                                        />
-                                    </div>
-                                    <div className="ipdc-allergy-btns">
-                                        {existingAllergies.combinedSuggestions?.length > 0 && !allergyForm.slot1 && (
-                                            <button
-                                                type="button"
-                                                className="ipdc-btn-outline"
-                                                onClick={() => setAllergyForm(p => ({
-                                                    ...p,
-                                                    slot1: existingAllergies.combinedSuggestions[0] || '',
-                                                    slot2: existingAllergies.combinedSuggestions[1] || ''
-                                                }))}
-                                            >
-                                                Fill From Record
-                                            </button>
-                                        )}
-                                        <button type="submit" className="ipdc-btn-primary" disabled={savingAllergy}>
-                                            <FiSave size={14} /> <span>{savingAllergy ? 'Saving…' : 'Save Allergies'}</span>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                    {!loading && activeTab === 'drug_chart' && (
+                        <div className="ipdc-sheets-stack">
+                            {/* ── SHEET 1: PAGE 1 (ALLERGIES, STAT-DOSES & I.V. FLUIDS) ── */}
+                            <div className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
+                                <TabletPenCanvas
+                                    pageKey="dc_page_1"
+                                    strokes={penStrokes['dc_page_1'] || []}
+                                    activeTool={activeTool}
+                                    penColor={penColor}
+                                    penWidth={penWidth}
+                                    onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_1', newStrokes)}
+                                />
+                                {renderPatientStrip()}
+                                {renderExactLetterhead()}
 
-                            {/* Section B: ONCE-ONLY PRESCRIPTION (STAT-DOSES) */}
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header">
-                                    <h4><FiFileText /> Section B — ONCE-ONLY PRESCRIPTION (STAT-DOSES)</h4>
-                                    {isDoctorOrAdmin && (
+                                {/* Drug Allergy Line */}
+                                <div className="dc-prev-allergy">
+                                    <strong>DRUG ALLERGY :</strong>
+                                    <span>1.</span>
+                                    {isBlank ? (
+                                        <span className="dc-prev-dots red" />
+                                    ) : (
+                                        <div className="dc-cell-wrapper" style={{ width: 'auto', display: 'inline-flex' }}>
+                                            <input
+                                                ref={(el) => { if (el) inputsRef.current['allergy_slot1'] = el; }}
+                                                className="dc-inline-allergy-input"
+                                                value={allergyForm.slot1}
+                                                onChange={(e) => {
+                                                    setDirtyDrugChart(true);
+                                                    setAllergyForm(p => ({ ...p, slot1: e.target.value }));
+                                                }}
+                                                onFocus={() => setActiveFocusedKey('allergy_slot1')}
+                                                placeholder={existingAllergies.combinedSuggestions?.[0] || 'Type allergy 1…'}
+                                                title="Drug Allergy 1"
+                                            />
+                                            {activeFocusedKey === 'allergy_slot1' && (
+                                                <button
+                                                    type="button"
+                                                    className={`line-mic-pill ${dictatingKey === 'allergy_slot1' ? 'listening' : ''}`}
+                                                    onClick={() => handleToggleLineDictation('allergy_slot1', allergyForm.slot1, (v) => {
+                                                        setDirtyDrugChart(true);
+                                                        setAllergyForm(p => ({ ...p, slot1: v }));
+                                                    })}
+                                                    title="Dictate Allergy 1"
+                                                >
+                                                    <FiMic size={10} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <span>2.</span>
+                                    {isBlank ? (
+                                        <span className="dc-prev-dots red" />
+                                    ) : (
+                                        <div className="dc-cell-wrapper" style={{ width: 'auto', display: 'inline-flex' }}>
+                                            <input
+                                                ref={(el) => { if (el) inputsRef.current['allergy_slot2'] = el; }}
+                                                className="dc-inline-allergy-input"
+                                                value={allergyForm.slot2}
+                                                onChange={(e) => {
+                                                    setDirtyDrugChart(true);
+                                                    setAllergyForm(p => ({ ...p, slot2: e.target.value }));
+                                                }}
+                                                onFocus={() => setActiveFocusedKey('allergy_slot2')}
+                                                placeholder={existingAllergies.combinedSuggestions?.[1] || 'Type allergy 2…'}
+                                                title="Drug Allergy 2"
+                                            />
+                                            {activeFocusedKey === 'allergy_slot2' && (
+                                                <button
+                                                    type="button"
+                                                    className={`line-mic-pill ${dictatingKey === 'allergy_slot2' ? 'listening' : ''}`}
+                                                    onClick={() => handleToggleLineDictation('allergy_slot2', allergyForm.slot2, (v) => {
+                                                        setDirtyDrugChart(true);
+                                                        setAllergyForm(p => ({ ...p, slot2: v }));
+                                                    })}
+                                                    title="Dictate Allergy 2"
+                                                >
+                                                    <FiMic size={10} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <span>Sheet No.</span>
+                                    {isBlank ? (
+                                        <span className="dc-prev-dots sm" />
+                                    ) : (
+                                        <input
+                                            className="dc-inline-allergy-sheet"
+                                            value={allergyForm.sheetNo}
+                                            onChange={(e) => {
+                                                setDirtyDrugChart(true);
+                                                setAllergyForm(p => ({ ...p, sheetNo: e.target.value }));
+                                            }}
+                                        />
+                                    )}
+                                    {!isBlank && (
                                         <button
                                             type="button"
-                                            className="ipdc-btn-primary"
-                                            onClick={() => setShowStatForm(s => !s)}
+                                            className="ipdc-btn-save-allergy"
+                                            onClick={handleSaveDrugChartInline}
+                                            disabled={savingDrugChart}
+                                            title="Save Drug Chart &amp; Allergies"
                                         >
-                                            <FiPlus size={14} /> <span>{showStatForm ? 'Close Form' : 'Add STAT Order'}</span>
+                                            <FiSave size={11} /> <span>{savingDrugChart ? 'Saving…' : 'Save'}</span>
                                         </button>
                                     )}
                                 </div>
 
-                                {showStatForm && isDoctorOrAdmin && (
-                                    <form onSubmit={handleAddStatDose} className="ipdc-subform">
-                                        <div className="ipdc-grid-4">
-                                            <div className="ipdc-field">
-                                                <label>Date *</label>
-                                                <input type="text" value={statForm.date} onChange={(e) => setStatForm(p => ({ ...p, date: e.target.value }))} required />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Drug Name *</label>
-                                                <input type="text" placeholder="e.g. Inj. Ondansetron" value={statForm.drugName} onChange={(e) => setStatForm(p => ({ ...p, drugName: e.target.value }))} required />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Dose</label>
-                                                <input type="text" placeholder="e.g. 4 mg" value={statForm.dose} onChange={(e) => setStatForm(p => ({ ...p, dose: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Route</label>
-                                                <select value={statForm.route} onChange={(e) => setStatForm(p => ({ ...p, route: e.target.value }))}>
-                                                    {ROUTES_LIST.map(r => <option key={r} value={r}>{r}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Time</label>
-                                                <input type="text" value={statForm.time} onChange={(e) => setStatForm(p => ({ ...p, time: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Prescribing Doctor</label>
-                                                <input type="text" value={statForm.doctorName} onChange={(e) => setStatForm(p => ({ ...p, doctorName: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field span-2">
-                                                <label>Remarks / Indication</label>
-                                                <input type="text" placeholder="Clinical indication or instructions" value={statForm.remarks} onChange={(e) => setStatForm(p => ({ ...p, remarks: e.target.value }))} />
-                                            </div>
-                                        </div>
-                                        <div className="ipdc-form-actions">
-                                            <span className="safety-hint">New STAT orders start as <strong>Pending</strong>; Nursing staff confirm Given By separately.</span>
-                                            <button type="submit" className="ipdc-btn-primary" disabled={savingStat}>
-                                                <FiSave size={14} /> <span>{savingStat ? 'Prescribing…' : 'Save STAT Prescription'}</span>
-                                            </button>
-                                        </div>
-                                    </form>
-                                )}
+                                {/* Section A: ONCE-ONLY PRESCRIPTION (STAT-DOSES) */}
+                                <div className="dc-section-hdr-row">
+                                    <div className="dc-prev-sec-title">SECTION A — ONCE-ONLY PRESCRIPTION (STAT-DOSES)</div>
+                                    {isDoctorOrAdmin && !isBlank && (
+                                        <button
+                                            type="button"
+                                            className="dc-btn-add-stat"
+                                            onClick={() => {
+                                                setDirtyDrugChart(true);
+                                                setEditableStatRows(prev => [
+                                                    ...prev,
+                                                    {
+                                                        _id: null,
+                                                        date: todayDateDisplay(),
+                                                        time: nowTime12h(),
+                                                        drugName: '',
+                                                        dose: '',
+                                                        route: 'IV',
+                                                        doctorName: defaultPrescribingDoctor,
+                                                        givenByName: !isDoctorUser ? (user?.name || '') : '',
+                                                        checkedByName: '',
+                                                        remarks: '',
+                                                        status: 'PENDING',
+                                                        isNew: true
+                                                    }
+                                                ]);
+                                            }}
+                                            title="Add a new blank STAT row"
+                                        >
+                                            <FiPlus size={12} /> <span>+ Add STAT Row</span>
+                                        </button>
+                                    )}
+                                </div>
 
-                                <div className="ipdc-table-scroll">
-                                    <table className="ipdc-data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Drug</th>
-                                                <th>Dose</th>
-                                                <th>Route</th>
-                                                <th>Time</th>
-                                                <th>Doctor</th>
-                                                <th>Given By</th>
-                                                <th>Checked By</th>
-                                                <th>Remarks / Status</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {combinedStatRows.length === 0 ? (
-                                                <tr><td colSpan={10} className="ipdc-empty-cell">No STAT-dose orders recorded yet.</td></tr>
-                                            ) : combinedStatRows.map((row) => (
-                                                <tr key={row._id}>
-                                                    <td className="c">{row.date}</td>
-                                                    <td><strong>{row.drugName}</strong></td>
-                                                    <td className="c">{row.dose || '—'}</td>
-                                                    <td className="c">{row.route || '—'}</td>
-                                                    <td className="c">{row.time || '—'}</td>
-                                                    <td>{row.doctorName || '—'}</td>
-                                                    <td>{row.givenByName || <span className="pending-txt">Pending Nurse</span>}</td>
-                                                    <td>{row.checkedByName || '—'}</td>
-                                                    <td>
-                                                        <span className={`status-chip st-${(row.status || 'PENDING').toLowerCase()}`}>
-                                                            {row.status === 'ADMINISTERED' ? 'Given' : row.status || 'Pending'}
-                                                        </span>
-                                                        {row.remarks && <div className="rem-txt">{row.remarks}</div>}
+                                <table className="dc-prev-table">
+                                    <colgroup>
+                                        {STAT_COLS.map(c => (
+                                            <col key={c.key} style={{ width: c.widthPct }} />
+                                        ))}
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            {STAT_COLS.map(c => (
+                                                <th key={c.key} style={{ width: c.widthPct }}>
+                                                    {c.label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {editableStatRows.slice(0, Math.max(10, editableStatRows.length)).map((s, rIdx) => {
+                                            if (isBlank) {
+                                                return (
+                                                    <tr key={rIdx}>
+                                                        <td className="c">&nbsp;</td><td>&nbsp;</td><td className="c">&nbsp;</td>
+                                                        <td className="c">&nbsp;</td><td className="c">&nbsp;</td><td>&nbsp;</td>
+                                                        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+                                                    </tr>
+                                                );
+                                            }
+                                            return (
+                                                <tr key={s._id || rIdx}>
+                                                    {/* 1. Date */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_date`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={s.date || ''}
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'date', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_date`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'date')}
+                                                            />
+                                                        </div>
                                                     </td>
+                                                    {/* 2. Drug Name */}
                                                     <td>
-                                                        {!row.fromOrderOnly && (
-                                                            <div className="row-actions">
-                                                                {canNurseAdminister && row.status === 'PENDING' && (
+                                                        <div className="dc-cell-inner">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_drugName`] = el; }}
+                                                                className="dc-cell-input bold"
+                                                                value={s.drugName || ''}
+                                                                placeholder={rIdx === 0 && !s.drugName ? 'Click to prescribe drug…' : ''}
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'drugName', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_drugName`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'drugName')}
+                                                            />
+                                                            {activeFocusedKey === `stat_${rIdx}_drugName` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `stat_${rIdx}_drugName` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`stat_${rIdx}_drugName`, s.drugName, (v) => handleStatCellChange(rIdx, 'drugName', v))}
+                                                                    title="Dictate Drug Name"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 3. Dose */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_dose`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={s.dose || ''}
+                                                                placeholder="Dose"
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'dose', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_dose`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'dose')}
+                                                            />
+                                                            {activeFocusedKey === `stat_${rIdx}_dose` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `stat_${rIdx}_dose` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`stat_${rIdx}_dose`, s.dose, (v) => handleStatCellChange(rIdx, 'dose', v), true)}
+                                                                    title="Dictate Dose (numeric)"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 4. Route */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_route`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={s.route || ''}
+                                                                placeholder="Route"
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'route', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_route`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'route')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 5. Time */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_time`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={s.time || ''}
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'time', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_time`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'time')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 6. Doctor */}
+                                                    <td>
+                                                        <div className="dc-cell-inner">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_doctorName`] = el; }}
+                                                                className="dc-cell-input"
+                                                                value={s.doctorName || ''}
+                                                                placeholder="Doctor"
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'doctorName', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_doctorName`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'doctorName')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 7. Given By */}
+                                                    <td>
+                                                        <div className="dc-cell-inner">
+                                                            {s.drugName && !s.givenByName && canNurseAdminister && s.status === 'PENDING' ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%' }}>
                                                                     <button
                                                                         type="button"
-                                                                        className="ipdc-mini-btn green"
-                                                                        onClick={() => setStatActionModal({
-                                                                            entry: row,
-                                                                            mode: 'administer',
-                                                                            form: {
-                                                                                status: 'ADMINISTERED',
-                                                                                givenByName: user?.name || '',
-                                                                                checkedByName: row.checkedByName || '',
-                                                                                remarks: row.remarks || '',
-                                                                                editReason: ''
-                                                                            }
-                                                                        })}
+                                                                        className="dc-mini-give-btn"
+                                                                        style={{ margin: 0, padding: '2px 5px', fontSize: '10px' }}
+                                                                        onClick={() => {
+                                                                            handleStatCellChange(rIdx, 'givenByName', user?.name || 'Staff');
+                                                                            handleStatCellChange(rIdx, 'status', 'ADMINISTERED');
+                                                                        }}
                                                                     >
-                                                                        <FiCheck size={12} /> Administer
+                                                                        <FiCheck size={10} /> Give
                                                                     </button>
-                                                                )}
-                                                                {canNurseAdminister && row.status !== 'PENDING' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ipdc-mini-btn"
-                                                                        onClick={() => setStatActionModal({
-                                                                            entry: row,
-                                                                            mode: 'correct',
-                                                                            form: {
-                                                                                status: row.status,
-                                                                                givenByName: row.givenByName || '',
-                                                                                checkedByName: row.checkedByName || '',
-                                                                                remarks: row.remarks || '',
-                                                                                editReason: ''
-                                                                            }
-                                                                        })}
-                                                                    >
-                                                                        <FiEdit2 size={12} /> Correct
-                                                                    </button>
-                                                                )}
-                                                                {!canNurseAdminister && isDoctorOrAdmin && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ipdc-mini-btn"
-                                                                        onClick={() => setStatActionModal({
-                                                                            entry: row,
-                                                                            mode: 'edit',
-                                                                            form: {
-                                                                                date: row.date,
-                                                                                time: row.time,
-                                                                                drugName: row.drugName,
-                                                                                dose: row.dose,
-                                                                                route: row.route,
-                                                                                doctorName: row.doctorName,
-                                                                                checkedByName: row.checkedByName || user?.name || '',
-                                                                                remarks: row.remarks || '',
-                                                                                editReason: ''
-                                                                            }
-                                                                        })}
-                                                                    >
-                                                                        <FiEdit2 size={12} /> Verify/Edit
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
+                                                                    <input
+                                                                        ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_givenByName`] = el; }}
+                                                                        className="dc-cell-input"
+                                                                        value={s.givenByName || ''}
+                                                                        placeholder="or type"
+                                                                        onChange={(e) => handleStatCellChange(rIdx, 'givenByName', e.target.value)}
+                                                                        onFocus={() => setActiveFocusedKey(`stat_${rIdx}_givenByName`)}
+                                                                        onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'givenByName')}
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_givenByName`] = el; }}
+                                                                    className="dc-cell-input"
+                                                                    value={s.givenByName || ''}
+                                                                    placeholder={s.drugName ? 'Given by…' : ''}
+                                                                    onChange={(e) => handleStatCellChange(rIdx, 'givenByName', e.target.value)}
+                                                                    onFocus={() => setActiveFocusedKey(`stat_${rIdx}_givenByName`)}
+                                                                    onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'givenByName')}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 8. Checked by */}
+                                                    <td>
+                                                        <div className="dc-cell-inner">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_checkedByName`] = el; }}
+                                                                className="dc-cell-input"
+                                                                value={s.checkedByName || ''}
+                                                                placeholder={s.drugName ? 'Checked by…' : ''}
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'checkedByName', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_checkedByName`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'checkedByName')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 9. Remarks */}
+                                                    <td>
+                                                        <div className="dc-cell-inner" style={{ gap: '2px' }}>
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_remarks`] = el; }}
+                                                                className="dc-cell-input"
+                                                                value={s.remarks || ''}
+                                                                placeholder={s.drugName ? 'Remarks…' : ''}
+                                                                onChange={(e) => handleStatCellChange(rIdx, 'remarks', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`stat_${rIdx}_remarks`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'remarks')}
+                                                                style={{ flex: 1 }}
+                                                            />
+                                                            {activeFocusedKey === `stat_${rIdx}_remarks` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `stat_${rIdx}_remarks` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`stat_${rIdx}_remarks`, s.remarks, (v) => handleStatCellChange(rIdx, 'remarks', v))}
+                                                                    title="Dictate Remarks"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                            {isDoctorOrAdmin && !isBlank && (s.drugName || s._id) && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="dc-row-del-btn"
+                                                                    onClick={() => handleDeleteStatRow(rIdx)}
+                                                                    title="Delete / clear this STAT dose row"
+                                                                >
+                                                                    <FiTrash2 size={11} />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+
+                                {/* Section B: I.V. FLUIDS */}
+                                <div className="dc-section-hdr-row" style={{ marginTop: '14px' }}>
+                                    <div className="dc-prev-sec-title">SECTION B — I.V. FLUIDS</div>
+                                    {!isBlank && (
+                                        <button
+                                            type="button"
+                                            className="dc-btn-add-stat"
+                                            onClick={() => {
+                                                setDirtyDrugChart(true);
+                                                setEditableIvRows(prev => [
+                                                    ...prev,
+                                                    {
+                                                        _id: null,
+                                                        date: todayDateDisplay(),
+                                                        fluidName: '',
+                                                        volume: '',
+                                                        timeStart: nowTime12h(),
+                                                        infusionTimeHrs: '',
+                                                        doctorName: user?.name ? (isDoctorOrAdmin ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name) : '',
+                                                        adminByName: '',
+                                                        remarks: '',
+                                                        status: 'PENDING',
+                                                        isNew: true
+                                                    }
+                                                ]);
+                                            }}
+                                            title="Add a new blank IV Fluid row"
+                                        >
+                                            <FiPlus size={12} /> <span>+ Add IV Row</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                <table className="dc-prev-table iv">
+                                    <colgroup>
+                                        {IV_COLS.map(c => (
+                                            <col key={c.key} style={{ width: c.widthPct }} />
+                                        ))}
+                                    </colgroup>
+                                    <thead>
+                                        <tr>
+                                            {IV_COLS.map(c => (
+                                                <th key={c.key} style={{ width: c.widthPct }}>
+                                                    {c.key === 'infusionTimeHrs' ? <>Infusion<br />time(hrs.)</> : c.label}
+                                                </th>
                                             ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            {/* Section C: I.V. FLUIDS */}
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header">
-                                    <h4><FiDroplet /> Section C — I.V. FLUIDS</h4>
-                                    <button
-                                        type="button"
-                                        className="ipdc-btn-primary"
-                                        onClick={() => setShowIvForm(s => !s)}
-                                    >
-                                        <FiPlus size={14} /> <span>{showIvForm ? 'Close Form' : 'Add IV Fluid'}</span>
-                                    </button>
-                                </div>
-
-                                {showIvForm && (
-                                    <form onSubmit={handleAddIVFluid} className="ipdc-subform">
-                                        <div className="ipdc-grid-4">
-                                            <div className="ipdc-field">
-                                                <label>Date *</label>
-                                                <input type="text" value={ivForm.date} onChange={(e) => setIvForm(p => ({ ...p, date: e.target.value }))} required />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Fluid Name *</label>
-                                                <input type="text" placeholder="e.g. Inj. Normal Saline (0.9%)" value={ivForm.fluidName} onChange={(e) => setIvForm(p => ({ ...p, fluidName: e.target.value }))} required />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Volume</label>
-                                                <input type="text" placeholder="e.g. 500 ml" value={ivForm.volume} onChange={(e) => setIvForm(p => ({ ...p, volume: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Time Start</label>
-                                                <input type="text" value={ivForm.timeStart} onChange={(e) => setIvForm(p => ({ ...p, timeStart: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Infusion Time (hrs.)</label>
-                                                <input type="text" placeholder="e.g. 4 hrs" value={ivForm.infusionTimeHrs} onChange={(e) => setIvForm(p => ({ ...p, infusionTimeHrs: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field">
-                                                <label>Doctor</label>
-                                                <input type="text" value={ivForm.doctorName} onChange={(e) => setIvForm(p => ({ ...p, doctorName: e.target.value }))} />
-                                            </div>
-                                            <div className="ipdc-field span-2">
-                                                <label>Remarks</label>
-                                                <input type="text" placeholder="Rate or additive details" value={ivForm.remarks} onChange={(e) => setIvForm(p => ({ ...p, remarks: e.target.value }))} />
-                                            </div>
-                                        </div>
-                                        <div className="ipdc-form-actions">
-                                            <button type="submit" className="ipdc-btn-primary" disabled={savingIv}>
-                                                <FiSave size={14} /> <span>{savingIv ? 'Saving…' : 'Save IV Fluid Entry'}</span>
-                                            </button>
-                                        </div>
-                                    </form>
-                                )}
-
-                                <div className="ipdc-table-scroll">
-                                    <table className="ipdc-data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Fluid</th>
-                                                <th>Volume</th>
-                                                <th>Time Start</th>
-                                                <th>Infusion time (hrs.)</th>
-                                                <th>Doctor</th>
-                                                <th>Admin.by</th>
-                                                <th>Remarks</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {combinedIvRows.length === 0 ? (
-                                                <tr><td colSpan={9} className="ipdc-empty-cell">No IV fluid entries recorded yet.</td></tr>
-                                            ) : combinedIvRows.map((row) => (
-                                                <tr key={row._id}>
-                                                    <td className="c">{row.date}</td>
-                                                    <td><strong>{row.fluidName}</strong></td>
-                                                    <td className="c">{row.volume || '—'}</td>
-                                                    <td className="c">{row.timeStart || '—'}</td>
-                                                    <td className="c">{row.infusionTimeHrs || '—'}</td>
-                                                    <td>{row.doctorName || '—'}</td>
-                                                    <td>{row.adminByName || <span className="pending-txt">Pending Nurse</span>}</td>
-                                                    <td>{row.remarks || '—'}</td>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {editableIvRows.slice(0, Math.max(8, editableIvRows.length)).map((iv, rIdx) => {
+                                            if (isBlank) {
+                                                return (
+                                                    <tr key={rIdx}>
+                                                        <td className="c">&nbsp;</td><td>&nbsp;</td><td className="c">&nbsp;</td>
+                                                        <td className="c">&nbsp;</td><td className="c">&nbsp;</td><td>&nbsp;</td>
+                                                        <td>&nbsp;</td><td>&nbsp;</td>
+                                                    </tr>
+                                                );
+                                            }
+                                            return (
+                                                <tr key={iv._id || rIdx}>
+                                                    {/* 1. Date */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_date`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={iv.date || ''}
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'date', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_date`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'date')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 2. Fluid Name */}
                                                     <td>
-                                                        {!row.fromOrderOnly && (
-                                                            <div className="row-actions">
-                                                                {canNurseAdminister && (
+                                                        <div className="dc-cell-inner">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_fluidName`] = el; }}
+                                                                className="dc-cell-input bold"
+                                                                value={iv.fluidName || ''}
+                                                                placeholder={rIdx === 0 && !iv.fluidName ? 'Click to prescribe IV fluid…' : ''}
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'fluidName', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_fluidName`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'fluidName')}
+                                                            />
+                                                            {activeFocusedKey === `iv_${rIdx}_fluidName` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `iv_${rIdx}_fluidName` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`iv_${rIdx}_fluidName`, iv.fluidName, (v) => handleIvCellChange(rIdx, 'fluidName', v))}
+                                                                    title="Dictate Fluid Name"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 3. Volume */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_volume`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={iv.volume || ''}
+                                                                placeholder="500 ml"
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'volume', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_volume`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'volume')}
+                                                            />
+                                                            {activeFocusedKey === `iv_${rIdx}_volume` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `iv_${rIdx}_volume` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`iv_${rIdx}_volume`, iv.volume, (v) => handleIvCellChange(rIdx, 'volume', v), true)}
+                                                                    title="Dictate Volume (numeric)"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 4. Time Start */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_timeStart`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={iv.timeStart || ''}
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'timeStart', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_timeStart`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'timeStart')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 5. Infusion time hrs */}
+                                                    <td className="c">
+                                                        <div className="dc-cell-inner c">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_infusionTimeHrs`] = el; }}
+                                                                className="dc-cell-input c"
+                                                                value={iv.infusionTimeHrs || ''}
+                                                                placeholder="4 hrs"
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'infusionTimeHrs', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_infusionTimeHrs`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'infusionTimeHrs')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 6. Doctor */}
+                                                    <td>
+                                                        <div className="dc-cell-inner">
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_doctorName`] = el; }}
+                                                                className="dc-cell-input"
+                                                                value={iv.doctorName || ''}
+                                                                placeholder="Doctor"
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'doctorName', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_doctorName`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'doctorName')}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    {/* 7. Admin.by */}
+                                                    <td>
+                                                        <div className="dc-cell-inner">
+                                                            {iv.fluidName && !iv.adminByName && canNurseAdminister && iv.status === 'PENDING' ? (
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', width: '100%' }}>
                                                                     <button
                                                                         type="button"
-                                                                        className="ipdc-mini-btn green"
-                                                                        onClick={() => setIvActionModal({
-                                                                            entry: row,
-                                                                            mode: ['COMPLETED', 'HELD', 'NOT_GIVEN'].includes(row.status) ? 'edit' : 'administer',
-                                                                            form: {
-                                                                                status: row.status === 'PENDING' ? 'RUNNING' : row.status,
-                                                                                adminByName: row.adminByName || user?.name || '',
-                                                                                timeStart: row.timeStart || nowTime12h(),
-                                                                                infusionTimeHrs: row.infusionTimeHrs || '',
-                                                                                remarks: row.remarks || '',
-                                                                                editReason: ''
-                                                                            }
-                                                                        })}
+                                                                        className="dc-mini-give-btn"
+                                                                        style={{ margin: 0, padding: '2px 5px', fontSize: '10px' }}
+                                                                        onClick={() => {
+                                                                            handleIvCellChange(rIdx, 'adminByName', user?.name || 'Staff');
+                                                                            handleIvCellChange(rIdx, 'status', 'RUNNING');
+                                                                        }}
                                                                     >
-                                                                        <FiCheck size={12} /> {row.adminByName ? 'Update Admin' : 'Confirm Admin'}
+                                                                        <FiCheck size={10} /> Start
                                                                     </button>
-                                                                )}
-                                                            </div>
-                                                        )}
+                                                                    <input
+                                                                        ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_adminByName`] = el; }}
+                                                                        className="dc-cell-input"
+                                                                        value={iv.adminByName || ''}
+                                                                        placeholder="or type"
+                                                                        onChange={(e) => handleIvCellChange(rIdx, 'adminByName', e.target.value)}
+                                                                        onFocus={() => setActiveFocusedKey(`iv_${rIdx}_adminByName`)}
+                                                                        onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'adminByName')}
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_adminByName`] = el; }}
+                                                                    className="dc-cell-input"
+                                                                    value={iv.adminByName || ''}
+                                                                    placeholder={iv.fluidName ? 'Admin. by…' : ''}
+                                                                    onChange={(e) => handleIvCellChange(rIdx, 'adminByName', e.target.value)}
+                                                                    onFocus={() => setActiveFocusedKey(`iv_${rIdx}_adminByName`)}
+                                                                    onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'adminByName')}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    {/* 8. Remarks */}
+                                                    <td>
+                                                        <div className="dc-cell-inner" style={{ gap: '2px' }}>
+                                                            <input
+                                                                ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_remarks`] = el; }}
+                                                                className="dc-cell-input"
+                                                                value={iv.remarks || ''}
+                                                                placeholder={iv.fluidName ? 'Remarks…' : ''}
+                                                                onChange={(e) => handleIvCellChange(rIdx, 'remarks', e.target.value)}
+                                                                onFocus={() => setActiveFocusedKey(`iv_${rIdx}_remarks`)}
+                                                                onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'remarks')}
+                                                                style={{ flex: 1 }}
+                                                            />
+                                                            {activeFocusedKey === `iv_${rIdx}_remarks` && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={`line-mic-pill ${dictatingKey === `iv_${rIdx}_remarks` ? 'listening' : ''}`}
+                                                                    onClick={() => handleToggleLineDictation(`iv_${rIdx}_remarks`, iv.remarks, (v) => handleIvCellChange(rIdx, 'remarks', v))}
+                                                                    title="Dictate Remarks"
+                                                                >
+                                                                    <FiMic size={10} />
+                                                                </button>
+                                                            )}
+                                                            {!isBlank && (iv.fluidName || iv._id) && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="dc-row-del-btn"
+                                                                    onClick={() => handleDeleteIvRow(rIdx)}
+                                                                    title="Delete / clear this IV fluid row"
+                                                                >
+                                                                    <FiTrash2 size={11} />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
-                        </div>
-                    )}
 
-                    {/* =========================================================
-                        TAB 3: DRUG CHART — MEDICATION ADMINISTRATION GRID (PAGE 2)
-                       ========================================================= */}
-                    {!loading && activeTab === 'drug_mar' && viewMode === 'workspace' && !isBlank && (
-                        <div className="ipdc-workspace-grid">
-                            <div className="ipdc-card">
-                                <div className="ipdc-card-header wrap">
+                            {/* ── SHEET 2: PAGE 2 (SECTION C — REGULAR MEDICATION ADMINISTRATION CHART) ── */}
+                            <div className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper" style={{ marginTop: '18px' }}>
+                                <TabletPenCanvas
+                                    pageKey="dc_page_2"
+                                    strokes={penStrokes['dc_page_2'] || []}
+                                    activeTool={activeTool}
+                                    penColor={penColor}
+                                    penWidth={penWidth}
+                                    onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_2', newStrokes)}
+                                />
+                                {renderDrugPage2PatientStrip()}
+
+                                <div className="ipdc-card-header wrap" style={{ padding: '6px 0', border: 'none', background: 'transparent' }}>
                                     <div>
-                                        <h4><FiShield /> Medication Administration Grid (06 AM · 10 AM · 02 PM · 10 PM)</h4>
-                                        <span className="ipdc-muted-sub">
-                                            {canNurseAdminister
-                                                ? 'Tap any slot cell to record Given / Pending / Not Given / Refused / Held status, actual dose, and nurse initials.'
-                                                : 'Doctor Read-Only Review: Only authorized nursing staff can confirm administration.'}
-                                        </span>
+                                        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <FiShield color="#0d9488" size={14} />
+                                            <span>SECTION C — REGULAR MEDICATION ADMINISTRATION CHART (06 AM · 10 AM · 02 PM · 10 PM)</span>
+                                        </h4>
                                     </div>
-                                    <div className="ipdc-day-nav">
+                                    <div className="ipdc-day-nav" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <button
                                             type="button"
                                             className="ipdc-btn-outline sm"
                                             disabled={dayWindowIdx <= 0}
                                             onClick={() => setDayWindowIdx(i => Math.max(0, i - 1))}
+                                            style={{ padding: '3px 8px', fontSize: '11px', minHeight: '26px' }}
                                         >
-                                            <FiChevronLeft /> Prev 4 Days
+                                            <FiChevronLeft size={12} /> Prev 4 Days
                                         </button>
-                                        <span className="day-range-lbl">
+                                        <span className="day-range-lbl" style={{ fontSize: '11px', fontWeight: 600 }}>
                                             {formatDateDisplay(activeFourDates[0])} – {formatDateDisplay(activeFourDates[3])}
                                         </span>
                                         <button
@@ -1424,81 +2431,115 @@ const IPDClinicalChartsModal = ({
                                             className="ipdc-btn-outline sm"
                                             disabled={dayWindowIdx >= dateWindows.length - 1}
                                             onClick={() => setDayWindowIdx(i => Math.min(dateWindows.length - 1, i + 1))}
+                                            style={{ padding: '3px 8px', fontSize: '11px', minHeight: '26px' }}
                                         >
-                                            Next 4 Days <FiChevronRight />
+                                            Next 4 Days <FiChevronRight size={12} />
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Visual Status Legend */}
-                                <div className="mar-legend">
+                                {/* Status Legend */}
+                                <div className="mar-legend" style={{ margin: '4px 0 8px 0', padding: '4px 8px', fontSize: '11px' }}>
                                     <span className="lg-item lg-given">Given</span>
                                     <span className="lg-item lg-pending">Pending</span>
                                     <span className="lg-item lg-not-given">Not Given</span>
                                     <span className="lg-item lg-refused">Refused</span>
                                     <span className="lg-item lg-held">Held</span>
-                                    <span className="lg-note">Prescribed dose stays read-only on left; actual administered dose &amp; time stored per cell.</span>
+                                    <span className="lg-note">Tap any slot cell to record administration. Tablet stylus supported.</span>
                                 </div>
 
-                                {marOrders.length === 0 ? (
-                                    <div className="ipdc-empty">No scheduled inpatient medication orders exist for this admission yet. Prescribe medications in Doctor IPD Orders first.</div>
-                                ) : (
-                                    <div className="mar-grid-scroll">
-                                        <table className="mar-interactive-table">
-                                            <thead>
-                                                <tr>
-                                                    <th className="sticky-med-col right-lbl" rowSpan={1}>Date</th>
-                                                    {activeFourDates.map((dKey) => (
-                                                        <th key={dKey} colSpan={4} className="day-group-hdr">
-                                                            {formatDateDisplay(dKey)}
+                                {/* Interactive MAR Table matching original DRUG CHART(2).pdf Page 2 */}
+                                <div className="mar-grid-scroll">
+                                    <table className="mar-interactive-table">
+                                        <thead>
+                                            <tr>
+                                                <th colSpan={4} className="dc-mar-top-date-lbl" style={{ width: '33.33%' }}>Date</th>
+                                                {activeFourDates.map((dKey) => (
+                                                    <th key={dKey} colSpan={4} className="day-group-hdr" style={{ width: '16.67%' }}>
+                                                        {formatDateDisplay(dKey)}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                            <tr>
+                                                <th colSpan={4} className="dc-mar-top-time-lbl" style={{ width: '33.33%' }}>Time</th>
+                                                {activeFourDates.map((dKey) => (
+                                                    DRUG_CHART_TIME_SLOTS.map((slotName, sIdx) => (
+                                                        <th key={`${dKey}-${slotName}`} className={`slot-hdr ${sIdx === 0 ? 'day-edge' : ''}`} style={{ width: '4.167%' }}>
+                                                            {slotName}
                                                         </th>
-                                                    ))}
-                                                </tr>
-                                                <tr>
-                                                    <th className="sticky-med-col right-lbl">Time</th>
-                                                    {activeFourDates.map((dKey) => (
-                                                        DRUG_CHART_TIME_SLOTS.map((slotName, sIdx) => (
-                                                            <th key={`${dKey}-${slotName}`} className={`slot-hdr ${sIdx === 0 ? 'day-edge' : ''}`}>
-                                                                {slotName}
-                                                            </th>
-                                                        ))
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {marOrders.map((ord) => {
-                                                    const doseStr = `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim();
-                                                    const drRaw = ord.doctorId?.name || '';
-                                                    const drStr = drRaw ? (/^dr/i.test(drRaw) ? drRaw : `Dr. ${drRaw}`) : '—';
-                                                    const startStr = ord.startDate ? formatDateDisplay(ord.startDate) : '—';
-                                                    const isInactive = ['CANCELLED', 'ON_HOLD', 'COMPLETED'].includes(ord.status);
-
-                                                    return (
-                                                        <tr key={ord._id} className={isInactive ? 'inactive-order-row' : ''}>
-                                                            <td className="sticky-med-col med-info-cell">
-                                                                <div className="med-name-top">
-                                                                    <span>{ord.medicineName}</span>
-                                                                    <span className={`ord-tag ord-${String(ord.status || 'ACTIVE').toLowerCase()}`}>
-                                                                        {ord.status === 'CANCELLED' ? 'Discontinued' : ord.status}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="med-sub-grid">
-                                                                    <div><span>Date</span><strong>{startStr}</strong></div>
-                                                                    <div><span>Route</span><strong>{ord.route || '—'}</strong></div>
-                                                                    <div><span>Dose</span><strong>{doseStr || '—'}</strong></div>
-                                                                    <div><span>Prescribed by</span><strong>{drStr}</strong></div>
+                                                    ))
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {editableMedBlocks.slice(0, 12).map((blk, bIdx) => {
+                                                const isInactive = ['CANCELLED', 'ON_HOLD', 'COMPLETED'].includes(blk.status);
+                                                const orderObj = orders.find(o => String(o._id) === String(blk.orderId));
+                                                return (
+                                                    <React.Fragment key={blk._id || `block_${bIdx}`}>
+                                                        {/* Sub-row 1: Drug Name (spanning 4 sub-columns) + 16 Time Slot cells with rowSpan={3} */}
+                                                        <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                            <td colSpan={4} className="dc-mar-drugname-td">
+                                                                <div className="dc-mar-drugname-flex">
+                                                                    <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, minWidth: '16px' }}>{bIdx + 1}.</span>
+                                                                    <input
+                                                                        ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_name`] = el; }}
+                                                                        className="dc-cell-input bold"
+                                                                        value={blk.medicineName || ''}
+                                                                        placeholder={bIdx === 0 && !blk.medicineName ? 'Click to prescribe medication...' : 'Drug name...'}
+                                                                        disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                        onChange={(e) => handleMedBlockChange(bIdx, 'medicineName', e.target.value)}
+                                                                        onFocus={() => setActiveFocusedKey(`med_${bIdx}_name`)}
+                                                                        style={{ flex: 1, textDecoration: isInactive ? 'line-through' : 'none', color: isInactive ? '#991b1b' : '#0f172a' }}
+                                                                    />
+                                                                    {blk.status && blk.orderId && (
+                                                                        <span className={`ord-tag ord-${String(blk.status).toLowerCase()}`}>
+                                                                            {blk.status === 'CANCELLED' ? 'Discontinued' : blk.status}
+                                                                        </span>
+                                                                    )}
+                                                                    {activeFocusedKey === `med_${bIdx}_name` && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`line-mic-pill ${dictatingKey === `med_${bIdx}_name` ? 'listening' : ''}`}
+                                                                            onClick={() => handleToggleLineDictation(`med_${bIdx}_name`, blk.medicineName, (v) => handleMedBlockChange(bIdx, 'medicineName', v))}
+                                                                            title="Dictate Drug Name"
+                                                                        >
+                                                                            <FiMic size={10} />
+                                                                        </button>
+                                                                    )}
+                                                                    {isDoctorOrAdmin && !isBlank && (blk.medicineName || blk.orderId) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="dc-row-del-btn"
+                                                                            onClick={() => handleDiscontinueOrder(bIdx)}
+                                                                            title={blk.orderId ? 'Discontinue / Cancel Medication Order' : 'Clear this draft block'}
+                                                                        >
+                                                                            <FiTrash2 size={11} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </td>
+                                                            {/* 16 MAR Time Slot Cells spanning 3 rows */}
                                                             {activeFourDates.map((dKey) => (
                                                                 DRUG_CHART_TIME_SLOTS.map((slotName, sIdx) => {
-                                                                    const mar = marCellLookup.get(`${String(ord._id)}::${dKey}::${slotName}`);
+                                                                    const marKey = blk.orderId ? `${String(blk.orderId)}::${dKey}::${slotName}` : null;
+                                                                    const mar = marKey ? marCellLookup.get(marKey) : null;
                                                                     const st = formatMarCellStatus(mar);
+                                                                    const canAdmin = canNurseAdminister && blk.orderId && blk.status === 'ACTIVE';
+
                                                                     return (
                                                                         <td
-                                                                            key={`${ord._id}-${dKey}-${slotName}`}
+                                                                            key={`${bIdx}-${dKey}-${slotName}`}
+                                                                            rowSpan={3}
                                                                             className={`mar-slot-td ${sIdx === 0 ? 'day-edge' : ''} ${mar ? `cell-${st.code.toLowerCase()}` : 'cell-empty'}`}
-                                                                            onClick={() => openMarCellPopup(ord, dKey, slotName)}
-                                                                            title={mar ? `${st.label}${mar.administeredByName ? ` by ${mar.administeredByName}` : ''}` : `Click to record ${ord.medicineName} at ${slotName}`}
+                                                                            onClick={() => {
+                                                                                if (orderObj) {
+                                                                                    openMarCellPopup(orderObj, dKey, slotName);
+                                                                                } else if (!blk.orderId && blk.medicineName) {
+                                                                                    toast('Save Drug Chart first to enable nursing administration on this new medication.', { icon: 'ℹ️' });
+                                                                                }
+                                                                            }}
+                                                                            title={mar ? `${st.label}${mar.administeredByName ? ` by ${mar.administeredByName}` : ''}` : blk.medicineName ? `Record ${blk.medicineName} at ${slotName}` : 'Medication slot'}
                                                                         >
                                                                             {mar ? (
                                                                                 <div className="cell-pill">
@@ -1511,163 +2552,259 @@ const IPDClinicalChartsModal = ({
                                                                                     )}
                                                                                 </div>
                                                                             ) : (
-                                                                                <span className="cell-plus">{canNurseAdminister ? '+' : '·'}</span>
+                                                                                <span className="cell-plus">{canAdmin ? '+' : '·'}</span>
                                                                             )}
                                                                         </td>
                                                                     );
                                                                 })
                                                             ))}
                                                         </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
 
-                    {/* =========================================================
-                        EXACT A4 PDF PREVIEW FOR DRUG CHART (PAGE 1 & PAGE 2)
-                       ========================================================= */}
-                    {!loading && (activeTab === 'drug_stat_iv' || activeTab === 'drug_mar') && (viewMode === 'preview' || isBlank) && (
-                        <div className="ipdc-sheets-stack">
-                            {/* PAGE 1 PREVIEW */}
-                            <div className="ipdc-a4-sheet">
-                                {renderPatientStrip()}
-                                {renderExactLetterhead()}
-                                <div className="dc-prev-allergy">
-                                    <strong>DRUG ALLERGY :</strong>
-                                    <span>1.</span>
-                                    <span className="dc-prev-dots red">{isBlank ? '' : (allergyForm.slot1 || existingAllergies.combinedSuggestions?.[0] || '')}</span>
-                                    <span>2.</span>
-                                    <span className="dc-prev-dots red">{isBlank ? '' : (allergyForm.slot2 || existingAllergies.combinedSuggestions?.[1] || '')}</span>
-                                    <span>Sheet No.</span>
-                                    <span className="dc-prev-dots sm">{isBlank ? '' : (allergyForm.sheetNo || '1')}</span>
-                                </div>
+                                                        {/* Sub-row 2: 4 Sub-column Headers */}
+                                                        <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                            <td className="dc-mar-subhdr-td" style={{ width: '6.77%' }}>Date</td>
+                                                            <td className="dc-mar-subhdr-td" style={{ width: '6.25%' }}>Route</td>
+                                                            <td className="dc-mar-subhdr-td" style={{ width: '7.29%' }}>Dose</td>
+                                                            <td className="dc-mar-subhdr-td" style={{ width: '13.02%' }}>Prescribed by</td>
+                                                        </tr>
 
-                                <div className="dc-prev-sec-title">ONCE-ONLY PRESCRIPTION (STAT-DOSES)</div>
-                                <table className="dc-prev-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th><th>Drug</th><th>Dose</th><th>Route</th><th>Time</th><th>Doctor</th><th>Given By</th><th>Checked by</th><th>Remarks</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Array.from({ length: DRUG_CHART_STAT_ROWS_PER_PAGE }, (_, r) => {
-                                            const s = isBlank ? null : combinedStatRows[r];
-                                            return (
-                                                <tr key={r}>
-                                                    <td className="c">{s ? s.date : ''}</td>
-                                                    <td>{s ? s.drugName : ''}</td>
-                                                    <td className="c">{s ? s.dose : ''}</td>
-                                                    <td className="c">{s ? s.route : ''}</td>
-                                                    <td className="c">{s ? s.time : ''}</td>
-                                                    <td>{s ? s.doctorName : ''}</td>
-                                                    <td>{s ? s.givenByName : ''}</td>
-                                                    <td>{s ? s.checkedByName : ''}</td>
-                                                    <td>{s ? (s.remarks || (s.status === 'PENDING' ? 'Pending' : s.status)) : ''}</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-
-                                <div className="dc-prev-sec-title" style={{ marginTop: '10px' }}>I.V. FLUIDS</div>
-                                <table className="dc-prev-table iv">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th><th>Fluid</th><th>Volume</th><th>Time Start</th><th>Infusion<br />time(hrs.)</th><th>Doctor</th><th>Admin.by</th><th>Remarks</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Array.from({ length: DRUG_CHART_IV_ROWS_PER_PAGE }, (_, r) => {
-                                            const iv = isBlank ? null : combinedIvRows[r];
-                                            return (
-                                                <tr key={r}>
-                                                    <td className="c">{iv ? iv.date : ''}</td>
-                                                    <td>{iv ? iv.fluidName : ''}</td>
-                                                    <td className="c">{iv ? iv.volume : ''}</td>
-                                                    <td className="c">{iv ? iv.timeStart : ''}</td>
-                                                    <td className="c">{iv ? iv.infusionTimeHrs : ''}</td>
-                                                    <td>{iv ? iv.doctorName : ''}</td>
-                                                    <td>{iv ? iv.adminByName : ''}</td>
-                                                    <td>{iv ? iv.remarks : ''}</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* PAGE 2 PREVIEW */}
-                            <div className="ipdc-a4-sheet">
-                                <div className="dc-prev-mar-sheet-inner">
-                                    {renderDrugPage2PatientStrip()}
-                                    <table className="dc-prev-mar-hdr">
-                                        {renderDrugPage2ColGroup()}
-                                        <tbody>
-                                            <tr>
-                                                <td colSpan={4} className="lbl">Date</td>
-                                                {activeFourDates.map((dKey, i) => (
-                                                    <td key={i} colSpan={4}>{isBlank ? '' : formatDateDisplay(dKey)}</td>
-                                                ))}
-                                            </tr>
-                                            <tr>
-                                                <td colSpan={4} className="lbl time-h">Time</td>
-                                                {activeFourDates.map((dKey, di) => DRUG_CHART_TIME_SLOTS.map((sl, si) => (
-                                                    <td key={`${di}-${si}`} className="vert-slot"><span>{sl}</span></td>
-                                                )))}
-                                            </tr>
+                                                        {/* Sub-row 3: 4 Sub-column Editable Values */}
+                                                        <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                            <td className="dc-mar-subval-td">
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_date`] = el; }}
+                                                                    className="dc-cell-input c"
+                                                                    value={blk.startDate || ''}
+                                                                    placeholder="DD/MM/YYYY"
+                                                                    disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                    onChange={(e) => handleMedBlockChange(bIdx, 'startDate', e.target.value)}
+                                                                    onFocus={() => setActiveFocusedKey(`med_${bIdx}_date`)}
+                                                                />
+                                                            </td>
+                                                            <td className="dc-mar-subval-td">
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_route`] = el; }}
+                                                                    className="dc-cell-input c"
+                                                                    value={blk.route || ''}
+                                                                    placeholder="Route"
+                                                                    disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                    onChange={(e) => handleMedBlockChange(bIdx, 'route', e.target.value)}
+                                                                    onFocus={() => setActiveFocusedKey(`med_${bIdx}_route`)}
+                                                                />
+                                                            </td>
+                                                            <td className="dc-mar-subval-td">
+                                                                <div className="dc-cell-wrapper">
+                                                                    <input
+                                                                        ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_dose`] = el; }}
+                                                                        className="dc-cell-input c bold"
+                                                                        value={blk.dose || ''}
+                                                                        placeholder="Dose"
+                                                                        disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                        onChange={(e) => handleMedBlockChange(bIdx, 'dose', e.target.value)}
+                                                                        onFocus={() => setActiveFocusedKey(`med_${bIdx}_dose`)}
+                                                                    />
+                                                                    {activeFocusedKey === `med_${bIdx}_dose` && isDoctorOrAdmin && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`line-mic-pill ${dictatingKey === `med_${bIdx}_dose` ? 'listening' : ''}`}
+                                                                            onClick={() => handleToggleLineDictation(`med_${bIdx}_dose`, blk.dose, (v) => handleMedBlockChange(bIdx, 'dose', v), true)}
+                                                                            title="Dictate Dose (numeric)"
+                                                                        >
+                                                                            <FiMic size={10} />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="dc-mar-subval-td">
+                                                                <input
+                                                                    ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_doctor`] = el; }}
+                                                                    className="dc-cell-input"
+                                                                    value={blk.doctorName || ''}
+                                                                    placeholder="Prescribed by"
+                                                                    disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                    onChange={(e) => handleMedBlockChange(bIdx, 'doctorName', e.target.value)}
+                                                                    onFocus={() => setActiveFocusedKey(`med_${bIdx}_doctor`)}
+                                                                />
+                                                            </td>
+                                                        </tr>
+                                                    </React.Fragment>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
-
-                                    {Array.from({ length: DRUG_CHART_MAR_BLOCKS_PER_PAGE }, (_, bIdx) => {
-                                        const ord = isBlank ? null : marOrders[bIdx];
-                                        const startStr = ord?.startDate ? new Date(ord.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) : '';
-                                        const doseStr = ord ? `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim() : '';
-                                        const drRaw = ord?.doctorId?.name || '';
-                                        const drStr = drRaw ? (/^dr/i.test(drRaw) ? drRaw : `Dr. ${drRaw}`) : '';
-
-                                        return (
-                                            <table key={bIdx} className="dc-prev-mar-blk">
-                                                {renderDrugPage2ColGroup()}
-                                                <tbody>
-                                                    <tr>
-                                                        <td colSpan={4} className="blk-name">{ord ? `${ord.medicineName}${ord.status === 'CANCELLED' ? ' [DISCONTINUED]' : ''}` : ''}</td>
-                                                        {activeFourDates.map((dKey, di) => DRUG_CHART_TIME_SLOTS.map((slotName, si) => {
-                                                            const mar = (ord && dKey && !isBlank) ? marCellLookup.get(`${String(ord._id)}::${dKey}::${slotName}`) : null;
-                                                            const st = mar ? formatMarCellStatus(mar) : null;
-                                                            return (
-                                                                <td key={`${di}-${si}`} rowSpan={3} className={`blk-slot ${si === 0 ? 'd-edge' : ''}`}>
-                                                                    {st && <div style={{ color: st.color, fontWeight: 700, fontSize: '6.8px' }}>{st.shortLabel}</div>}
-                                                                    {mar?.administeredTime && st?.code === 'GIVEN' && <div style={{ fontSize: '6.5px' }}>{formatShortTime(mar.administeredTime)}</div>}
-                                                                    {(mar?.administeredByName || mar?.administeredBy?.name) && (
-                                                                        <div style={{ fontSize: '6.5px', fontWeight: 700 }}>{getStaffInitials(mar.administeredByName || mar.administeredBy?.name)}</div>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        }))}
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Date</th>
-                                                        <th>Route</th>
-                                                        <th>Dose</th>
-                                                        <th>Prescribed by</th>
-                                                    </tr>
-                                                    <tr>
-                                                        <td className="c sub">{startStr}</td>
-                                                        <td className="c sub">{ord?.route || ''}</td>
-                                                        <td className="c sub">{doseStr}</td>
-                                                        <td className="c sub">{drStr}</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        );
-                                    })}
                                 </div>
                             </div>
+
+                            {/* ── CONTINUATION SHEETS FOR DRUG CHART (PAGE 2) IF ADDED VIA + ADD SHEET ── */}
+                            {Array.from({ length: manualExtraDrugPages }).map((_, extraPgIdx) => {
+                                const startSlice = (extraPgIdx + 1) * 12;
+                                const pageBlocks = editableMedBlocks.slice(startSlice, startSlice + 12);
+                                return (
+                                    <div key={`dc_cont_${extraPgIdx}`} className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper" style={{ marginTop: '18px' }}>
+                                        <TabletPenCanvas
+                                            pageKey={`dc_page_2_cont_${extraPgIdx + 1}`}
+                                            strokes={penStrokes[`dc_page_2_cont_${extraPgIdx + 1}`] || []}
+                                            activeTool={activeTool}
+                                            penColor={penColor}
+                                            penWidth={penWidth}
+                                            onSaveStrokes={(newStrokes) => handleSaveStrokes(`dc_page_2_cont_${extraPgIdx + 1}`, newStrokes)}
+                                        />
+                                        {renderDrugPage2PatientStrip()}
+
+                                        <div className="ipdc-card-header wrap" style={{ padding: '6px 0', border: 'none', background: 'transparent' }}>
+                                            <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <FiShield color="#0d9488" size={14} />
+                                                <span>SECTION C — REGULAR MEDICATION ADMINISTRATION (Continuation Sheet {extraPgIdx + 2})</span>
+                                            </h4>
+                                        </div>
+
+                                        <div className="mar-grid-scroll">
+                                            <table className="mar-interactive-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th colSpan={4} className="dc-mar-top-date-lbl" style={{ width: '33.33%' }}>Date</th>
+                                                        {activeFourDates.map((dKey) => (
+                                                            <th key={dKey} colSpan={4} className="day-group-hdr" style={{ width: '16.67%' }}>
+                                                                {formatDateDisplay(dKey)}
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                    <tr>
+                                                        <th colSpan={4} className="dc-mar-top-time-lbl" style={{ width: '33.33%' }}>Time</th>
+                                                        {activeFourDates.map((dKey) => (
+                                                            DRUG_CHART_TIME_SLOTS.map((slotName, sIdx) => (
+                                                                <th key={`${dKey}-${slotName}`} className={`slot-hdr ${sIdx === 0 ? 'day-edge' : ''}`} style={{ width: '4.167%' }}>
+                                                                    {slotName}
+                                                                </th>
+                                                            ))
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {pageBlocks.map((blk, pIdx) => {
+                                                        const bIdx = startSlice + pIdx;
+                                                        const isInactive = ['CANCELLED', 'ON_HOLD', 'COMPLETED'].includes(blk.status);
+                                                        const orderObj = orders.find(o => String(o._id) === String(blk.orderId));
+                                                        return (
+                                                            <React.Fragment key={blk._id || `block_${bIdx}`}>
+                                                                <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                                    <td colSpan={4} className="dc-mar-drugname-td">
+                                                                        <div className="dc-mar-drugname-flex">
+                                                                            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 700, minWidth: '16px' }}>{bIdx + 1}.</span>
+                                                                            <input
+                                                                                ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_name`] = el; }}
+                                                                                className="dc-cell-input bold"
+                                                                                value={blk.medicineName || ''}
+                                                                                placeholder="Drug name..."
+                                                                                disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                                onChange={(e) => handleMedBlockChange(bIdx, 'medicineName', e.target.value)}
+                                                                                onFocus={() => setActiveFocusedKey(`med_${bIdx}_name`)}
+                                                                                style={{ flex: 1, textDecoration: isInactive ? 'line-through' : 'none', color: isInactive ? '#991b1b' : '#0f172a' }}
+                                                                            />
+                                                                            {blk.status && blk.orderId && (
+                                                                                <span className={`ord-tag ord-${String(blk.status).toLowerCase()}`}>
+                                                                                    {blk.status === 'CANCELLED' ? 'Discontinued' : blk.status}
+                                                                                </span>
+                                                                            )}
+                                                                            {isDoctorOrAdmin && !isBlank && (blk.medicineName || blk.orderId) && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="dc-row-del-btn"
+                                                                                    onClick={() => handleDiscontinueOrder(bIdx)}
+                                                                                    title={blk.orderId ? 'Discontinue Medication' : 'Clear block'}
+                                                                                >
+                                                                                    <FiTrash2 size={11} />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                    {activeFourDates.map((dKey) => (
+                                                                        DRUG_CHART_TIME_SLOTS.map((slotName, sIdx) => {
+                                                                            const marKey = blk.orderId ? `${String(blk.orderId)}::${dKey}::${slotName}` : null;
+                                                                            const mar = marKey ? marCellLookup.get(marKey) : null;
+                                                                            const st = formatMarCellStatus(mar);
+                                                                            const canAdmin = canNurseAdminister && blk.orderId && blk.status === 'ACTIVE';
+
+                                                                            return (
+                                                                                <td
+                                                                                    key={`${bIdx}-${dKey}-${slotName}`}
+                                                                                    rowSpan={3}
+                                                                                    className={`mar-slot-td ${sIdx === 0 ? 'day-edge' : ''} ${mar ? `cell-${st.code.toLowerCase()}` : 'cell-empty'}`}
+                                                                                    onClick={() => {
+                                                                                        if (orderObj) openMarCellPopup(orderObj, dKey, slotName);
+                                                                                    }}
+                                                                                >
+                                                                                    {mar ? (
+                                                                                        <div className="cell-pill">
+                                                                                            <span className="cell-st">{st.label}</span>
+                                                                                            {mar.administeredTime && st.code === 'GIVEN' && (
+                                                                                                <small>{formatShortTime(mar.administeredTime)}</small>
+                                                                                            )}
+                                                                                            {(mar.administeredByName || mar.administeredBy?.name) && (
+                                                                                                <small className="cell-init">{getStaffInitials(mar.administeredByName || mar.administeredBy?.name)}</small>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <span className="cell-plus">{canAdmin ? '+' : '·'}</span>
+                                                                                    )}
+                                                                                </td>
+                                                                            );
+                                                                        })
+                                                                    ))}
+                                                                </tr>
+                                                                <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                                    <td className="dc-mar-subhdr-td" style={{ width: '6.77%' }}>Date</td>
+                                                                    <td className="dc-mar-subhdr-td" style={{ width: '6.25%' }}>Route</td>
+                                                                    <td className="dc-mar-subhdr-td" style={{ width: '7.29%' }}>Dose</td>
+                                                                    <td className="dc-mar-subhdr-td" style={{ width: '13.02%' }}>Prescribed by</td>
+                                                                </tr>
+                                                                <tr className={isInactive ? 'inactive-order-row' : ''}>
+                                                                    <td className="dc-mar-subval-td">
+                                                                        <input
+                                                                            className="dc-cell-input c"
+                                                                            value={blk.startDate || ''}
+                                                                            placeholder="DD/MM/YYYY"
+                                                                            disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                            onChange={(e) => handleMedBlockChange(bIdx, 'startDate', e.target.value)}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="dc-mar-subval-td">
+                                                                        <input
+                                                                            className="dc-cell-input c"
+                                                                            value={blk.route || ''}
+                                                                            placeholder="Route"
+                                                                            disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                            onChange={(e) => handleMedBlockChange(bIdx, 'route', e.target.value)}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="dc-mar-subval-td">
+                                                                        <input
+                                                                            className="dc-cell-input c bold"
+                                                                            value={blk.dose || ''}
+                                                                            placeholder="Dose"
+                                                                            disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                            onChange={(e) => handleMedBlockChange(bIdx, 'dose', e.target.value)}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="dc-mar-subval-td">
+                                                                        <input
+                                                                            className="dc-cell-input"
+                                                                            value={blk.doctorName || ''}
+                                                                            placeholder="Prescribed by"
+                                                                            disabled={!isDoctorOrAdmin && blk.orderId}
+                                                                            onChange={(e) => handleMedBlockChange(bIdx, 'doctorName', e.target.value)}
+                                                                        />
+                                                                    </td>
+                                                                </tr>
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -2041,6 +3178,16 @@ const IPDClinicalChartsModal = ({
                         </div>
                     </div>
                 )}
+
+                {/* AI Voice Scribe Modal */}
+                <ClinicalVoiceScribeModal
+                    isOpen={isScribeModalOpen}
+                    onClose={() => setIsScribeModalOpen(false)}
+                    onApproveAndInsert={handleApproveVoiceScribe}
+                    patientName={ptDetails.name}
+                    uhid={ptDetails.uhid}
+                    ipdNumber={ptDetails.ipdNumber}
+                />
             </div>
         </div>
     );

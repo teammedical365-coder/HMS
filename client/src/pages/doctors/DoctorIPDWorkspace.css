@@ -1,0 +1,330 @@
+/* Doctor IPD Workspace Page Styles */
+.doc-ipd-workspace-page {
+    padding: 20px 24px 40px;
+    background: #f8fafc;
+    min-height: calc(100vh - 70px);
+    box-sizing: border-box;
+}
+
+/* Top Navigation Bar */
+.doc-ipd-top-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 18px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.doc-ipd-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.doc-ipd-back-btn:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+}
+
+.doc-ipd-nav-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #64748b;
+}
+
+.doc-ipd-badge-role {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+}
+
+.doc-ipd-nav-sep {
+    color: #cbd5e1;
+}
+
+.doc-ipd-pt-nav-name {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.doc-ipd-nav-ipd {
+    font-weight: 600;
+    color: #475569;
+}
+
+.doc-ipd-nav-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.doc-ipd-nav-refresh-btn:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+/* Patient Identity Header Card */
+.doc-ipd-identity-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.doc-ipd-identity-card.is-icu-identity {
+    border-left: 5px solid #ef4444;
+    background: linear-gradient(135deg, #fffcfc 0%, #ffffff 40%);
+}
+
+.doc-ipd-id-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.doc-ipd-id-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.doc-ipd-identity-card.is-icu-identity .doc-ipd-id-avatar {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+}
+
+.doc-ipd-id-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.doc-ipd-id-name-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-id-name {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.doc-ipd-live-status-pill {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.doc-ipd-live-status-pill.admitted {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.doc-ipd-live-status-pill.icu-critical {
+    background: #dc2626;
+    color: #ffffff;
+    letter-spacing: 0.03em;
+    font-weight: 800;
+}
+
+.doc-ipd-id-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: #64748b;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-tag {
+    background: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.doc-ipd-tag.ipd {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+}
+
+.doc-ipd-tag.location {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.doc-ipd-tag.location.icu {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.doc-ipd-tag.doc {
+    color: #475569;
+}
+
+/* Quick Document Action Buttons */
+.doc-ipd-id-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-chart-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.doc-ipd-chart-btn.tpr {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.doc-ipd-chart-btn.tpr:hover {
+    background: #0f766e;
+}
+
+.doc-ipd-chart-btn.progress {
+    background: #0f766e;
+    color: #ffffff;
+}
+
+.doc-ipd-chart-btn.progress:hover {
+    background: #115e59;
+}
+
+.doc-ipd-chart-btn.clinical {
+    background: #0f2e7a;
+    color: #ffffff;
+}
+
+.doc-ipd-chart-btn.clinical:hover {
+    background: #0a1f52;
+}
+
+.doc-ipd-chart-btn.drug {
+    background: #1e3a8a;
+    color: #ffffff;
+}
+
+.doc-ipd-chart-btn.drug:hover {
+    background: #172554;
+}
+
+.doc-ipd-chart-btn.icu {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.doc-ipd-chart-btn.icu.highlighted {
+    background: #dc2626;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
+.doc-ipd-chart-btn.icu:hover {
+    background: #0369a1;
+}
+
+.doc-ipd-chart-btn.icu.highlighted:hover {
+    background: #b91c1c;
+}
+
+/* Body */
+.doc-ipd-workspace-body {
+    background: transparent;
+}
+
+/* Loading & Error States */
+.doc-ipd-loading-box,
+.doc-ipd-error-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 60px 24px;
+    text-align: center;
+    color: #64748b;
+    margin-top: 20px;
+}
+
+.doc-ipd-error-box {
+    color: #ef4444;
+}
+
+.doc-ipd-error-box h3 {
+    margin: 12px 0 16px;
+    color: #0f172a;
+}
+
+.doc-ipd-retry-btn {
+    background: #0284c7;
+    color: #ffffff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+

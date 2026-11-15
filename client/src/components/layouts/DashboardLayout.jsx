@@ -79,6 +79,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             return [
                 { label: 'Assistant Dashboard', path: '/assistant/dashboard', icon: <FiHome />, prefetchKey: 'asst_dash', prefetchFn: () => import('../../pages/assistant/DoctorAssistantDashboard') },
                 { label: 'Patient Queue', path: '/assistant/queue', icon: <FiUsers />, prefetchKey: 'asst_queue', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQueue') },
+                { label: 'IPD Clinical Records', path: '/doctor/ipd-patients', icon: <FiActivity />, prefetchKey: 'asst_ipd', prefetchFn: () => import('../../pages/doctors/DoctorIPDPatients') },
                 { label: 'Question Library', path: '/assistant/question-library', icon: <FiFileText />, prefetchKey: 'asst_ql', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQuestionLibrary') },
             ];
         }
@@ -91,10 +92,11 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Revisit Schedule', path: '/opd/revisits', icon: <FiClock />, prefetchKey: 'opd_revisits', prefetchFn: () => import('../../pages/opd/RevisitSchedule') },
             ];
         }
-        if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || (role.includes('doctor') && !role.includes('assistant'))) {
+        if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || role === 'resident' || role === 'residentdoctor' || role === 'resident doctor' || role.includes('resident') || (role.includes('doctor') && !role.includes('assistant'))) {
             return [
                 { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
+                { label: 'IPD Clinical Records', path: '/doctor/ipd-patients', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/doctors/DoctorIPDPatients') },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
                 { label: 'Surgeries', path: '/doctor/surgeries', icon: <FiScissors />, prefetchKey: 'doc_surgeries', prefetchFn: () => import('../../pages/doctors/DoctorSurgeries') },
                 { label: 'Real-Time Monitoring', path: '/doctor/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'doc_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
@@ -404,6 +406,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
         if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
         if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
         if (pathname === '/doctor/patients') return 'My Patients';
+        if (pathname === '/doctor/ipd-patients') return 'IPD Clinical Records';
+        if (pathname.startsWith('/doctor/ipd/patient/')) return 'IPD Patient Clinical Workspace';
         if (pathname === '/doctor/surgeries' || pathname === '/doctor/surgery-referrals' || pathname === '/doctor/surgery-plans') return 'Surgeries';
         if (pathname.includes('/doctor/patient/')) return 'Patient Consultation Details';
         if (pathname.includes('/patient/')) return 'Patient Profile';

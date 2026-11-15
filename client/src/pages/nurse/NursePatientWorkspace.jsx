@@ -39,6 +39,7 @@ import {
 import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
+import ICUChartModal from '../../components/ipd/ICUChartModal';
 import './NursePatientWorkspace.css';
 
 // ── Tab definitions ──
@@ -121,6 +122,7 @@ const NursePatientWorkspace = () => {
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [clinicalNotesModal, setClinicalNotesModal] = useState({ open: false, tab: 'notes' });
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
+    const [icuChartModalOpen, setIcuChartModalOpen] = useState(false);
     const [editingVitalsId, setEditingVitalsId] = useState(null);
     const [editingRemarkText, setEditingRemarkText] = useState('');
     const [savingRemark, setSavingRemark] = useState(false);
@@ -621,6 +623,15 @@ const NursePatientWorkspace = () => {
                             title="2-Page Drug Chart (STAT Doses, IV Fluids & Scheduled MAR Grid)"
                         >
                             <FiFileText size={13} /> Drug Chart
+                        </button>
+                        <button
+                            type="button"
+                            className="npw-btn-outline"
+                            style={{ borderColor: '#0284c7', color: '#0284c7', fontWeight: 700 }}
+                            onClick={() => setIcuChartModalOpen(true)}
+                            title="Official 2-Page ICU Daily Observation Chart"
+                        >
+                            <FiActivity size={13} /> ICU Chart
                         </button>
                     </div>
                 </div>
@@ -1976,6 +1987,15 @@ const NursePatientWorkspace = () => {
                 admission={admission}
                 patient={admission?.patientId}
                 initialTab={clinicalChartsModal.tab}
+            />
+
+            {/* ── Official 2-Page ICU Daily Observation Chart Modal ── */}
+            <ICUChartModal
+                isOpen={icuChartModalOpen}
+                onClose={() => setIcuChartModalOpen(false)}
+                admissionId={admissionId}
+                admission={admission}
+                patient={admission?.patientId}
             />
         </div>
     );

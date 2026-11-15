@@ -682,7 +682,7 @@ const HospitalPatientProfileContent = () => {
     // Tab definitions (Clean icons, no raw emojis, unified documents tab)
     const tabs = [
         { key: 'timeline', label: 'Timeline', icon: <FiClock />, count: displayTimeline?.length },
-        { key: 'ipdOrders', label: 'IPD Orders', icon: <FiActivity /> },
+        { key: 'ipdOrders', label: 'IPD Clinical Records', icon: <FiActivity /> },
         { key: 'familyHistory', label: 'Family Tree', icon: <FiUsers /> },
         { key: 'vitals', label: 'Vitals', icon: <FiHeart /> },
         { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText />, count: medications?.length },

@@ -602,6 +602,23 @@ class AIWalletService {
      */
     async ensureAllHospitalsHaveWallets() {
         try {
+            // Guard: wait if database connection is still in progress (readyState: 2 = connecting)
+            if (mongoose.connection.readyState !== 1) {
+                if (mongoose.connection.readyState === 2) {
+                    await new Promise((resolve) => {
+                        const timer = setTimeout(resolve, 15000);
+                        mongoose.connection.once('open', () => {
+                            clearTimeout(timer);
+                            resolve();
+                        });
+                    });
+                }
+                if (mongoose.connection.readyState !== 1) {
+                    console.warn(`⚠️ [AI Wallet] DB connection not ready (readyState: ${mongoose.connection.readyState}). Skipping automatic wallet initialization.`);
+                    return;
+                }
+            }
+
             const hospitals = await Hospital.find({}).select('_id name').lean();
             let createdCount = 0;
 

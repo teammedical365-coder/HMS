@@ -14,6 +14,14 @@ const MasterInpatientClinicalNote = require('../models/inpatientClinicalNote.mod
 const MasterPatientNurseNote = require('../models/patientNurseNote.model');
 const MasterInpatientProgressNote = require('../models/inpatientProgressNote.model');
 const MasterInpatientDrugChart = require('../models/inpatientDrugChart.model');
+const MasterIPDIntakeOutput = require('../models/ipdIntakeOutput.model');
+const MasterIPDLine = require('../models/ipdLine.model');
+const MasterIPDCatheter = require('../models/ipdCatheter.model');
+const MasterNursingNote = require('../models/nursingNote.model');
+const MasterLabReport = require('../models/labReport.model');
+const MasterSurgeryPlan = require('../models/surgeryPlan.model');
+const MasterBed = require('../models/bed.model');
+const Hospital = require('../models/hospital.model');
 const MasterUser = require('../models/user.model');
 const AuditLog = require('../models/auditLog.model');
 
@@ -57,6 +65,13 @@ const getModels = (req) => {
         PatientNurseNote: MasterPatientNurseNote,
         InpatientProgressNote: MasterInpatientProgressNote,
         InpatientDrugChart: MasterInpatientDrugChart,
+        IPDIntakeOutput: MasterIPDIntakeOutput,
+        IPDLine: MasterIPDLine,
+        IPDCatheter: MasterIPDCatheter,
+        NursingNote: MasterNursingNote,
+        LabReport: MasterLabReport,
+        SurgeryPlan: MasterSurgeryPlan,
+        Bed: MasterBed,
         User: MasterUser,
     };
 };
@@ -80,12 +95,14 @@ const enrichOrderVirtuals = (ord) => {
 
 const DOCTOR_ROLES = [
     'doctor', 'clinicdoctor', 'clinic doctor', 'surgeon', 'consultant',
-    'physician', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'physician', 'doctorassistant', 'doctor assistant', 'doctor_assistant', 'assistant', 'clinicalassistant', 'clinical assistant',
+    'resident', 'residentdoctor', 'resident doctor',
     'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
 ];
 const NURSE_ROLES = [
     'nurse', 'staffnurse', 'headnurse', 'doctor', 'clinicdoctor', 'clinic doctor',
-    'surgeon', 'consultant', 'physician', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'surgeon', 'consultant', 'physician', 'doctorassistant', 'doctor assistant', 'doctor_assistant', 'assistant', 'clinicalassistant', 'clinical assistant',
+    'resident', 'residentdoctor', 'resident doctor',
     'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
 ];
 const NURSING_ONLY_ADMINISTER_ROLES = [
@@ -1924,6 +1941,26 @@ const saveInpatientClinicalNoteHandler = async (req, res) => {
             };
         }
 
+        if (Array.isArray(payload.continuationPages)) {
+            noteDoc.continuationPages = payload.continuationPages.map((cp, idx) => ({
+                pageNumber: Number(cp.pageNumber) || (idx + 3),
+                title: cleanStr(cp.title) || `CONTINUATION SHEET (PAGE ${idx + 3})`,
+                notes: strVal(cp.notes || cp.content || ''),
+                createdAt: cp.createdAt || new Date(),
+                updatedAt: new Date()
+            }));
+        }
+
+        if (payload.handwritingStrokes !== undefined) {
+            noteDoc.handwritingStrokes = payload.handwritingStrokes;
+            noteDoc.markModified('handwritingStrokes');
+        }
+
+        if (Array.isArray(payload.aiScribeSessions) && payload.aiScribeSessions.length > 0) {
+            const existingAi = Array.isArray(noteDoc.aiScribeSessions) ? noteDoc.aiScribeSessions : [];
+            noteDoc.aiScribeSessions = [...existingAi, ...payload.aiScribeSessions].slice(-20);
+        }
+
         noteDoc.updatedBy = actorId;
         noteDoc.updatedByName = actorName;
         noteDoc.updatedByRole = actorRole;
@@ -2438,6 +2475,13 @@ const fetchDrugChartBundle = async (req, hospitalId, admission) => {
             'name email specialization department'
         ) || admission.doctorId;
     }
+    if (admission.admittedBy && !admission.admittedBy.name) {
+        admission.admittedBy = await findUserAcrossStores(
+            User,
+            admission.admittedBy,
+            'name email specialization department role'
+        ) || admission.admittedBy;
+    }
     if (admission.bedId && Bed && !admission.bedId.bedNumber) {
         admission.bedId = await Bed.findById(admission.bedId).select('bedNumber ward bedType').lean().catch(() => null) || admission.bedId;
     }
@@ -2448,6 +2492,45 @@ const fetchDrugChartBundle = async (req, hospitalId, admission) => {
         MARRecord.find({ hospitalId, admissionId: admission._id }).sort({ scheduledTime: 1, createdAt: 1 }).lean(),
         InpatientClinicalNote.findOne({ hospitalId, admissionId: admission._id }).select('anyDrugAllergy').lean()
     ]);
+
+    const admDocRaw = admission.doctorId?.name || admission.admittedBy?.name || admission.doctorName || '';
+    const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+    const admDocId = admission.doctorId?._id || admission.doctorId || admission.admittedBy?._id || admission.admittedBy || null;
+
+    if (drugChart) {
+        if (Array.isArray(drugChart.statDoses)) {
+            drugChart.statDoses.forEach(s => {
+                const doc = String(s.doctorName || '').trim();
+                const given = String(s.givenByName || '').trim();
+                const author = String(s.authorName || '').trim();
+                const isNurseAuthor = String(s.authorRole || '').toLowerCase().includes('nurse');
+                if (!doc || (given && doc.toLowerCase() === given.toLowerCase()) || (isNurseAuthor && doc.toLowerCase() === author.toLowerCase()) || /\(nurse\)/i.test(doc)) {
+                    s.doctorName = admDocName || '';
+                    if (admDocId && (!s.doctorId || String(s.doctorId) === String(s.authorId))) {
+                        s.doctorId = admDocId;
+                    }
+                } else if (!/^dr\.?\s*/i.test(doc)) {
+                    s.doctorName = `Dr. ${doc}`;
+                }
+            });
+        }
+        if (Array.isArray(drugChart.ivFluids)) {
+            drugChart.ivFluids.forEach(iv => {
+                const doc = String(iv.doctorName || '').trim();
+                const admin = String(iv.adminByName || '').trim();
+                const author = String(iv.authorName || '').trim();
+                const isNurseAuthor = String(iv.authorRole || '').toLowerCase().includes('nurse');
+                if (!doc || (admin && doc.toLowerCase() === admin.toLowerCase()) || (isNurseAuthor && doc.toLowerCase() === author.toLowerCase()) || /\(nurse\)/i.test(doc)) {
+                    iv.doctorName = admDocName || '';
+                    if (admDocId && (!iv.doctorId || String(iv.doctorId) === String(iv.authorId))) {
+                        iv.doctorId = admDocId;
+                    }
+                } else if (!/^dr\.?\s*/i.test(doc)) {
+                    iv.doctorName = `Dr. ${doc}`;
+                }
+            });
+        }
+    }
 
     const userIds = new Set();
     orders.forEach(o => { if (o.doctorId && mongoose.Types.ObjectId.isValid(o.doctorId)) userIds.add(String(o.doctorId)); });
@@ -2522,6 +2605,288 @@ router.get('/admissions/:admissionId/drug-chart', verifyToken, resolveTenant, re
     } catch (err) {
         console.error('Fetch drug chart error:', err);
         res.status(500).json({ success: false, message: 'Error fetching drug chart data' });
+    }
+});
+
+// PUT /api/ipd-clinical/admissions/:admissionId/drug-chart — Inline Drug Chart Save (Allergies, STAT, IV & Regular Orders)
+router.put('/admissions/:admissionId/drug-chart', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        const { drugAllergies, statDoses, ivFluids, deletedStatIds, deletedIvIds, newRegularOrders, discontinuedOrderIds } = req.body || {};
+
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+
+        const { Admission, InpatientDrugChart, InpatientOrder } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        }
+
+        const actorId = req.user._id || req.user.userId;
+        const actorName = req.user.name || req.user.email || 'Clinical Staff';
+        const actorRole = req.user._roleData?.name || req.user.role || 'Staff';
+
+        const isNurseActor = ['nurse', 'staffnurse', 'headnurse'].includes(String(actorRole || '').toLowerCase());
+        const isDoctorActor = isDoctorOrAdminRole(req) && !isNurseActor;
+
+        let admDocRaw = admission.doctorName || '';
+        let admDocId = admission.doctorId || admission.admittedBy || null;
+        if (!admDocRaw && (admission.doctorId || admission.admittedBy)) {
+            const { User } = getModels(req);
+            const docObj = await findUserAcrossStores(User, admission.doctorId || admission.admittedBy, 'name');
+            if (docObj?.name) admDocRaw = docObj.name;
+        }
+        const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+
+        const sanitizePrescribingDoctor = (inputDocName) => {
+            const raw = String(inputDocName || '').trim();
+            if (!raw) return isDoctorActor ? (actorName ? `Dr. ${actorName.replace(/^dr\.?\s*/i, '')}` : '') : (admDocName || '');
+            if (isNurseActor && raw.toLowerCase() === String(actorName || '').trim().toLowerCase()) {
+                return admDocName || '';
+            }
+            if (/\(nurse\)/i.test(raw)) return admDocName || '';
+            return /^dr\.?\s*/i.test(raw) ? raw : `Dr. ${raw}`;
+        };
+
+        let chartDoc = await InpatientDrugChart.findOne({ hospitalId, admissionId: admission._id });
+        if (!chartDoc) {
+            chartDoc = new InpatientDrugChart({
+                hospitalId,
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                createdBy: actorId
+            });
+        }
+
+        // Process explicit deletions of STAT rows if provided
+        if (Array.isArray(deletedStatIds) && deletedStatIds.length > 0) {
+            chartDoc.statDoses = chartDoc.statDoses.filter(s => !deletedStatIds.includes(String(s._id)));
+        }
+
+        // Process explicit deletions of IV fluid rows if provided
+        if (Array.isArray(deletedIvIds) && deletedIvIds.length > 0) {
+            chartDoc.ivFluids = chartDoc.ivFluids.filter(iv => !deletedIvIds.includes(String(iv._id)));
+        }
+
+        // 1. Update Allergies if provided
+        if (drugAllergies) {
+            chartDoc.drugAllergies = {
+                ...chartDoc.drugAllergies,
+                slot1: String(drugAllergies.slot1 || '').trim(),
+                slot2: String(drugAllergies.slot2 || '').trim(),
+                sheetNo: String(drugAllergies.sheetNo || '1').trim() || '1',
+                updatedBy: actorId,
+                updatedByName: actorName,
+                updatedByRole: actorRole,
+                updatedAt: new Date()
+            };
+        }
+
+        // 2. Update/Add STAT doses if provided
+        if (Array.isArray(statDoses)) {
+            const validStats = statDoses.filter(s => s && s.drugName && String(s.drugName).trim());
+            validStats.forEach(s => {
+                if (s._id && mongoose.Types.ObjectId.isValid(s._id) && !String(s._id).startsWith('order-')) {
+                    const existing = chartDoc.statDoses.id(s._id);
+                    if (existing) {
+                        existing.date = s.date || existing.date;
+                        existing.time = s.time || existing.time;
+                        existing.drugName = s.drugName || existing.drugName;
+                        if (s.dose !== undefined) existing.dose = s.dose;
+                        if (s.route) existing.route = s.route;
+                        if (s.doctorName !== undefined) {
+                            const cleanDoc = sanitizePrescribingDoctor(s.doctorName);
+                            if (cleanDoc) existing.doctorName = cleanDoc;
+                        }
+                        if (s.status) existing.status = s.status;
+                        if (s.givenByName !== undefined) existing.givenByName = s.givenByName;
+                        if (s.checkedByName !== undefined) existing.checkedByName = s.checkedByName;
+                        if (s.remarks !== undefined) existing.remarks = s.remarks;
+                        existing.updatedBy = actorId;
+                        existing.updatedByName = actorName;
+                        existing.updatedByRole = actorRole;
+                    }
+                } else if (!s.fromOrderOnly) {
+                    const cleanDoc = sanitizePrescribingDoctor(s.doctorName);
+                    chartDoc.statDoses.push({
+                        date: s.date || new Date().toISOString().split('T')[0],
+                        time: s.time || '',
+                        drugName: String(s.drugName).trim(),
+                        dose: s.dose || '',
+                        route: s.route || 'IV',
+                        doctorName: cleanDoc,
+                        doctorId: isDoctorActor ? actorId : (s.doctorId || admDocId),
+                        status: s.status || 'PENDING',
+                        givenByName: s.givenByName || (isNurseActor && s.status === 'ADMINISTERED' ? actorName : ''),
+                        checkedByName: s.checkedByName || '',
+                        remarks: s.remarks || '',
+                        authorId: actorId,
+                        authorName: actorName,
+                        authorRole: actorRole
+                    });
+                }
+            });
+        }
+
+        // 3. Update/Add IV fluids if provided
+        if (Array.isArray(ivFluids)) {
+            const validIvs = ivFluids.filter(iv => iv && iv.fluidName && String(iv.fluidName).trim());
+            validIvs.forEach(iv => {
+                if (iv._id && mongoose.Types.ObjectId.isValid(iv._id) && !String(iv._id).startsWith('ivorder-')) {
+                    const existing = chartDoc.ivFluids.id(iv._id);
+                    if (existing) {
+                        existing.date = iv.date || existing.date;
+                        existing.fluidName = iv.fluidName || existing.fluidName;
+                        if (iv.volume !== undefined) existing.volume = iv.volume;
+                        if (iv.timeStart) existing.timeStart = iv.timeStart;
+                        if (iv.infusionTimeHrs !== undefined) existing.infusionTimeHrs = iv.infusionTimeHrs;
+                        if (iv.doctorName !== undefined) {
+                            const cleanDoc = sanitizePrescribingDoctor(iv.doctorName);
+                            if (cleanDoc) existing.doctorName = cleanDoc;
+                        }
+                        if (iv.status) existing.status = iv.status;
+                        if (iv.adminByName !== undefined) existing.adminByName = iv.adminByName;
+                        if (iv.remarks !== undefined) existing.remarks = iv.remarks;
+                        existing.updatedBy = actorId;
+                        existing.updatedByName = actorName;
+                        existing.updatedByRole = actorRole;
+                    }
+                } else if (!iv.fromOrderOnly) {
+                    const cleanDoc = sanitizePrescribingDoctor(iv.doctorName);
+                    chartDoc.ivFluids.push({
+                        date: iv.date || new Date().toISOString().split('T')[0],
+                        fluidName: String(iv.fluidName).trim(),
+                        volume: iv.volume || '',
+                        timeStart: iv.timeStart || '',
+                        infusionTimeHrs: iv.infusionTimeHrs || '',
+                        doctorName: cleanDoc,
+                        doctorId: isDoctorActor ? actorId : (iv.doctorId || admDocId),
+                        status: iv.status || 'PENDING',
+                        adminByName: iv.adminByName || (isNurseActor && (iv.status === 'RUNNING' || iv.status === 'COMPLETED') ? actorName : ''),
+                        remarks: iv.remarks || '',
+                        authorId: actorId,
+                        authorName: actorName,
+                        authorRole: actorRole
+                    });
+                }
+            });
+        }
+
+        chartDoc.updatedBy = actorId;
+        await chartDoc.save();
+
+        // 4. Create new regular medication orders prescribed directly on Page 2
+        let createdOrdersCount = 0;
+        if (Array.isArray(newRegularOrders) && newRegularOrders.length > 0 && isDoctorOrAdminRole(req)) {
+            for (const no of newRegularOrders) {
+                if (!no || !no.medicineName || !String(no.medicineName).trim()) continue;
+                const doseRaw = String(no.dose || '').trim();
+                const doseMatch = doseRaw.match(/^([\d.]+)\s*(.*)$/);
+                const dosageValue = doseMatch ? Number(doseMatch[1]) : (no.dosageValue || 1);
+                const dosageUnit = doseMatch && doseMatch[2] ? doseMatch[2].trim() : (no.dosageUnit || 'tab');
+
+                // Determine effective doctorId (use admission attending doctor or actor if doctor)
+                const docId = (admission.attendingDoctorId && mongoose.Types.ObjectId.isValid(admission.attendingDoctorId))
+                    ? admission.attendingDoctorId
+                    : (admission.primaryDoctorId || actorId);
+
+                try {
+                    const newOrd = new InpatientOrder({
+                        hospitalId,
+                        admissionId: admission._id,
+                        patientId: admission.patientId?._id || admission.patientId,
+                        doctorId: docId,
+                        medicineName: String(no.medicineName).trim(),
+                        dosageValue,
+                        dosageUnit,
+                        route: no.route ? String(no.route).trim() : 'Oral',
+                        frequency: no.frequency ? String(no.frequency).trim() : 'TDS',
+                        startDate: no.startDate ? new Date(no.startDate) : new Date(),
+                        status: 'ACTIVE',
+                        instructions: no.instructions ? String(no.instructions).trim() : '',
+                        prescribedByName: sanitizePrescribingDoctor(no.doctorName),
+                        createdBy: actorId
+                    });
+                    await newOrd.save();
+                    createdOrdersCount++;
+                } catch (ordErr) {
+                    console.error('Error saving inline regular order:', ordErr);
+                    return res.status(400).json({ success: false, message: `Failed to save regular order: ${ordErr.message}`, error: ordErr });
+                }
+            }
+        }
+
+        // 5. Discontinue / cancel regular medication orders if requested
+        if (Array.isArray(discontinuedOrderIds) && discontinuedOrderIds.length > 0 && isDoctorOrAdminRole(req)) {
+            const validIds = discontinuedOrderIds.filter(id => id && mongoose.Types.ObjectId.isValid(id));
+            if (validIds.length > 0) {
+                await InpatientOrder.updateMany(
+                    { _id: { $in: validIds }, hospitalId },
+                    { $set: { status: 'CANCELLED', updatedBy: actorId } }
+                );
+            }
+        }
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'DRUG_CHART_INLINE_UPDATED',
+            targetModel: 'InpatientDrugChart',
+            targetId: chartDoc._id,
+            targetLabel: `Inline updated Drug Chart for admission ${admission._id}${createdOrdersCount ? ` (+${createdOrdersCount} new regular orders)` : ''}`,
+            req
+        });
+
+        res.json({ success: true, message: 'Drug chart updated successfully', drugChart: chartDoc });
+    } catch (err) {
+        console.error('Inline update drug chart error:', err);
+        res.status(500).json({ success: false, message: 'Error updating drug chart data' });
+    }
+});
+
+// DELETE /api/ipd-clinical/admissions/:admissionId/drug-chart/stat-doses/:entryId
+router.delete('/admissions/:admissionId/drug-chart/stat-doses/:entryId', verifyToken, resolveTenant, requireDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, entryId } = req.params;
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(entryId)) {
+            return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        }
+        const { InpatientDrugChart } = getModels(req);
+        const chartDoc = await InpatientDrugChart.findOne({ hospitalId, admissionId });
+        if (!chartDoc) return res.status(404).json({ success: false, message: 'Drug chart not found' });
+        chartDoc.statDoses = chartDoc.statDoses.filter(s => String(s._id) !== String(entryId));
+        chartDoc.updatedBy = req.user._id || req.user.userId;
+        await chartDoc.save();
+        res.json({ success: true, message: 'STAT dose removed successfully', drugChart: chartDoc });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error deleting STAT dose' });
+    }
+});
+
+// DELETE /api/ipd-clinical/admissions/:admissionId/drug-chart/iv-fluids/:entryId
+router.delete('/admissions/:admissionId/drug-chart/iv-fluids/:entryId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, entryId } = req.params;
+        if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(entryId)) {
+            return res.status(400).json({ success: false, message: 'Invalid ID format' });
+        }
+        const { InpatientDrugChart } = getModels(req);
+        const chartDoc = await InpatientDrugChart.findOne({ hospitalId, admissionId });
+        if (!chartDoc) return res.status(404).json({ success: false, message: 'Drug chart not found' });
+        chartDoc.ivFluids = chartDoc.ivFluids.filter(iv => String(iv._id) !== String(entryId));
+        chartDoc.updatedBy = req.user._id || req.user.userId;
+        await chartDoc.save();
+        res.json({ success: true, message: 'IV fluid removed successfully', drugChart: chartDoc });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error deleting IV fluid' });
     }
 });
 
@@ -2640,6 +3005,14 @@ router.post('/admissions/:admissionId/drug-chart/stat-doses', verifyToken, resol
         const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const nowTimeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+        const isNurseActor = ['nurse', 'staffnurse', 'headnurse'].includes(String(actorRole || '').toLowerCase());
+        const isDoctorActor = isDoctorOrAdminRole(req) && !isNurseActor;
+        const admDocRaw = admission.doctorName || '';
+        const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+        const cleanDocName = doctorName
+            ? (/^dr\.?\s*/i.test(doctorName) ? doctorName : `Dr. ${doctorName}`)
+            : (isDoctorActor ? `Dr. ${actorName.replace(/^dr\.?\s*/i, '')}` : (admDocName || ''));
+
         chartDoc.statDoses.push({
             orderId: orderId && mongoose.Types.ObjectId.isValid(orderId) ? orderId : null,
             date: date ? String(date).trim() : todayStr,
@@ -2647,8 +3020,8 @@ router.post('/admissions/:admissionId/drug-chart/stat-doses', verifyToken, resol
             drugName: String(drugName).trim(),
             dose: dose ? String(dose).trim() : '',
             route: route ? String(route).trim() : 'IV',
-            doctorId: actorId,
-            doctorName: doctorName ? String(doctorName).trim() : actorName,
+            doctorId: isDoctorActor ? actorId : (admission.doctorId || admission.admittedBy || null),
+            doctorName: cleanDocName,
             // Strictly initialized as PENDING with empty administration fields
             status: 'PENDING',
             givenById: null,
@@ -2876,14 +3249,22 @@ router.post('/admissions/:admissionId/drug-chart/iv-fluids', verifyToken, resolv
             ? String(status).trim().toUpperCase()
             : (cleanAdminBy ? 'RUNNING' : 'PENDING');
 
+        const isNurseActor = ['nurse', 'staffnurse', 'headnurse'].includes(String(actorRole || '').toLowerCase());
+        const isDoctorActor = isDoctorOrAdminRole(req) && !isNurseActor;
+        const admDocRaw = admission.doctorName || '';
+        const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+        const cleanDocName = doctorName
+            ? (/^dr\.?\s*/i.test(doctorName) ? doctorName : `Dr. ${doctorName}`)
+            : (isDoctorActor ? `Dr. ${actorName.replace(/^dr\.?\s*/i, '')}` : (admDocName || ''));
+
         chartDoc.ivFluids.push({
             date: date ? String(date).trim() : todayStr,
             fluidName: String(fluidName).trim(),
             volume: volume ? String(volume).trim() : '',
             timeStart: timeStart ? String(timeStart).trim() : '',
             infusionTimeHrs: infusionTimeHrs ? String(infusionTimeHrs).trim() : '',
-            doctorId: isDoctorOrAdminRole(req) ? actorId : null,
-            doctorName: doctorName ? String(doctorName).trim() : (isDoctorOrAdminRole(req) ? actorName : ''),
+            doctorId: isDoctorActor ? actorId : (admission.doctorId || admission.admittedBy || null),
+            doctorName: cleanDocName,
             status: ['PENDING', 'RUNNING', 'COMPLETED', 'HELD', 'NOT_GIVEN'].includes(resolvedStatus) ? resolvedStatus : 'PENDING',
             adminById: cleanAdminBy ? actorId : null,
             adminByName: cleanAdminBy,
@@ -3313,6 +3694,125 @@ router.patch('/admissions/:admissionId/drug-chart/mar/:marId/correct', verifyTok
     } catch (err) {
         console.error('MAR correction error:', err);
         res.status(500).json({ success: false, message: 'Error correcting medication administration record' });
+    }
+});
+
+// ============================================================================
+// SECTION K: ICU DAILY OBSERVATION CHART (EXACT 2-PAGE AUTO-POPULATION)
+// ============================================================================
+
+// GET /api/ipd-clinical/admissions/:admissionId/icu-chart
+router.get('/admissions/:admissionId/icu-chart', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+
+        if (!hospitalId) {
+            return res.status(403).json({ success: false, message: 'Hospital context required' });
+        }
+
+        const {
+            Admission,
+            InpatientOrder,
+            IPDVitals,
+            IPDIntakeOutput,
+            IPDLine,
+            IPDCatheter,
+            NursingNote,
+            LabReport,
+            SurgeryPlan,
+            InpatientClinicalNote,
+            InpatientDrugChart,
+            User,
+            Bed
+        } = getModels(req);
+
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission record not found in this hospital' });
+        }
+
+        // Cross-store user and bed hydration
+        let patient = null;
+        if (admission.patientId) {
+            patient = await findUserAcrossStores(User, admission.patientId);
+        }
+
+        let doctor = null;
+        if (admission.doctorId) {
+            doctor = await findUserAcrossStores(User, admission.doctorId);
+        }
+
+        let bed = null;
+        if (admission.bedId && Bed) {
+            try {
+                bed = await Bed.findOne({ _id: admission.bedId, hospitalId }).lean();
+            } catch (_) {}
+        }
+
+        // Parallel query of existing clinical streams belonging strictly to this admission & hospital
+        const [
+            vitals,
+            intakeOutput,
+            lines,
+            catheters,
+            orders,
+            nursingNotes,
+            labReports,
+            surgeries,
+            clinicalNote,
+            drugChart,
+            hospitalDoc
+        ] = await Promise.all([
+            IPDVitals ? IPDVitals.find({ admissionId, hospitalId }).sort({ recordedAt: 1 }).lean() : [],
+            IPDIntakeOutput ? IPDIntakeOutput.find({ admissionId, hospitalId }).sort({ recordedAt: 1 }).lean() : [],
+            IPDLine ? IPDLine.find({ admissionId, hospitalId }).sort({ insertedAt: 1 }).lean() : [],
+            IPDCatheter ? IPDCatheter.find({ admissionId, hospitalId }).sort({ insertedAt: 1 }).lean() : [],
+            InpatientOrder ? InpatientOrder.find({ admissionId, hospitalId, status: { $in: ['ACTIVE', 'COMPLETED'] } }).sort({ createdAt: 1 }).lean() : [],
+            NursingNote ? NursingNote.find({ admissionId, hospitalId }).sort({ createdAt: 1 }).lean() : [],
+            LabReport ? LabReport.find({ hospitalId, $or: [{ userId: admission.patientId }, { patientId: String(admission.patientId) }] }).sort({ createdAt: -1 }).limit(10).lean() : [],
+            SurgeryPlan ? SurgeryPlan.find({ hospitalId, patientId: admission.patientId }).sort({ createdAt: -1 }).limit(5).lean() : [],
+            InpatientClinicalNote ? InpatientClinicalNote.findOne({ admissionId, hospitalId }).lean() : null,
+            InpatientDrugChart ? InpatientDrugChart.findOne({ admissionId, hospitalId }).lean() : null,
+            Hospital.findById(hospitalId).lean()
+        ]);
+
+        // Audit log access
+        logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'ICU_CHART_VIEWED',
+            targetModel: 'Admission',
+            targetId: admission._id,
+            targetLabel: `ICU Observation Chart Viewed for ${patient?.name || 'Patient'} (${admission.ipdNumber || admission.admissionNumber || admission._id})`,
+            req
+        }).catch(() => {});
+
+        res.json({
+            success: true,
+            data: {
+                admission: {
+                    ...admission,
+                    patientId: patient || admission.patientId,
+                    doctorId: doctor || admission.doctorId,
+                    bedId: bed || admission.bedId
+                },
+                hospital: hospitalDoc || {},
+                vitals: vitals || [],
+                intakeOutput: intakeOutput || [],
+                lines: lines || [],
+                catheters: catheters || [],
+                orders: orders || [],
+                nursingNotes: nursingNotes || [],
+                labReports: labReports || [],
+                surgeries: surgeries || [],
+                clinicalNote: clinicalNote || null,
+                drugChart: drugChart || null
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching ICU observation chart data:', err);
+        res.status(500).json({ success: false, message: 'Error retrieving ICU observation chart data', error: err.message });
     }
 });
 

@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 3000;
 const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
 
 // 1. Connect to Database
-connectDB();
+const dbPromise = connectDB();
 
 // 4. HTTP Server and Socket.io Setup
 const server = http.createServer(app);
@@ -136,12 +136,19 @@ if (DEPLOYMENT_MODE !== 'local') {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT} [mode: ${DEPLOYMENT_MODE}] and listening on all interfaces (0.0.0.0)`);
 
-    // 5. Post-startup services (after DB is ready — give it 3s)
-    setTimeout(() => {
+    // 5. Post-startup services (guaranteed execution after DB is fully connected)
+    (async () => {
+        try {
+            await dbPromise;
+        } catch (dbErr) {
+            console.error('❌ [Startup Error] Post-startup initialization skipped: DB connection failed:', dbErr.message);
+            return;
+        }
+
         // Ensure all hospitals have an initialized AI Wallet
         try {
             const aiWalletService = require('./src/services/ai/aiWallet.service');
-            aiWalletService.ensureAllHospitalsHaveWallets();
+            await aiWalletService.ensureAllHospitalsHaveWallets();
         } catch (walletInitErr) {
             console.warn('⚠️ [AI Wallet Init Warning]:', walletInitErr.message);
         }
@@ -164,7 +171,7 @@ server.listen(PORT, '0.0.0.0', () => {
             tunnelClient.setApp(app);
             tunnelClient.connect();
         }
-    }, 3000);
+    })();
 });
 
 // 5. Graceful Process Termination (Handles SIGTERM/SIGINT from Render & Docker)

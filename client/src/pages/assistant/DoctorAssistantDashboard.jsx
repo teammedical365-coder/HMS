@@ -85,6 +85,10 @@ const DoctorAssistantDashboard = () => {
                         <FiRefreshCw className={refreshing ? 'spin' : ''} />
                         Refresh
                     </button>
+                    <Link to="/doctor/ipd-patients" className="da-btn da-btn-primary" style={{ background: '#0284c7' }}>
+                        <FiActivity />
+                        IPD Clinical Records
+                    </Link>
                     <Link to="/assistant/queue" className="da-btn da-btn-primary">
                         <FiUsers />
                         Open Patient Queue
@@ -185,6 +189,101 @@ const DoctorAssistantDashboard = () => {
                         ))}
                     </div>
                 )}
+            </div>
+
+            {/* IPD CLINICAL CHARTS & INPATIENT RECORDS */}
+            <div className="da-section-card">
+                <div className="da-section-header">
+                    <div>
+                        <h2 className="da-section-title">
+                            🏥 IPD Clinical Records & Official Charts
+                        </h2>
+                        <p className="da-section-subtitle">
+                            Direct clinical access to official 2-Page ICU Charts, Drug Charts, Progress Notes, and TPR Observation
+                        </p>
+                    </div>
+                    <Link to="/doctor/ipd-patients" className="da-btn da-btn-primary" style={{ fontSize: '0.85rem' }}>
+                        Open Inpatient Directory <FiArrowRight />
+                    </Link>
+                </div>
+
+                <div className="da-ipd-grid">
+                    <Link to="/doctor/ipd-patients" className="da-ipd-card">
+                        <div className="da-ipd-card-top">
+                            <div className="da-ipd-icon blue">
+                                <FiActivity />
+                            </div>
+                            <div>
+                                <h4 className="da-ipd-title">ICU Daily Observation Chart</h4>
+                                <span className="da-badge" style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '10px' }}>2-Page Official</span>
+                            </div>
+                        </div>
+                        <p className="da-ipd-desc">
+                            Hourly vitals, intake/output tracking, active medication orders, ventilatory settings & shift nursing notes.
+                        </p>
+                        <div className="da-ipd-footer">
+                            <span>Open Inpatient Charts</span>
+                            <FiArrowRight />
+                        </div>
+                    </Link>
+
+                    <Link to="/doctor/ipd-patients" className="da-ipd-card">
+                        <div className="da-ipd-card-top">
+                            <div className="da-ipd-icon purple">
+                                <FiFileText />
+                            </div>
+                            <div>
+                                <h4 className="da-ipd-title">Drug Chart & MAR</h4>
+                                <span className="da-badge" style={{ background: '#f3e8ff', color: '#7e22ce', fontSize: '10px' }}>2-Page Official</span>
+                            </div>
+                        </div>
+                        <p className="da-ipd-desc">
+                            Page 1 STAT doses and IV fluids, Page 2 4-day multi-slot medication administration matrix with real-time audit.
+                        </p>
+                        <div className="da-ipd-footer">
+                            <span>Open Inpatient Charts</span>
+                            <FiArrowRight />
+                        </div>
+                    </Link>
+
+                    <Link to="/doctor/ipd-patients" className="da-ipd-card">
+                        <div className="da-ipd-card-top">
+                            <div className="da-ipd-icon emerald">
+                                <FiActivity />
+                            </div>
+                            <div>
+                                <h4 className="da-ipd-title">TPR & Vitals Chart</h4>
+                                <span className="da-badge" style={{ background: '#d1fae5', color: '#059669', fontSize: '10px' }}>Clinical Graphic</span>
+                            </div>
+                        </div>
+                        <p className="da-ipd-desc">
+                            Continuous graphical temperature, pulse, respiration, and blood pressure monitoring records.
+                        </p>
+                        <div className="da-ipd-footer">
+                            <span>Open Inpatient Charts</span>
+                            <FiArrowRight />
+                        </div>
+                    </Link>
+
+                    <Link to="/doctor/ipd-patients" className="da-ipd-card">
+                        <div className="da-ipd-card-top">
+                            <div className="da-ipd-icon amber">
+                                <FiBookOpen />
+                            </div>
+                            <div>
+                                <h4 className="da-ipd-title">Clinical Progress Notes</h4>
+                                <span className="da-badge" style={{ background: '#fef3c7', color: '#d97706', fontSize: '10px' }}>Continuation Sheets</span>
+                            </div>
+                        </div>
+                        <p className="da-ipd-desc">
+                            Daily chronological clinical progress observations, examination findings, and multi-sheet audit history.
+                        </p>
+                        <div className="da-ipd-footer">
+                            <span>Open Inpatient Charts</span>
+                            <FiArrowRight />
+                        </div>
+                    </Link>
+                </div>
             </div>
 
             {/* TODAY'S PATIENT QUEUE */}

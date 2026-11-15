@@ -9,6 +9,8 @@ import {
     FiCheck,
     FiCheckCircle,
     FiClock,
+    FiDroplet,
+    FiEye,
     FiFileText,
     FiHelpCircle,
     FiLayers,
@@ -20,6 +22,7 @@ import {
     FiSend,
     FiTrash2,
     FiMapPin,
+    FiUserCheck,
     FiX
 } from 'react-icons/fi';
 import './DoctorIPDOrdersPanel.css';
@@ -27,6 +30,7 @@ import CustomSelect from '../common/CustomSelect';
 import TPRChartModal from './TPRChartModal';
 import InpatientClinicalNotesModal from './InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from './IPDClinicalChartsModal';
+import ICUChartModal from './ICUChartModal';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -155,25 +159,70 @@ const createEmptyDischargeMedRow = () => ({
 });
 
 const DoctorIPDOrdersPanel = ({
-    patientId,
-    patient = {},
+    admissionId = null,
+    admission: propAdmission = null,
+    patientId: propPatientId = null,
+    patient: propPatient = {},
     appointment = null,
     currentUser = null,
-    onOrderCreated = null
+    onOrderCreated = null,
+    defaultTab = 'overview'
 }) => {
     const { user: authUser } = useAuth();
     const activeDoctor = currentUser || authUser;
     const hospitalId = activeDoctor?.hospitalId;
 
-    // Active sub-tab: 'orders', 'clarifications', 'discharge'
-    const [activeTab, setActiveTab] = useState('orders');
+    const patientId = propPatientId || propAdmission?.patientId?._id || propAdmission?.patientId || propPatient?._id || null;
+    const patient = propPatient || propAdmission?.patientId || {};
+
+    // Active sub-tab: 'overview', 'treatment_chart', 'tpr_vitals', 'icu_chart', 'progress_notes', 'clinical_notes', 'drug_chart', 'mar', 'nursing_notes', 'communication', 'investigations', 'discharge'
+    const [activeTab, setActiveTab] = useState(defaultTab || 'overview');
 
     // Active admission state
-    const [activeAdmission, setActiveAdmission] = useState(null);
-    const [loadingAdmission, setLoadingAdmission] = useState(true);
+    const [activeAdmission, setActiveAdmission] = useState(propAdmission || null);
+    const [loadingAdmission, setLoadingAdmission] = useState(!propAdmission);
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
+    const [icuChartModalOpen, setIcuChartModalOpen] = useState(false);
+
+    // ── Vitals & TPR State ──
+    const [vitalsList, setVitalsList] = useState([]);
+    const [loadingVitals, setLoadingVitals] = useState(false);
+
+    // ── Progress Notes State ──
+    const [progressNotes, setProgressNotes] = useState([]);
+    const [loadingProgressNotes, setLoadingProgressNotes] = useState(false);
+    const [newProgressNote, setNewProgressNote] = useState({
+        note: '',
+        sheetNo: '1',
+        recordedAt: ''
+    });
+    const [savingProgressNote, setSavingProgressNote] = useState(false);
+
+    // ── Drug Chart State ──
+    const [drugChartData, setDrugChartData] = useState(null);
+    const [loadingDrugChart, setLoadingDrugChart] = useState(false);
+
+    // ── Clinical Notes State ──
+    const [clinicalNotesData, setClinicalNotesData] = useState(null);
+    const [loadingClinicalNotes, setLoadingClinicalNotes] = useState(false);
+
+    // ── MAR State ──
+    const [marList, setMarList] = useState([]);
+    const [loadingMar, setLoadingMar] = useState(false);
+
+    // ICU patient check
+    const isICUPatient = useMemo(() => {
+        if (!activeAdmission) return false;
+        const w = (activeAdmission.ward || activeAdmission.bedId?.ward || '').toLowerCase();
+        const b = (activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || '').toLowerCase();
+        return Boolean(
+            activeAdmission.isICU ||
+            w.includes('icu') || w.includes('ccu') || w.includes('nicu') || w.includes('picu') ||
+            b.includes('icu') || b.includes('ccu') || b.includes('nicu') || b.includes('picu')
+        );
+    }, [activeAdmission]);
 
     // Hospitalize Modal State
     const [hospitalizeModalOpen, setHospitalizeModalOpen] = useState(false);
@@ -250,6 +299,38 @@ const DoctorIPDOrdersPanel = ({
 
     // Fetch active admission for this specific patient
     const fetchAdmission = useCallback(async () => {
+        if (propAdmission && propAdmission._id) {
+            setActiveAdmission(propAdmission);
+            setLoadingAdmission(false);
+            return;
+        }
+
+        if (admissionId) {
+            setLoadingAdmission(true);
+            try {
+                let found = null;
+                try {
+                    const singleRes = await admissionAPI.getAdmissionById(admissionId);
+                    found = singleRes.admission || singleRes.data || singleRes;
+                } catch (singleErr) {
+                    console.warn('Single admission fetch fallback:', singleErr);
+                }
+                if (!found) {
+                    const res = await admissionAPI.getActiveAdmissions();
+                    const list = res.admissions || res.data || [];
+                    found = list.find(a => String(a._id) === String(admissionId));
+                }
+                if (found) {
+                    setActiveAdmission(found);
+                }
+            } catch (err) {
+                console.warn('Could not fetch admission by id', err);
+            } finally {
+                setLoadingAdmission(false);
+            }
+            return;
+        }
+
         if (!patientId) return;
         setLoadingAdmission(true);
         try {
@@ -274,7 +355,119 @@ const DoctorIPDOrdersPanel = ({
         } finally {
             setLoadingAdmission(false);
         }
-    }, [patientId]);
+    }, [admissionId, propAdmission, patientId]);
+
+    // ── Additional Clinical Stream Fetchers ──
+    const fetchVitals = useCallback(async () => {
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) return;
+        setLoadingVitals(true);
+        try {
+            const res = await ipdClinicalAPI.getVitalsHistory(admId);
+            setVitalsList(Array.isArray(res?.vitals) ? res.vitals : (Array.isArray(res?.data) ? res.data : []));
+        } catch (err) {
+            console.warn('Failed to fetch vitals:', err);
+        } finally {
+            setLoadingVitals(false);
+        }
+    }, [activeAdmission?._id, admissionId]);
+
+    const fetchProgressNotes = useCallback(async () => {
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) return;
+        setLoadingProgressNotes(true);
+        try {
+            const res = await ipdClinicalAPI.getProgressNotes(admId);
+            setProgressNotes(Array.isArray(res?.notes) ? res.notes : (Array.isArray(res?.data) ? res.data : []));
+        } catch (err) {
+            console.warn('Failed to fetch progress notes:', err);
+        } finally {
+            setLoadingProgressNotes(false);
+        }
+    }, [activeAdmission?._id, admissionId]);
+
+    const fetchDrugChart = useCallback(async () => {
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) return;
+        setLoadingDrugChart(true);
+        try {
+            const res = await ipdClinicalAPI.getDrugChart(admId);
+            setDrugChartData(res?.drugChart || res?.data || null);
+        } catch (err) {
+            console.warn('Failed to fetch drug chart:', err);
+        } finally {
+            setLoadingDrugChart(false);
+        }
+    }, [activeAdmission?._id, admissionId]);
+
+    const fetchClinicalNotes = useCallback(async () => {
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) return;
+        setLoadingClinicalNotes(true);
+        try {
+            const res = await ipdClinicalAPI.getInpatientClinicalNotes(admId);
+            setClinicalNotesData(res?.clinicalNotes || res?.data || null);
+        } catch (err) {
+            console.warn('Failed to fetch clinical notes:', err);
+        } finally {
+            setLoadingClinicalNotes(false);
+        }
+    }, [activeAdmission?._id, admissionId]);
+
+    const fetchMAR = useCallback(async () => {
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) return;
+        setLoadingMar(true);
+        try {
+            const res = await ipdClinicalAPI.getMARRecords(admId);
+            setMarList(Array.isArray(res?.marRecords) ? res.marRecords : (Array.isArray(res?.data) ? res.data : []));
+        } catch (err) {
+            console.warn('Failed to fetch MAR records:', err);
+        } finally {
+            setLoadingMar(false);
+        }
+    }, [activeAdmission?._id, admissionId]);
+
+    // Handle adding a new progress note
+    const handleAddProgressNote = async (e) => {
+        if (e) e.preventDefault();
+        const admId = activeAdmission?._id || admissionId;
+        if (!admId) {
+            setErrorMsg('Active admission required to add progress note');
+            return;
+        }
+        if (!newProgressNote.note.trim()) {
+            setErrorMsg('Please enter a clinical progress observation');
+            return;
+        }
+
+        setSavingProgressNote(true);
+        setErrorMsg('');
+        try {
+            const res = await ipdClinicalAPI.addProgressNote(admId, {
+                note: newProgressNote.note.trim(),
+                sheetNo: newProgressNote.sheetNo || '1',
+                recordedAt: newProgressNote.recordedAt || new Date().toISOString()
+            });
+            if (res && res.success) {
+                setSuccessMsg('Clinical Progress Note saved successfully!');
+                setNewProgressNote({
+                    note: '',
+                    sheetNo: '1',
+                    recordedAt: ''
+                });
+                fetchProgressNotes();
+                setTimeout(() => setSuccessMsg(''), 4000);
+            } else {
+                setErrorMsg(res?.message || 'Failed to save progress note');
+            }
+        } catch (err) {
+            console.error('Error saving progress note:', err);
+            setErrorMsg(err.response?.data?.message || err.message || 'Error saving progress note');
+        } finally {
+            setSavingProgressNote(false);
+        }
+    };
 
     // Open Hospitalize Modal & Fetch Available Beds
     const handleOpenHospitalizeModal = async () => {
@@ -459,8 +652,23 @@ const DoctorIPDOrdersPanel = ({
             fetchClarifications();
             fetchNursingNotes();
             fetchDischargeSummary();
+            fetchVitals();
+            fetchProgressNotes();
+            fetchDrugChart();
+            fetchClinicalNotes();
+            fetchMAR();
         }
-    }, [activeAdmission, fetchClarifications, fetchNursingNotes, fetchDischargeSummary]);
+    }, [
+        activeAdmission,
+        fetchClarifications,
+        fetchNursingNotes,
+        fetchDischargeSummary,
+        fetchVitals,
+        fetchProgressNotes,
+        fetchDrugChart,
+        fetchClinicalNotes,
+        fetchMAR
+    ]);
 
     // Socket.IO real-time event listeners
     useEffect(() => {
@@ -471,6 +679,10 @@ const DoctorIPDOrdersPanel = ({
             fetchClarifications();
             fetchNursingNotes();
             fetchAdmission();
+            fetchVitals();
+            fetchProgressNotes();
+            fetchDrugChart();
+            fetchMAR();
         };
 
         const events = [
@@ -480,7 +692,13 @@ const DoctorIPDOrdersPanel = ({
             'order_clarification_requested',
             'order_clarification_resolved',
             'nursing_note_created',
-            'discharge_summary_updated'
+            'discharge_summary_updated',
+            'ipd:order_created',
+            'ipd:mar_updated',
+            'ipd:vitals_updated',
+            'ipd:notes_updated',
+            'ipd:progress_note_added',
+            'ipd:clarification_answered'
         ];
 
         events.forEach(evt => socket.on(evt, handleOrderEvent));
@@ -488,7 +706,7 @@ const DoctorIPDOrdersPanel = ({
         return () => {
             events.forEach(evt => socket.off(evt, handleOrderEvent));
         };
-    }, [fetchOrders, fetchClarifications, fetchNursingNotes, fetchAdmission]);
+    }, [fetchOrders, fetchClarifications, fetchNursingNotes, fetchAdmission, fetchVitals, fetchProgressNotes, fetchDrugChart, fetchMAR]);
 
     // Medicine row management
     const handleMedRowChange = (index, field, value) => {
@@ -951,6 +1169,27 @@ const DoctorIPDOrdersPanel = ({
                                 <FiFileText size={14} />
                                 <span>Drug Chart</span>
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setIcuChartModalOpen(true)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    background: '#0284c7',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                }}
+                                title="Official 2-Page ICU Daily Observation Chart"
+                            >
+                                <FiActivity size={14} />
+                                <span>ICU Chart</span>
+                            </button>
                             <div className="ipd-status-card admitted">
                                 <span className="ipd-pulse-dot green"></span>
                                 <div className="ipd-status-card-text">
@@ -980,53 +1219,43 @@ const DoctorIPDOrdersPanel = ({
                 </div>
             </div>
 
-            {/* Sub-Navigation Tabs */}
+            {/* Sub-Navigation Tabs (All 11+ Clinical Sections) */}
             <div className="ipd-sub-tabs">
-                <button
-                    type="button"
-                    className={`sub-tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('orders')}
-                >
-                    <FiLayers />
-                    <span>Inpatient Orders & MAR</span>
-                    <span className="count-pill">{existingOrders.length}</span>
-                </button>
-
-                <button
-                    type="button"
-                    className={`sub-tab-btn ${activeTab === 'clarifications' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('clarifications')}
-                >
-                    <FiHelpCircle />
-                    <span>Nurse Clarification Inbox</span>
-                    {openClarificationsCount > 0 ? (
-                        <span className="count-pill badge-urgent">{openClarificationsCount} Open</span>
-                    ) : (
-                        <span className="count-pill">{clarifications.length}</span>
-                    )}
-                </button>
-
-                <button
-                    type="button"
-                    className={`sub-tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('notes')}
-                >
-                    <FiMessageSquare />
-                    <span>Nursing Notes</span>
-                    <span className="count-pill">{nursingNotes.length}</span>
-                </button>
-
-                <button
-                    type="button"
-                    className={`sub-tab-btn ${activeTab === 'discharge' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('discharge')}
-                >
-                    <FiFileText />
-                    <span>Structured Discharge Summary</span>
-                    {summaryDoctorSigned && (
-                        <span className="count-pill badge-signed">✓ Signed</span>
-                    )}
-                </button>
+                {[
+                    { key: 'overview', label: 'Overview', icon: <FiEye /> },
+                    { key: 'treatment_chart', label: 'Treatment Chart', icon: <FiLayers />, count: existingOrders.length },
+                    { key: 'tpr_vitals', label: 'TPR & Vitals', icon: <FiActivity />, count: vitalsList.length },
+                    ...(isICUPatient ? [{ key: 'icu_chart', label: '⚡ ICU Chart', icon: <FiActivity />, isICU: true }] : []),
+                    { key: 'progress_notes', label: 'Progress Notes', icon: <FiFileText />, count: progressNotes.length },
+                    { key: 'clinical_notes', label: 'Clinical Notes', icon: <FiFileText /> },
+                    { key: 'drug_chart', label: 'Drug Chart', icon: <FiDroplet /> },
+                    { key: 'mar', label: 'Medication Administration', icon: <FiClock />, count: marList.length },
+                    { key: 'notes', label: 'Nursing Notes', icon: <FiMessageSquare />, count: nursingNotes.length },
+                    { key: 'clarifications', label: 'Patient Communication', icon: <FiHelpCircle />, count: openClarificationsCount || clarifications.length },
+                    { key: 'investigations', label: 'Investigations', icon: <FiFileText /> },
+                    { key: 'discharge', label: 'Discharge Summary', icon: <FiFileText />, isSigned: summaryDoctorSigned }
+                ].map(tab => {
+                    const isActive = activeTab === tab.key || (tab.key === 'treatment_chart' && activeTab === 'orders');
+                    return (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            className={`sub-tab-btn ${isActive ? 'active' : ''} ${tab.isICU ? 'tab-icu-highlight' : ''}`}
+                            onClick={() => setActiveTab(tab.key)}
+                        >
+                            {tab.icon}
+                            <span>{tab.label}</span>
+                            {tab.count !== undefined && tab.count > 0 && (
+                                <span className={`count-pill ${tab.key === 'clarifications' && openClarificationsCount > 0 ? 'badge-urgent' : ''}`}>
+                                    {tab.count}
+                                </span>
+                            )}
+                            {tab.isSigned && (
+                                <span className="count-pill badge-signed">✓ Signed</span>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Notification messages */}
@@ -1094,8 +1323,634 @@ const DoctorIPDOrdersPanel = ({
                 </div>
             )}
 
-            {/* ── TAB 1: INPATIENT ORDERS ENTRY & LIST ── */}
-            {activeTab === 'orders' && (
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 1: OVERVIEW & CLINICAL RECORDS DASHBOARD
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'overview' && (
+                <div className="ipd-overview-section">
+                    {/* Clinical Overview Banner */}
+                    <div className="ipd-overview-banner">
+                        <div>
+                            <h4 className="ipd-overview-title">
+                                {patientName} • Inpatient Clinical Records &amp; Overview
+                            </h4>
+                            <p className="ipd-overview-sub">
+                                Diagnosis: <strong>{diagnosis || activeAdmission?.diagnosis || 'Clinical Inpatient Care'}</strong> &nbsp;|&nbsp;
+                                Location: <strong>{activeAdmission?.ward || 'Ward'} • Bed {activeAdmission?.bedNumber || 'Assigned'}</strong> &nbsp;|&nbsp;
+                                Consultant: <strong>{activeAdmission?.consultant || `Dr. ${activeDoctor?.name || 'Attending'}`}</strong>
+                            </p>
+                        </div>
+
+                        {isICUPatient && (
+                            <span className="doc-ipd-icu-badge" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                                ⚡ CRITICAL CARE ICU PATIENT
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Official Document Launcher Cards */}
+                    <div>
+                        <h5 style={{ margin: '0 0 12px', fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
+                            OFFICIAL CLINICAL CHARTS &amp; DOCUMENTS (SHARED DOCTOR / NURSE STREAM)
+                        </h5>
+                        <div className="ipd-quick-cards-grid">
+                            <div className="ipd-quick-doc-card tpr" onClick={() => setTprModalOpen(true)}>
+                                <div className="ipd-qdoc-header">
+                                    <div className="ipd-qdoc-icon teal"><FiPrinter /></div>
+                                    <h6 className="ipd-qdoc-title">TPR Bedside Chart</h6>
+                                </div>
+                                <p className="ipd-qdoc-desc">
+                                    Dynamic 10-column temperature, pulse, respiration, BP &amp; fluid intake/output record.
+                                </p>
+                                <span className="ipd-qdoc-action-label">Open Bedside TPR Chart →</span>
+                            </div>
+
+                            <div className="ipd-quick-doc-card progress" onClick={() => setClinicalChartsModal({ open: true, tab: 'progress_notes' })}>
+                                <div className="ipd-qdoc-header">
+                                    <div className="ipd-qdoc-icon emerald"><FiFileText /></div>
+                                    <h6 className="ipd-qdoc-title">Clinical Progress Notes</h6>
+                                </div>
+                                <p className="ipd-qdoc-desc">
+                                    Official 1-page progress notes with continuation sheets and NABH letterhead.
+                                </p>
+                                <span className="ipd-qdoc-action-label">Open Progress Notes →</span>
+                            </div>
+
+                            <div className="ipd-quick-doc-card clinical" onClick={() => setClinicalNotesModalOpen(true)}>
+                                <div className="ipd-qdoc-header">
+                                    <div className="ipd-qdoc-icon navy"><FiFileText /></div>
+                                    <h6 className="ipd-qdoc-title">Clinical Notes (2-Page)</h6>
+                                </div>
+                                <p className="ipd-qdoc-desc">
+                                    Official two-page form: History, Examination, Treatment, Discharge &amp; Communication.
+                                </p>
+                                <span className="ipd-qdoc-action-label">Open Clinical Notes →</span>
+                            </div>
+
+                            <div className="ipd-quick-doc-card drug" onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}>
+                                <div className="ipd-qdoc-header">
+                                    <div className="ipd-qdoc-icon blue"><FiDroplet /></div>
+                                    <h6 className="ipd-qdoc-title">Drug Chart (2-Page)</h6>
+                                </div>
+                                <p className="ipd-qdoc-desc">
+                                    STAT Doses, Continuous IV Infusions, Allergies &amp; 4-Day Scheduled MAR Grid.
+                                </p>
+                                <span className="ipd-qdoc-action-label">Open Drug Chart →</span>
+                            </div>
+
+                            <div
+                                className={`ipd-quick-doc-card icu ${isICUPatient ? 'highlighted' : ''}`}
+                                onClick={() => setIcuChartModalOpen(true)}
+                            >
+                                <div className="ipd-qdoc-header">
+                                    <div className={`ipd-qdoc-icon ${isICUPatient ? 'red' : 'sky'}`}><FiActivity /></div>
+                                    <h6 className="ipd-qdoc-title">{isICUPatient ? '⚡ ICU Chart (Official)' : 'ICU Observation Chart'}</h6>
+                                </div>
+                                <p className="ipd-qdoc-desc">
+                                    Official two-page landscape chart: 24h vitals, ventilator, diabetic chart &amp; diet orders.
+                                </p>
+                                <span className="ipd-qdoc-action-label">Open ICU Chart →</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Latest Vitals Snapshot */}
+                    <div className="ipd-summary-box">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                            <h5 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FiActivity style={{ color: '#0284c7' }} /> Latest Bedside Vitals (Shared Stream)
+                            </h5>
+                            <button
+                                type="button"
+                                className="doc-ipd-mini-btn"
+                                onClick={() => setActiveTab('tpr_vitals')}
+                            >
+                                View Full Vitals History ({vitalsList.length}) →
+                            </button>
+                        </div>
+
+                        {vitalsList.length === 0 ? (
+                            <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>
+                                No bedside vitals recorded yet. When nursing staff records vitals at bedside, they synchronize here live.
+                            </p>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>BP (Blood Pressure)</span>
+                                    <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                                        {vitalsList[0].systolicBP && vitalsList[0].diastolicBP ? `${vitalsList[0].systolicBP}/${vitalsList[0].diastolicBP}` : '—'}
+                                    </strong>
+                                </div>
+                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Pulse / Heart Rate</span>
+                                    <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                                        {vitalsList[0].pulse ? `${vitalsList[0].pulse} bpm` : '—'}
+                                    </strong>
+                                </div>
+                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>SpO₂ (Oxygen)</span>
+                                    <strong style={{ fontSize: '1.1rem', color: vitalsList[0].spo2 && vitalsList[0].spo2 < 95 ? '#dc2626' : '#059669' }}>
+                                        {vitalsList[0].spo2 ? `${vitalsList[0].spo2}%` : '—'}
+                                    </strong>
+                                </div>
+                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Temperature</span>
+                                    <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                                        {vitalsList[0].temperature ? `${vitalsList[0].temperature} °F` : '—'}
+                                    </strong>
+                                </div>
+                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Resp Rate</span>
+                                    <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>
+                                        {vitalsList[0].respiratoryRate ? `${vitalsList[0].respiratoryRate} /min` : '—'}
+                                    </strong>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 2: TPR & BEDSIDE VITALS
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'tpr_vitals' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Bedside Temperature, Pulse, Respiration (TPR) &amp; Vitals Stream</h4>
+                            <p>Real-time bedside vitals recorded by nurses and doctors. Synchronized with the official Bedside TPR Chart.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn teal"
+                            onClick={() => setTprModalOpen(true)}
+                        >
+                            <FiPrinter size={15} /> <span>Open &amp; Print Bedside TPR Chart</span>
+                        </button>
+                    </div>
+
+                    <div className="ipd-clinical-table-wrapper">
+                        {loadingVitals ? (
+                            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                <FiRefreshCw className="spinning" size={24} />
+                                <p style={{ marginTop: '8px' }}>Loading vitals history...</p>
+                            </div>
+                        ) : vitalsList.length === 0 ? (
+                            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                <p style={{ margin: 0, fontWeight: 600 }}>No vitals recorded yet for this admission.</p>
+                                <span style={{ fontSize: '0.82rem' }}>Bedside vital readings recorded by nurses appear here automatically.</span>
+                            </div>
+                        ) : (
+                            <table className="ipd-clinical-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date &amp; Time</th>
+                                        <th>BP (mmHg)</th>
+                                        <th>Pulse (bpm)</th>
+                                        <th>Temp (°F)</th>
+                                        <th>SpO₂ (%)</th>
+                                        <th>Resp (/min)</th>
+                                        <th>Pain</th>
+                                        <th>Recorded By</th>
+                                        <th>Clinical Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {vitalsList.map((v, i) => (
+                                        <tr key={v._id || i}>
+                                            <td style={{ fontWeight: 600 }}>
+                                                {new Date(v.recordedAt || v.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td>{v.systolicBP && v.diastolicBP ? `${v.systolicBP}/${v.diastolicBP}` : '—'}</td>
+                                            <td>{v.pulse || '—'}</td>
+                                            <td>{v.temperature ? `${v.temperature}°F` : '—'}</td>
+                                            <td style={{ color: v.spo2 && v.spo2 < 95 ? '#dc2626' : 'inherit', fontWeight: v.spo2 && v.spo2 < 95 ? 800 : 500 }}>
+                                                {v.spo2 ? `${v.spo2}%` : '—'}
+                                            </td>
+                                            <td>{v.respiratoryRate || '—'}</td>
+                                            <td>{v.painScore !== undefined ? v.painScore : '—'}</td>
+                                            <td>{v.recordedBy?.name || v.recordedByName || 'Staff Nurse'}</td>
+                                            <td style={{ color: '#64748b', fontStyle: v.remark ? 'normal' : 'italic' }}>
+                                                {v.remark || 'Routine monitoring'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 3: ICU DAILY OBSERVATION CHART
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'icu_chart' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Intensive Care Unit (ICU) Daily Observation Chart</h4>
+                            <p>Official two-page landscape clinical document containing 24h hourly vitals, ventilator parameters, diabetic monitoring, and diet orders.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn red"
+                            onClick={() => setIcuChartModalOpen(true)}
+                        >
+                            <FiActivity size={15} /> <span>Open Official 2-Page ICU Chart (Preview &amp; Print)</span>
+                        </button>
+                    </div>
+
+                    {!isICUPatient ? (
+                        <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '12px', padding: '24px', color: '#92400e' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '1.4rem' }}>ℹ️</span>
+                                <h5 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>General / Private Inpatient Record</h5>
+                            </div>
+                            <p style={{ margin: 0, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                                Patient is currently assigned to <strong>{activeAdmission?.ward || 'General Ward'} (Bed {activeAdmission?.bedNumber || 'Assigned'})</strong>.
+                                The ICU Daily Observation Chart is specifically designed for ICU / CCU / Critical Care bed assignments.
+                                You can still click the button above to generate or print a blank/preview ICU chart at any time.
+                            </p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                            <div className="ipd-summary-box">
+                                <h5>⚡ 24-Hour Hourly Vitals Monitoring</h5>
+                                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '0 0 12px 0' }}>
+                                    Tracks 8 AM to 7 AM (Pulse, BP, Temp, SpO₂, CVP, GCS) on Page 1.
+                                </p>
+                                <button type="button" className="doc-ipd-mini-btn" onClick={() => setIcuChartModalOpen(true)}>
+                                    View 24-Hour Grid →
+                                </button>
+                            </div>
+
+                            <div className="ipd-summary-box">
+                                <h5>🫁 Ventilatory Settings &amp; Parameters</h5>
+                                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '0 0 12px 0' }}>
+                                    Mode, Tidal Volume, RR, PEEP, FiO₂, PIP &amp; Pressure Support on Page 2.
+                                </p>
+                                <button type="button" className="doc-ipd-mini-btn" onClick={() => setIcuChartModalOpen(true)}>
+                                    View Ventilatory Table →
+                                </button>
+                            </div>
+
+                            <div className="ipd-summary-box">
+                                <h5>💧 Intake &amp; Output Balance</h5>
+                                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '0 0 12px 0' }}>
+                                    Oral, NG, IV, Infusion, Urine, Drain, Stool and RTA fluid monitoring.
+                                </p>
+                                <button type="button" className="doc-ipd-mini-btn" onClick={() => setIcuChartModalOpen(true)}>
+                                    View Fluid Balance →
+                                </button>
+                            </div>
+
+                            <div className="ipd-summary-box">
+                                <h5>🩸 Diabetic Chart &amp; Diet Orders</h5>
+                                <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '0 0 12px 0' }}>
+                                    Hourly blood sugar monitoring, insulin units, and physician diet instructions.
+                                </p>
+                                <button type="button" className="doc-ipd-mini-btn" onClick={() => setIcuChartModalOpen(true)}>
+                                    View Diabetic Chart →
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 4: CLINICAL PROGRESS NOTES
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'progress_notes' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Clinical Progress Notes (Doctor &amp; Clinical Staff Workspace)</h4>
+                            <p>Ruled chronological progress observations, continuation sheets, and NABH-compliant hospital letterhead.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn progress"
+                            onClick={() => setClinicalChartsModal({ open: true, tab: 'progress_notes' })}
+                        >
+                            <FiFileText size={15} /> <span>View Official 1-Page Progress Notes PDF</span>
+                        </button>
+                    </div>
+
+                    {/* Add New Progress Note Form */}
+                    <div className="ipd-progress-add-card">
+                        <h5>
+                            <FiPlus style={{ color: '#0f766e' }} /> Write New Clinical Progress Observation
+                        </h5>
+                        <form onSubmit={handleAddProgressNote}>
+                            <div className="ipd-progress-form-grid">
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                        Observation Date &amp; Time
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        className="ipd-progress-input"
+                                        value={newProgressNote.recordedAt || ''}
+                                        onChange={(e) => setNewProgressNote(prev => ({ ...prev, recordedAt: e.target.value }))}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                        Sheet No.
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="ipd-progress-input"
+                                        value={newProgressNote.sheetNo}
+                                        onChange={(e) => setNewProgressNote(prev => ({ ...prev, sheetNo: e.target.value }))}
+                                        placeholder="1"
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                        Clinical Progress Observation <span style={{ color: '#dc2626' }}>*</span>
+                                    </label>
+                                    <textarea
+                                        className="ipd-progress-textarea"
+                                        placeholder="Enter clinical examination, progress remarks, patient response, and plan..."
+                                        value={newProgressNote.note}
+                                        onChange={(e) => setNewProgressNote(prev => ({ ...prev, note: e.target.value }))}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="ipd-btn-save-note"
+                                    disabled={savingProgressNote}
+                                >
+                                    <FiSave />
+                                    <span>{savingProgressNote ? 'Saving...' : 'Save Note'}</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Chronological Progress Notes List */}
+                    <div className="ipd-progress-list">
+                        {loadingProgressNotes ? (
+                            <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                                <FiRefreshCw className="spinning" size={20} />
+                                <p style={{ marginTop: '6px' }}>Loading progress notes...</p>
+                            </div>
+                        ) : progressNotes.length === 0 ? (
+                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                                <p style={{ margin: 0, fontWeight: 600 }}>No progress notes recorded yet for this admission.</p>
+                                <span style={{ fontSize: '0.82rem' }}>Use the form above to add your first clinical progress observation.</span>
+                            </div>
+                        ) : (
+                            progressNotes.map((pn, idx) => (
+                                <div key={pn._id || idx} className="ipd-progress-item-card">
+                                    <div className="ipd-progress-item-header">
+                                        <div className="ipd-pitem-meta">
+                                            <span className="ipd-pitem-sheet-badge">Sheet #{pn.sheetNo || 1}</span>
+                                            <span style={{ fontWeight: 600 }}>
+                                                {new Date(pn.recordedAt || pn.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            <span>•</span>
+                                            <span className="ipd-pitem-author">
+                                                {pn.authorName || 'Physician'} {pn.authorRole ? `(${pn.authorRole})` : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="ipd-pitem-text">{pn.note}</div>
+                                    {pn.editHistory?.length > 0 && (
+                                        <div className="ipd-pitem-audit-trail">
+                                            Last modified by {pn.editHistory[pn.editHistory.length - 1].editedBy} on{' '}
+                                            {new Date(pn.editHistory[pn.editHistory.length - 1].editedAt).toLocaleDateString('en-GB')}
+                                            {pn.editHistory[pn.editHistory.length - 1].editReason ? ` (Reason: ${pn.editHistory[pn.editHistory.length - 1].editReason})` : ''}
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 5: IN-PATIENT CLINICAL NOTES (2-PAGE)
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'clinical_notes' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>In-Patient Clinical Notes (Official Two-Page IPD Form)</h4>
+                            <p>History, Physical Examination, Diagnostic Investigations, Condition at Discharge, and Patient &amp; Nurse Communication.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn navy"
+                            onClick={() => setClinicalNotesModalOpen(true)}
+                        >
+                            <FiFileText size={15} /> <span>Open Official 2-Page Clinical Notes Form &amp; PDF</span>
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                        <div className="ipd-summary-box">
+                            <h5>📑 Page 1: Clinical History &amp; Presenting Complaints</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                {clinicalNotesData?.history || 'History of present illness and admission indications recorded in inpatient form.'}
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalNotesModalOpen(true)}>
+                                Edit Page 1 Details →
+                            </button>
+                        </div>
+
+                        <div className="ipd-summary-box">
+                            <h5>🩺 Page 1: Physical Examination &amp; Systemic Findings</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                {clinicalNotesData?.physicalExam || 'General condition, systemic evaluation, CVS, RS, CNS and abdominal examination.'}
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalNotesModalOpen(true)}>
+                                Edit Examination →
+                            </button>
+                        </div>
+
+                        <div className="ipd-summary-box">
+                            <h5>💬 Page 2: Patient &amp; Nurse Communication</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                Chronological dialogue notes, bedside nursing communication, and patient-family updates.
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalNotesModalOpen(true)}>
+                                View Patient Communication →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 6: INPATIENT DRUG CHART (STAT & IV)
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'drug_chart' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Inpatient Drug Chart (Allergies, STAT Prescriptions &amp; Continuous IV Fluids)</h4>
+                            <p>Official 2-page clinical chart for Once-Only STAT doses, IV fluids, and Drug Allergies.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn blue"
+                            onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}
+                        >
+                            <FiDroplet size={15} /> <span>Open Official 2-Page Drug Chart Form &amp; PDF</span>
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                        <div className="ipd-summary-box">
+                            <h5>🚫 Known Drug Allergies</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                {drugChartData?.allergies?.length > 0 ? drugChartData.allergies.join(', ') : 'No known drug allergies reported (NKDA).'}
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}>
+                                Update Allergies →
+                            </button>
+                        </div>
+
+                        <div className="ipd-summary-box">
+                            <h5>⚡ Once-Only (STAT) Prescriptions</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                {drugChartData?.statDoses?.length > 0
+                                    ? `${drugChartData.statDoses.length} STAT prescriptions recorded.`
+                                    : 'No emergency STAT doses prescribed yet.'}
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}>
+                                Prescribe STAT Dose →
+                            </button>
+                        </div>
+
+                        <div className="ipd-summary-box">
+                            <h5>💧 Continuous I.V. Fluid Infusions</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                {drugChartData?.ivFluids?.length > 0
+                                    ? `${drugChartData.ivFluids.length} IV fluid infusions active.`
+                                    : 'No continuous IV fluids ordered.'}
+                            </p>
+                            <button type="button" className="doc-ipd-mini-btn" onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}>
+                                Order IV Fluid →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 7: MEDICATION ADMINISTRATION RECORD (MAR)
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'mar' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Medication Administration Record (4-Day Scheduled MAR Grid)</h4>
+                            <p>Daily scheduled administration grid (06 AM, 10 AM, 02 PM, 10 PM) with actual bedside nurse administration tracking.</p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ipd-action-launch-btn navy"
+                            onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_mar' })}
+                        >
+                            <FiClock size={15} /> <span>Open 4-Day MAR Grid PDF</span>
+                        </button>
+                    </div>
+
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px 18px', marginBottom: '16px', fontSize: '0.82rem', color: '#475569' }}>
+                        🔒 <strong>Doctor Clinical Audit Mode:</strong> Doctors review administration timelines and compliance. Bedside administration is confirmed and recorded by nursing staff.
+                    </div>
+
+                    <div className="ipd-clinical-table-wrapper">
+                        {loadingMar ? (
+                            <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                                <FiRefreshCw className="spinning" size={20} />
+                                <p style={{ marginTop: '6px' }}>Loading MAR records...</p>
+                            </div>
+                        ) : marList.length === 0 ? (
+                            <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                                <p style={{ margin: 0, fontWeight: 600 }}>No MAR administration records yet.</p>
+                                <span style={{ fontSize: '0.82rem' }}>Prescribe medications in the Treatment Chart tab to automatically generate the MAR schedule.</span>
+                            </div>
+                        ) : (
+                            <table className="ipd-clinical-table">
+                                <thead>
+                                    <tr>
+                                        <th>Medicine Name</th>
+                                        <th>Route</th>
+                                        <th>Scheduled Time</th>
+                                        <th>Status</th>
+                                        <th>Administered By</th>
+                                        <th>Administration Time</th>
+                                        <th>Nurse Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {marList.slice(0, 25).map((m, idx) => (
+                                        <tr key={m._id || idx}>
+                                            <td style={{ fontWeight: 700 }}>{m.medicineName}</td>
+                                            <td>{m.route || 'Oral'}</td>
+                                            <td>{m.scheduledTime || '10:00 AM'}</td>
+                                            <td>
+                                                <span className={`ipd-pill-tag ${m.status === 'ADMINISTERED' || m.status === 'GIVEN' ? 'given' : m.isOverdue ? 'overdue' : 'pending'}`}>
+                                                    {m.status || 'SCHEDULED'}
+                                                </span>
+                                            </td>
+                                            <td>{m.administeredBy?.name || m.administeredByName || '—'}</td>
+                                            <td>
+                                                {m.administeredAt ? new Date(m.administeredAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                            </td>
+                                            <td style={{ color: '#64748b' }}>{m.notes || '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════
+                SECTION 8: INVESTIGATIONS & DIET CHART
+                ══════════════════════════════════════════════════════════ */}
+            {activeTab === 'investigations' && (
+                <div>
+                    <div className="ipd-clinical-top-bar">
+                        <div>
+                            <h4>Clinical Investigations, Lab Reports &amp; Diet Orders</h4>
+                            <p>Diagnostic laboratory tests, imaging reports, and prescribed inpatient diet regimen.</p>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                        <div className="ipd-summary-box">
+                            <h5>🔬 Diagnostic Investigations &amp; Reports</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                Inpatient lab tests, CBC, blood chemistry, radiology, and ECG reports linked to this admission.
+                            </p>
+                            <span style={{ fontSize: '0.82rem', color: '#0284c7', fontWeight: 600 }}>Synchronized with Hospital Lab Information System (LIS)</span>
+                        </div>
+
+                        <div className="ipd-summary-box">
+                            <h5>🥗 Inpatient Diet Chart Regimen</h5>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+                                Soft diet, diabetic diet, low sodium, NPO, or clear liquid diet prescribed by attending physician.
+                            </p>
+                            <span style={{ fontSize: '0.82rem', color: '#059669', fontWeight: 600 }}>Synchronized with Inpatient Dietary Kitchen</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── TAB: INPATIENT ORDERS ENTRY & LIST ── */}
+            {(activeTab === 'treatment_chart' || activeTab === 'orders') && (
                 <div>
                     {/* Orders Creation Form */}
                     <form onSubmit={handleSubmitOrders}>
@@ -2251,26 +3106,35 @@ const DoctorIPDOrdersPanel = ({
             <TPRChartModal
                 isOpen={tprModalOpen}
                 onClose={() => setTprModalOpen(false)}
-                admissionId={activeAdmission?._id}
-                admission={activeAdmission}
+                admissionId={activeAdmission?._id || admissionId || propAdmission?._id}
+                admission={activeAdmission || propAdmission}
                 patient={patient || activeAdmission?.patientId}
             />
 
             <InpatientClinicalNotesModal
                 isOpen={clinicalNotesModalOpen}
                 onClose={() => setClinicalNotesModalOpen(false)}
-                admissionId={activeAdmission?._id}
-                admission={activeAdmission}
+                admissionId={activeAdmission?._id || admissionId || propAdmission?._id}
+                admission={activeAdmission || propAdmission}
                 patient={patient || activeAdmission?.patientId}
             />
 
             <IPDClinicalChartsModal
                 isOpen={clinicalChartsModal.open}
                 onClose={() => setClinicalChartsModal(prev => ({ ...prev, open: false }))}
-                admissionId={activeAdmission?._id}
-                admission={activeAdmission}
+                admissionId={activeAdmission?._id || admissionId || propAdmission?._id}
+                admission={activeAdmission || propAdmission}
                 patient={patient || activeAdmission?.patientId}
                 initialTab={clinicalChartsModal.tab}
+            />
+
+            {/* ── Official 2-Page ICU Daily Observation Chart Modal ── */}
+            <ICUChartModal
+                isOpen={icuChartModalOpen}
+                onClose={() => setIcuChartModalOpen(false)}
+                admissionId={activeAdmission?._id || admissionId || propAdmission?._id}
+                admission={activeAdmission || propAdmission}
+                patient={patient || activeAdmission?.patientId}
             />
         </div>
     );

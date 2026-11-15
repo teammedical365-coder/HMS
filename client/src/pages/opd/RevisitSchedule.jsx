@@ -337,7 +337,7 @@ const RevisitSchedule = () => {
                                 <th>Doctor Advice</th>
                                 <th style={{ textAlign: 'center' }}>Action</th>
                             </tr>
-                        </thead>
+                        </thead> 
                         <tbody>
                             {loading ? (
                                 <tr>

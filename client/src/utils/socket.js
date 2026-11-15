@@ -5,7 +5,7 @@ const API_BASE_URL = rawBaseUrl.startsWith('http') ? rawBaseUrl : `https://${raw
 
 const socket = io(API_BASE_URL, {
     autoConnect: false,
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     withCredentials: true,
     reconnection: true,
     reconnectionAttempts: 5,

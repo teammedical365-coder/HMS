@@ -189,28 +189,61 @@ CRITICAL SAFETY RULES:
      * @returns {object} { transcript, speakerSegments, detectedLanguages, clinicalSummary, soap, usage }
      */
     async transcribeAndAnalyze(audioBase64, mimeType, outputLanguage = 'English', userContext = {}, liveTranscript = '') {
-        if (!audioBase64) {
-            throw new Error('No audio data provided for transcription.');
+        if (!audioBase64 && (!liveTranscript || !liveTranscript.trim())) {
+            throw new Error('No audio data or speech transcript provided for clinical AI analysis.');
         }
 
         const systemPrompt = this._buildSystemPrompt(outputLanguage);
+        let text = null;
+        let usage = null;
+
+        // 1. If real-time consultation transcript is captured, analyze directly with configured Gemini Flash
+        if (liveTranscript && liveTranscript.trim().length > 3) {
+            try {
+                const prompt = `${systemPrompt}\n\nIMPORTANT: Return ONLY a raw JSON object matching the requested schema. No code fences, no markdown prose.\n\nCONSULTATION TRANSCRIPT:\n${liveTranscript.trim()}`;
+                const res = await geminiProvider.chatCompletion(
+                    'You are Medical365 AI Voice Scribe',
+                    [{ role: 'user', content: prompt }]
+                );
+                text = res.text;
+                usage = res.usage;
+            } catch (err) {
+                console.warn('[Voice Scribe] Gemini chatCompletion with transcript warning:', err.message);
+            }
+        }
+
+        // 2. If direct audio was sent and text not yet produced, attempt Gemini audio transcription
+        if (!text && audioBase64) {
+            try {
+                const res = await geminiProvider.transcribeAudio(
+                    systemPrompt,
+                    audioBase64,
+                    mimeType
+                );
+                text = res.text;
+                usage = res.usage;
+            } catch (audioErr) {
+                console.warn('[Voice Scribe] Gemini transcribeAudio error:', audioErr.message);
+                if (!liveTranscript) {
+                    throw audioErr;
+                }
+            }
+        }
+
+        if (!text) {
+            throw new Error('Failed to generate clinical analysis from consultation audio. Please check microphone and try again.');
+        }
 
         try {
-            const { text, usage } = await geminiProvider.transcribeAudio(
-                systemPrompt,
-                audioBase64,
-                mimeType
-            );
-
             const parsed = this._parseResponse(text);
             const billingUsage = await this._processBilling(usage, userContext, {
                 mimeType,
                 outputLanguage,
-                audioSizeBytes: Math.round(audioBase64.length * 0.75) // approximate decoded size
+                audioSizeBytes: audioBase64 ? Math.round(audioBase64.length * 0.75) : 0
             });
 
             return {
-                transcript: parsed.transcript || '',
+                transcript: parsed.transcript || liveTranscript || '',
                 speakerSegments: parsed.speakerSegments || [],
                 detectedLanguages: parsed.detectedLanguages || [],
                 clinicalSummary: parsed.clinicalSummary || {},

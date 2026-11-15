@@ -16,6 +16,29 @@ export const DRUG_CHART_MAR_BLOCKS_PER_PAGE = 12;
 export const DRUG_CHART_PAGE2_SUBCOLS_MM = [13, 12, 14, 25];
 export const DRUG_CHART_PAGE2_SLOT_MM = 8;
 
+export const STAT_COLS = [
+    { key: 'date', label: 'Date', w: 19, align: 'center', widthPct: '10%' },
+    { key: 'drugName', label: 'Drug', w: 40, align: 'left', widthPct: '21.05%' },
+    { key: 'dose', label: 'Dose', w: 14, align: 'center', widthPct: '7.37%' },
+    { key: 'route', label: 'Route', w: 13, align: 'center', widthPct: '6.84%' },
+    { key: 'time', label: 'Time', w: 13, align: 'center', widthPct: '6.84%' },
+    { key: 'doctorName', label: 'Doctor', w: 23, align: 'left', widthPct: '12.11%' },
+    { key: 'givenByName', label: 'Given By', w: 22, align: 'left', widthPct: '11.58%' },
+    { key: 'checkedByName', label: 'Checked by', w: 22, align: 'left', widthPct: '11.58%' },
+    { key: 'remarks', label: 'Remarks', w: 24, align: 'left', widthPct: '12.63%' }
+];
+
+export const IV_COLS = [
+    { key: 'date', label: 'Date', w: 19, align: 'center', widthPct: '10%' },
+    { key: 'fluidName', label: 'Fluid', w: 45, align: 'left', widthPct: '23.68%' },
+    { key: 'volume', label: 'Volume', w: 16, align: 'center', widthPct: '8.42%' },
+    { key: 'timeStart', label: 'Time Start', w: 17, align: 'center', widthPct: '8.95%' },
+    { key: 'infusionTimeHrs', label: 'Infusion\ntime(hrs.)', w: 22, align: 'center', widthPct: '11.58%' },
+    { key: 'doctorName', label: 'Doctor', w: 22, align: 'left', widthPct: '11.58%' },
+    { key: 'adminByName', label: 'Admin.by', w: 22, align: 'left', widthPct: '11.58%' },
+    { key: 'remarks', label: 'Remarks', w: 27, align: 'left', widthPct: '14.21%' }
+];
+
 /**
  * Render Drug Chart Page 2 blue Times-serif patient header banner on one clean line
  * (matching original DRUG CHART.pdf Page 2: no '|' pipes, balanced spacing, no wrap).
@@ -178,8 +201,26 @@ export const buildDrugChartDateWindows = ({ admission = {}, orders = [], marReco
 /**
  * Merge DrugChart STAT entries + any unlinked STAT InpatientOrders cleanly without marking pending orders as Given.
  */
-export const buildCombinedStatRows = (drugChart = {}, orders = []) => {
-    const savedStats = Array.isArray(drugChart?.statDoses) ? drugChart.statDoses : [];
+export const buildCombinedStatRows = (drugChart = {}, orders = [], admission = {}) => {
+    const admDocRaw = admission?.doctorId?.name || admission?.admittedBy?.name || admission?.doctorName || '';
+    const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+
+    const savedStats = (Array.isArray(drugChart?.statDoses) ? drugChart.statDoses : []).map(s => {
+        const doc = String(s.doctorName || '').trim();
+        const given = String(s.givenByName || '').trim();
+        const author = String(s.authorName || '').trim();
+        const isNurseAuthor = String(s.authorRole || '').toLowerCase().includes('nurse');
+        let cleanDoc = doc;
+        if (!cleanDoc || (given && cleanDoc.toLowerCase() === given.toLowerCase()) || (isNurseAuthor && cleanDoc.toLowerCase() === author.toLowerCase()) || /\(nurse\)/i.test(cleanDoc)) {
+            cleanDoc = admDocName || '';
+        } else if (!/^dr\.?\s*/i.test(cleanDoc)) {
+            cleanDoc = `Dr. ${cleanDoc}`;
+        }
+        return {
+            ...s,
+            doctorName: cleanDoc
+        };
+    });
     const linkedOrderIds = new Set(savedStats.map(s => s.orderId && String(s.orderId)).filter(Boolean));
 
     const extraStatOrders = (Array.isArray(orders) ? orders : [])
@@ -194,7 +235,7 @@ export const buildCombinedStatRows = (drugChart = {}, orders = []) => {
             route: o.route || 'IV',
             doctorName: o.doctorId?.name
                 ? (/^dr\.?\s/i.test(o.doctorId.name) ? o.doctorId.name : `Dr. ${o.doctorId.name}`)
-                : '',
+                : (admDocName || ''),
             status: 'PENDING',
             givenByName: '',
             checkedByName: '',
@@ -208,8 +249,26 @@ export const buildCombinedStatRows = (drugChart = {}, orders = []) => {
 /**
  * Merge DrugChart IV Fluid entries + any unlinked IV InpatientOrders cleanly.
  */
-export const buildCombinedIVFluidRows = (drugChart = {}, orders = []) => {
-    const savedIVs = Array.isArray(drugChart?.ivFluids) ? drugChart.ivFluids : [];
+export const buildCombinedIVFluidRows = (drugChart = {}, orders = [], admission = {}) => {
+    const admDocRaw = admission?.doctorId?.name || admission?.admittedBy?.name || admission?.doctorName || '';
+    const admDocName = admDocRaw ? (/^dr\.?\s*/i.test(admDocRaw) ? admDocRaw : `Dr. ${admDocRaw}`) : '';
+
+    const savedIVs = (Array.isArray(drugChart?.ivFluids) ? drugChart.ivFluids : []).map(iv => {
+        const doc = String(iv.doctorName || '').trim();
+        const admin = String(iv.adminByName || '').trim();
+        const author = String(iv.authorName || '').trim();
+        const isNurseAuthor = String(iv.authorRole || '').toLowerCase().includes('nurse');
+        let cleanDoc = doc;
+        if (!cleanDoc || (admin && cleanDoc.toLowerCase() === admin.toLowerCase()) || (isNurseAuthor && cleanDoc.toLowerCase() === author.toLowerCase()) || /\(nurse\)/i.test(cleanDoc)) {
+            cleanDoc = admDocName || '';
+        } else if (!/^dr\.?\s*/i.test(cleanDoc)) {
+            cleanDoc = `Dr. ${cleanDoc}`;
+        }
+        return {
+            ...iv,
+            doctorName: cleanDoc
+        };
+    });
     const linkedOrderIds = new Set(savedIVs.map(s => s.orderId && String(s.orderId)).filter(Boolean));
 
     const extraIVOrders = (Array.isArray(orders) ? orders : [])
@@ -234,7 +293,7 @@ export const buildCombinedIVFluidRows = (drugChart = {}, orders = []) => {
             infusionTimeHrs: o.duration || '',
             doctorName: o.doctorId?.name
                 ? (/^dr\.?\s/i.test(o.doctorId.name) ? o.doctorId.name : `Dr. ${o.doctorId.name}`)
-                : '',
+                : (admDocName || ''),
             status: 'PENDING',
             adminByName: '',
             remarks: o.instructions || '',
@@ -370,30 +429,7 @@ export const downloadDrugChartPdf = async ({
         isAccredited && accreditationLogo ? loadImageForPdf(accreditationLogo) : Promise.resolve(null)
     ]);
 
-    const STAT_COLS = [
-        { key: 'date', label: 'Date', w: 19, align: 'center' },
-        { key: 'drugName', label: 'Drug', w: 40, align: 'left' },
-        { key: 'dose', label: 'Dose', w: 14, align: 'center' },
-        { key: 'route', label: 'Route', w: 13, align: 'center' },
-        { key: 'time', label: 'Time', w: 13, align: 'center' },
-        { key: 'doctorName', label: 'Doctor', w: 23, align: 'left' },
-        { key: 'givenByName', label: 'Given By', w: 22, align: 'left' },
-        { key: 'checkedByName', label: 'Checked by', w: 22, align: 'left' },
-        { key: 'remarks', label: 'Remarks', w: 24, align: 'left' }
-    ];
-
-    const IV_COLS = [
-        { key: 'date', label: 'Date', w: 19, align: 'center' },
-        { key: 'fluidName', label: 'Fluid', w: 45, align: 'left' },
-        { key: 'volume', label: 'Volume', w: 16, align: 'center' },
-        { key: 'timeStart', label: 'Time Start', w: 17, align: 'center' },
-        { key: 'infusionTimeHrs', label: 'Infusion\ntime(hrs.)', w: 22, align: 'center' },
-        { key: 'doctorName', label: 'Doctor', w: 22, align: 'left' },
-        { key: 'adminByName', label: 'Admin.by', w: 22, align: 'left' },
-        { key: 'remarks', label: 'Remarks', w: 27, align: 'left' }
-    ];
-
-    const allStatRows = isBlank ? [] : buildCombinedStatRows(drugChart, orders).map(s => ({
+    const allStatRows = isBlank ? [] : buildCombinedStatRows(drugChart, orders, admission).map(s => ({
         date: s.date || '',
         drugName: s.drugName || '',
         dose: s.dose || '',
@@ -405,7 +441,7 @@ export const downloadDrugChartPdf = async ({
         remarks: s.status === 'PENDING' && !s.remarks ? 'Pending' : (s.remarks || (s.status && s.status !== 'ADMINISTERED' ? `${s.status}` : ''))
     }));
 
-    const allIvRows = isBlank ? [] : buildCombinedIVFluidRows(drugChart, orders).map(iv => ({
+    const allIvRows = isBlank ? [] : buildCombinedIVFluidRows(drugChart, orders, admission).map(iv => ({
         date: iv.date || '',
         fluidName: iv.fluidName || '',
         volume: iv.volume || '',
@@ -786,8 +822,8 @@ export const printDrugChart = ({
         </div>
     `;
 
-    const allStats = isBlank ? [] : buildCombinedStatRows(drugChart, orders);
-    const allIVs = isBlank ? [] : buildCombinedIVFluidRows(drugChart, orders);
+    const allStats = isBlank ? [] : buildCombinedStatRows(drugChart, orders, admission);
+    const allIVs = isBlank ? [] : buildCombinedIVFluidRows(drugChart, orders, admission);
     const p1Count = isBlank
         ? 1
         : Math.max(1, Math.ceil(allStats.length / DRUG_CHART_STAT_ROWS_PER_PAGE), Math.ceil(allIVs.length / DRUG_CHART_IV_ROWS_PER_PAGE));

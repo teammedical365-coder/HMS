@@ -47,6 +47,31 @@ const inpatientClinicalNoteSchema = new mongoose.Schema({
         signTime: { type: String, default: '', trim: true }
     },
 
+    // Continuation Pages (MS Word-style automatic continuation sheets beyond 2 pages)
+    continuationPages: [{
+        pageNumber: { type: Number, default: 3 },
+        title: { type: String, default: 'CONTINUATION SHEET' },
+        notes: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now }
+    }],
+
+    // Tablet Pen / Stylus Handwriting vector strokes per page
+    handwritingStrokes: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({ page1: [], page2: [] })
+    },
+
+    // AI Voice Scribe session audit & transcription logs
+    aiScribeSessions: [{
+        recordedAt: { type: Date, default: Date.now },
+        durationSeconds: { type: Number, default: 0 },
+        recordedBy: { type: String, default: '' },
+        recordedByRole: { type: String, default: '' },
+        rawTranscript: { type: String, default: '' },
+        structuredSummary: { type: mongoose.Schema.Types.Mixed, default: null }
+    }],
+
     // Authorship & Edit Audit Trail
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     createdByName: { type: String, default: '' },

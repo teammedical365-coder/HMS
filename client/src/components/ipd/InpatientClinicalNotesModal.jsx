@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../store/hooks';
 import { useBranding } from '../../context/BrandingContext';
 import { ipdClinicalAPI, admissionAPI, hospitalAPI } from '../../utils/api';
@@ -8,25 +8,16 @@ import {
     downloadInpatientClinicalNotesPdf,
     printInpatientClinicalNotes
 } from '../../utils/inpatientNotesPdf';
-import { FiX, FiPrinter, FiDownload, FiFileText, FiSave, FiMessageSquare, FiEdit2, FiClock } from 'react-icons/fi';
+import RuledSectionEditor from './RuledSectionEditor';
+import TabletPenCanvas from './TabletPenCanvas';
+import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
+import {
+    FiX, FiPrinter, FiDownload, FiFileText, FiSave,
+    FiMessageSquare, FiEdit2, FiClock, FiRotateCcw, FiRotateCw,
+    FiPlus, FiTrash2, FiZap, FiCheck, FiSend
+} from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import './InpatientClinicalNotesModal.css';
-
-const splitLinesForPreview = (text, count) => {
-    const rawLines = (text ? String(text).split(/\r?\n/) : []).filter((l) => l.length > 0);
-    const wrapped = [];
-    rawLines.forEach((p) => {
-        let rest = p;
-        while (rest.length > 105) {
-            let cut = rest.lastIndexOf(' ', 105);
-            if (cut < 40) cut = 105;
-            wrapped.push(rest.slice(0, cut));
-            rest = rest.slice(cut).trimStart();
-        }
-        wrapped.push(rest);
-    });
-    return Array.from({ length: count }, (_, idx) => wrapped[idx] || '');
-};
 
 const InpatientClinicalNotesModal = ({
     isOpen,
@@ -41,21 +32,35 @@ const InpatientClinicalNotesModal = ({
     const { branding, hospitalName: brandingHospitalName } = useBranding();
 
     const [activeSectionTab, setActiveSectionTab] = useState(initialTab);
-    const [noteViewMode, setNoteViewMode] = useState('preview'); // 'preview' | 'edit'
     const [loading, setLoading] = useState(false);
     const [savingNotes, setSavingNotes] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Active tool: 'type' | 'pen' | 'eraser'
+    const [activeTool, setActiveTool] = useState('type');
+    const [penColor, setPenColor] = useState('#1d4ed8'); // Medical blue
+    const [penWidth, setPenWidth] = useState(2);
+
+    // AI Voice Scribe Modal State
+    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     const [admission, setAdmission] = useState(initialAdmission || null);
     const [latestVitals, setLatestVitals] = useState(null);
     const [savedNoteDoc, setSavedNoteDoc] = useState(null);
     const [tenantHospital, setTenantHospital] = useState(null);
     const [hospLogoFailed, setHospLogoFailed] = useState(false);
+
+    // Unified Form State (primary document source)
     const [formState, setFormState] = useState(() =>
         buildDefaultClinicalNoteState({ patient: initialPatient, admission: initialAdmission, isBlank })
     );
 
-    // Part 4: Patient & Nurse Communication state
+    // History stack for Undo/Redo
+    const [historyStack, setHistoryStack] = useState([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+
+    // Communication state (Patient & Nurse Notes)
     const [commMessages, setCommMessages] = useState([]);
     const [commLoading, setCommLoading] = useState(false);
     const [commInput, setCommInput] = useState('');
@@ -71,6 +76,7 @@ const InpatientClinicalNotesModal = ({
         if (isOpen) {
             setActiveSectionTab(initialTab || 'notes');
             setHospLogoFailed(false);
+            setHasUnsavedChanges(false);
         }
     }, [isOpen, initialTab]);
 
@@ -85,7 +91,10 @@ const InpatientClinicalNotesModal = ({
             if (!effectiveAdmissionId || isBlank) {
                 const brandRes = await brandingPromise;
                 if (brandRes?.hospital) setTenantHospital(brandRes.hospital);
-                setFormState(buildDefaultClinicalNoteState({ patient: initialPatient, admission: initialAdmission, isBlank }));
+                const initSt = buildDefaultClinicalNoteState({ patient: initialPatient, admission: initialAdmission, isBlank });
+                setFormState(initSt);
+                setHistoryStack([initSt]);
+                setHistoryIndex(0);
                 return;
             }
 
@@ -103,15 +112,16 @@ const InpatientClinicalNotesModal = ({
             const loadedNote = notesRes?.clinicalNote || null;
             setSavedNoteDoc(loadedNote);
 
-            setFormState(
-                buildDefaultClinicalNoteState({
-                    patient: initialPatient || resolvedAdm?.patientId,
-                    admission: resolvedAdm,
-                    latestVitals: notesRes?.latestVitals || null,
-                    clinicalNote: loadedNote,
-                    isBlank
-                })
-            );
+            const initState = buildDefaultClinicalNoteState({
+                patient: initialPatient || resolvedAdm?.patientId,
+                admission: resolvedAdm,
+                latestVitals: notesRes?.latestVitals || null,
+                clinicalNote: loadedNote,
+                isBlank
+            });
+            setFormState(initState);
+            setHistoryStack([initState]);
+            setHistoryIndex(0);
             setCommMessages(commRes?.messages || []);
         } finally {
             setLoading(false);
@@ -136,6 +146,206 @@ const InpatientClinicalNotesModal = ({
         [initialPatient, admission, isBlank]
     );
 
+    // Push new state onto history stack (supporting Undo/Redo)
+    const commitStateUpdate = useCallback((updater) => {
+        setFormState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            setHistoryStack((oldStack) => {
+                const trimmed = oldStack.slice(0, historyIndex + 1);
+                return [...trimmed, next].slice(-50);
+            });
+            setHistoryIndex((oldIdx) => Math.min(oldIdx + 1, 49));
+            setHasUnsavedChanges(true);
+            return next;
+        });
+    }, [historyIndex]);
+
+    const handleUndo = useCallback(() => {
+        if (historyIndex > 0) {
+            const targetIdx = historyIndex - 1;
+            const targetState = historyStack[targetIdx];
+            if (targetState) {
+                setHistoryIndex(targetIdx);
+                setFormState(targetState);
+                toast('Undo performed');
+            }
+        }
+    }, [historyIndex, historyStack]);
+
+    const handleRedo = useCallback(() => {
+        if (historyIndex < historyStack.length - 1) {
+            const targetIdx = historyIndex + 1;
+            const targetState = historyStack[targetIdx];
+            if (targetState) {
+                setHistoryIndex(targetIdx);
+                setFormState(targetState);
+                toast('Redo performed');
+            }
+        }
+    }, [historyIndex, historyStack]);
+
+    // Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                if (e.shiftKey) {
+                    e.preventDefault();
+                    handleRedo();
+                } else {
+                    e.preventDefault();
+                    handleUndo();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                handleRedo();
+            }
+        };
+
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }
+    }, [isOpen, handleUndo, handleRedo]);
+
+    // Field update helpers with automatic MS Word-style continuation page generation
+    const updateField = (key, val) => {
+        commitStateUpdate((prev) => {
+            const next = { ...prev, [key]: val };
+            const lineLimits = {
+                historyAndComplaints: 7,
+                relevantPhysicalExamination: 7,
+                historyOfPresentIllness: 4,
+                pastMedicalSurgicalHistory: 3,
+                systemicExamination: 7,
+                investigations: 8,
+                dischargeAndFollowUp: 8
+            };
+            const limit = lineLimits[key];
+            if (limit) {
+                const totalLines = (val ? String(val).split(/\r?\n/) : []).length;
+                if (totalLines > limit) {
+                    const currentCont = Array.isArray(prev.continuationPages) ? prev.continuationPages : [];
+                    if (currentCont.length === 0) {
+                        const newPageNum = 3;
+                        next.continuationPages = [
+                            {
+                                pageNumber: newPageNum,
+                                title: `CONTINUATION SHEET (PAGE ${newPageNum})`,
+                                notes: ''
+                            }
+                        ];
+                        toast('Text overflow detected: Continuation Page 3 automatically added', { icon: '📄' });
+                    }
+                }
+            }
+            return next;
+        });
+    };
+
+    const updateGenField = (vitalKey, val) => {
+        commitStateUpdate((prev) => ({
+            ...prev,
+            generalExamination: { ...prev.generalExamination, [vitalKey]: val }
+        }));
+    };
+
+    const updateFooterField = (footerKey, val) => {
+        commitStateUpdate((prev) => ({
+            ...prev,
+            footer: { ...prev.footer, [footerKey]: val }
+        }));
+    };
+
+    // Strokes update helper for TabletPenCanvas
+    const handleSavePageStrokes = (pageKey, newStrokes) => {
+        commitStateUpdate((prev) => ({
+            ...prev,
+            handwritingStrokes: {
+                ...(prev.handwritingStrokes || {}),
+                [pageKey]: newStrokes
+            }
+        }));
+    };
+
+    // Continuation Page Management
+    const handleAddContinuationPage = () => {
+        commitStateUpdate((prev) => {
+            const currentCont = Array.isArray(prev.continuationPages) ? prev.continuationPages : [];
+            const newPageNum = currentCont.length + 3;
+            const newCont = [
+                ...currentCont,
+                {
+                    pageNumber: newPageNum,
+                    title: `CONTINUATION SHEET (PAGE ${newPageNum})`,
+                    notes: ''
+                }
+            ];
+            toast.success(`Continuation Page ${newPageNum} added`);
+            return { ...prev, continuationPages: newCont };
+        });
+    };
+
+    const handleDeleteContinuationPage = (idx) => {
+        if (!window.confirm('Are you sure you want to delete this continuation page?')) return;
+        commitStateUpdate((prev) => {
+            const currentCont = [...(prev.continuationPages || [])];
+            currentCont.splice(idx, 1);
+            // Renumber remaining continuation sheets
+            const renumbered = currentCont.map((cp, i) => ({
+                ...cp,
+                pageNumber: i + 3,
+                title: `CONTINUATION SHEET (PAGE ${i + 3})`
+            }));
+            toast.success('Continuation page removed');
+            return { ...prev, continuationPages: renumbered };
+        });
+    };
+
+    const handleContinuationNotesChange = (idx, newNotes) => {
+        commitStateUpdate((prev) => {
+            const currentCont = [...(prev.continuationPages || [])];
+            if (currentCont[idx]) {
+                currentCont[idx] = { ...currentCont[idx], notes: newNotes };
+            }
+            return { ...prev, continuationPages: currentCont };
+        });
+    };
+
+    // AI Voice Scribe Insertion
+    const handleApproveVoiceScribe = ({ sections, session }) => {
+        commitStateUpdate((prev) => {
+            const updated = { ...prev };
+            Object.keys(sections).forEach((key) => {
+                if (key === 'generalExamination') {
+                    updated.generalExamination = {
+                        ...(prev.generalExamination || {}),
+                        ...sections.generalExamination
+                    };
+                } else if (typeof sections[key] === 'string') {
+                    // Append cleanly if line already has content
+                    const existing = prev[key] || '';
+                    updated[key] = existing ? `${existing}\n${sections[key]}` : sections[key];
+                }
+            });
+
+            // Log session in audit array
+            if (session) {
+                const sessions = Array.isArray(prev.aiScribeSessions) ? prev.aiScribeSessions : [];
+                updated.aiScribeSessions = [
+                    ...sessions,
+                    {
+                        ...session,
+                        recordedBy: user?.name || 'Authorized Staff',
+                        recordedByRole: user?._roleData?.name || user?.role || 'Staff'
+                    }
+                ];
+            }
+
+            return updated;
+        });
+    };
+
+    // Save Clinical Notes
     const handleSaveNotes = async (e) => {
         if (e) e.preventDefault();
         if (!effectiveAdmissionId) {
@@ -147,8 +357,8 @@ const InpatientClinicalNotesModal = ({
             const res = await ipdClinicalAPI.saveInpatientClinicalNotes(effectiveAdmissionId, formState);
             if (res?.success) {
                 setSavedNoteDoc(res.clinicalNote);
-                toast.success('In-Patient Clinical Notes saved');
-                setNoteViewMode('preview');
+                setHasUnsavedChanges(false);
+                toast.success('In-Patient Clinical Notes saved successfully');
             }
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to save In-Patient Clinical Notes');
@@ -168,8 +378,9 @@ const InpatientClinicalNotesModal = ({
                 clinicalNote: formState,
                 isBlank
             });
-            toast.success('2-Page In-Patient Clinical Notes PDF downloaded');
+            toast.success('Official In-Patient Clinical Notes PDF downloaded');
         } catch (err) {
+            console.error('PDF error:', err);
             toast.error('Failed to generate Clinical Notes PDF');
         } finally {
             setDownloading(false);
@@ -187,6 +398,7 @@ const InpatientClinicalNotesModal = ({
         });
     };
 
+    // Communication API handlers
     const handleSendCommunication = async (e) => {
         e.preventDefault();
         if (!effectiveAdmissionId || !commInput.trim()) return;
@@ -229,130 +441,190 @@ const InpatientClinicalNotesModal = ({
         }
     };
 
-    const updateField = (key, value) => setFormState(prev => ({ ...prev, [key]: value }));
-    const updateGenField = (key, value) =>
-        setFormState(prev => ({ ...prev, generalExamination: { ...prev.generalExamination, [key]: value } }));
-    const updateFooterField = (key, value) =>
-        setFormState(prev => ({ ...prev, footer: { ...prev.footer, [key]: value } }));
-
     if (!isOpen) return null;
 
     const renderBanner = () => (
         <div className="ipn-doc-banner">
-            <span>Patient Name : {ptBannerDetails.name}</span>
-            <span className="ipn-sep">|</span>
-            <span>UHID : {ptBannerDetails.uhid}</span>
-            <span className="ipn-sep">|</span>
-            <span>IPD : {ptBannerDetails.ipdNumber}</span>
-            <span className="ipn-sep">|</span>
-            <span>Gender : {ptBannerDetails.gender}</span>
-            <span className="ipn-sep">|</span>
-            <span>Age : {ptBannerDetails.age}</span>
-        </div>
-    );
-
-    const renderRuledLines = (text, lineCount) => (
-        <div className="ipn-doc-ruled-lines">
-            {splitLinesForPreview(text, lineCount).map((line, idx) => (
-                <div key={idx} className="ipn-doc-ruled-line">{line}</div>
-            ))}
+            <span><strong>Patient Name :</strong> {ptBannerDetails.name}</span>
+            <span><strong>UHID :</strong> {ptBannerDetails.uhid}</span>
+            <span><strong>IPD :</strong> {ptBannerDetails.ipdNumber}</span>
+            <span><strong>Gender :</strong> {ptBannerDetails.gender}</span>
+            <span><strong>Age :</strong> {ptBannerDetails.age}</span>
         </div>
     );
 
     return (
         <div className="ipn-modal-overlay" onClick={onClose}>
             <div className="ipn-modal-container" onClick={e => e.stopPropagation()}>
+                {/* Header Strip */}
                 <div className="ipn-modal-header">
                     <div className="ipn-modal-title-group">
                         <h3>
                             <FiFileText color="#0d9488" />
-                            <span>In-Patient Clinical Notes (2-Page IPD Document)</span>
+                            <span>In-Patient Clinical Notes (Advanced Ruled Document Workspace)</span>
                         </h3>
                         <span className="ipn-modal-subtitle">
                             {loading ? 'Loading clinical notes…' : savedNoteDoc?.updatedByName
                                 ? `Last saved by ${savedNoteDoc.updatedByName} (${savedNoteDoc.updatedByRole || 'Staff'})`
-                                : 'Auto-populated from patient admission & latest vitals'}
+                                : 'Unified clinical records • Auto-synced across Nurse, Doctor & Assistant Dashboards'}
                         </span>
                     </div>
 
                     <div className="ipn-modal-actions">
-                        {activeSectionTab === 'notes' && !isBlank && (
+                        {!isBlank && (
                             <button
                                 type="button"
                                 className="ipn-btn ipn-btn-save"
                                 onClick={handleSaveNotes}
                                 disabled={savingNotes}
                             >
-                                <FiSave size={14} />
-                                <span>{savingNotes ? 'Saving…' : 'Save Clinical Notes'}</span>
+                                <FiSave size={13} />
+                                <span>{savingNotes ? 'Saving…' : hasUnsavedChanges ? 'Save Changes ●' : 'Save Notes'}</span>
                             </button>
                         )}
-                        {activeSectionTab === 'notes' && (
-                            <>
-                                <button type="button" className="ipn-btn ipn-btn-outline" onClick={handlePrint}>
-                                    <FiPrinter size={14} />
-                                    <span>Print 2-Page</span>
-                                </button>
-                                <button type="button" className="ipn-btn ipn-btn-outline" onClick={handleDownloadPdf} disabled={downloading}>
-                                    <FiDownload size={14} />
-                                    <span>{downloading ? 'Generating…' : 'Download PDF'}</span>
-                                </button>
-                            </>
-                        )}
+                        <button type="button" className="ipn-btn ipn-btn-outline" onClick={handlePrint}>
+                            <FiPrinter size={13} />
+                            <span>Print</span>
+                        </button>
+                        <button type="button" className="ipn-btn ipn-btn-outline" onClick={handleDownloadPdf} disabled={downloading}>
+                            <FiDownload size={13} />
+                            <span>{downloading ? 'Generating…' : 'PDF'}</span>
+                        </button>
                         <button type="button" className="ipn-btn-close" onClick={onClose} title="Close">
                             <FiX />
                         </button>
                     </div>
                 </div>
 
-                <div className="ipn-tab-bar">
-                    <div className="ipn-tabs-left">
+                {/* Compact MS Word-like Editing Toolbar */}
+                <div className="ipn-doc-toolbar">
+                    <div className="ipn-toolbar-group">
                         <button
                             type="button"
-                            className={`ipn-tab-btn ${activeSectionTab === 'notes' ? 'active' : ''}`}
-                            onClick={() => setActiveSectionTab('notes')}
+                            className={`ipn-tool-btn ${activeTool === 'type' ? 'active' : ''}`}
+                            onClick={() => setActiveTool('type')}
+                            title="Type directly on any ruled line or grid cell"
                         >
-                            <FiFileText size={14} />
-                            <span>In-Patient Clinical Notes</span>
+                            <FiEdit2 size={12} />
+                            <span>Type Mode</span>
                         </button>
-                        {!isBlank && (
-                            <button
-                                type="button"
-                                className={`ipn-tab-btn ${activeSectionTab === 'communication' ? 'active' : ''}`}
-                                onClick={() => setActiveSectionTab('communication')}
-                            >
-                                <FiMessageSquare size={14} />
-                                <span>Patient &amp; Nurse Communication ({commMessages.length})</span>
-                            </button>
+                        <button
+                            type="button"
+                            className={`ipn-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                            onClick={() => setActiveTool('pen')}
+                            title="Tablet pen / Stylus ink handwriting"
+                        >
+                            <span>✍️ Pen</span>
+                        </button>
+                        <button
+                            type="button"
+                            className={`ipn-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                            onClick={() => setActiveTool('eraser')}
+                            title="Erase handwriting ink strokes"
+                        >
+                            <span>🧹 Eraser</span>
+                        </button>
+
+                        {activeTool === 'pen' && (
+                            <div className="ipn-pen-palette">
+                                <span style={{ fontSize: '11px', color: '#64748b' }}>Ink:</span>
+                                <div
+                                    className={`ipn-color-dot ${penColor === '#1d4ed8' ? 'active' : ''}`}
+                                    style={{ background: '#1d4ed8' }}
+                                    onClick={() => setPenColor('#1d4ed8')}
+                                    title="Medical Blue"
+                                />
+                                <div
+                                    className={`ipn-color-dot ${penColor === '#0f172a' ? 'active' : ''}`}
+                                    style={{ background: '#0f172a' }}
+                                    onClick={() => setPenColor('#0f172a')}
+                                    title="Black"
+                                />
+                                <div
+                                    className={`ipn-color-dot ${penColor === '#dc2626' ? 'active' : ''}`}
+                                    style={{ background: '#dc2626' }}
+                                    onClick={() => setPenColor('#dc2626')}
+                                    title="Red / Alert"
+                                />
+                                <select
+                                    className="ipn-stroke-width-select"
+                                    value={penWidth}
+                                    onChange={(e) => setPenWidth(Number(e.target.value))}
+                                >
+                                    <option value={1.5}>Fine (1.5px)</option>
+                                    <option value={2.5}>Medium (2.5px)</option>
+                                    <option value={4}>Bold (4px)</option>
+                                </select>
+                            </div>
                         )}
                     </div>
 
-                    {activeSectionTab === 'notes' && (
-                        <div className="ipn-mode-toggle">
-                            <button
-                                type="button"
-                                className={`ipn-mode-pill ${noteViewMode === 'preview' ? 'active' : ''}`}
-                                onClick={() => setNoteViewMode('preview')}
-                            >
-                                Exact 2-Page Preview
-                            </button>
-                            <button
-                                type="button"
-                                className={`ipn-mode-pill ${noteViewMode === 'edit' ? 'active' : ''}`}
-                                onClick={() => setNoteViewMode('edit')}
-                            >
-                                Fill / Edit Fields
-                            </button>
-                        </div>
-                    )}
+                    <div className="ipn-toolbar-group">
+                        <button
+                            type="button"
+                            className="ipn-tool-btn ipn-tool-btn-ai"
+                            onClick={() => setIsScribeModalOpen(true)}
+                            title="Open AI Voice Scribe & Dictation"
+                        >
+                            <FiZap size={13} />
+                            <span>AI Voice Scribe</span>
+                        </button>
+
+                        <div className="ipn-tool-divider" />
+
+                        <button
+                            type="button"
+                            className="ipn-tool-btn"
+                            onClick={handleUndo}
+                            disabled={historyIndex <= 0}
+                            title="Undo (Ctrl+Z)"
+                        >
+                            <FiRotateCcw size={12} />
+                            <span>Undo</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="ipn-tool-btn"
+                            onClick={handleRedo}
+                            disabled={historyIndex >= historyStack.length - 1}
+                            title="Redo (Ctrl+Y)"
+                        >
+                            <FiRotateCw size={12} />
+                            <span>Redo</span>
+                        </button>
+
+                        <div className="ipn-tool-divider" />
+
+                        <button
+                            type="button"
+                            className="ipn-tool-btn"
+                            onClick={handleAddContinuationPage}
+                            title="Add a continuation page for extensive clinical notes"
+                        >
+                            <FiPlus size={12} />
+                            <span>Add Continuation Page</span>
+                        </button>
+                    </div>
                 </div>
 
+                {/* Modal Main Body */}
                 <div className="ipn-modal-body">
-                    {activeSectionTab === 'notes' && noteViewMode === 'preview' && (
-                        <div className="ipn-sheets-stack">
-                            {/* PAGE 1 */}
+                    <div className="ipn-sheets-stack">
+                            {/* ==================== PAGE 1 ==================== */}
                             <div className="ipn-sheet-paper">
+                                <span className="ipn-sheet-badge">PAGE 1 — CLINICAL ASSESSMENT</span>
                                 {renderBanner()}
+
+                                {/* Tablet Pen Overlay for Page 1 */}
+                                <TabletPenCanvas
+                                    pageKey="page1"
+                                    strokes={formState.handwritingStrokes?.page1 || []}
+                                    activeTool={activeTool}
+                                    penColor={penColor}
+                                    penWidth={penWidth}
+                                    onSaveStrokes={(newStrokes) => handleSavePageStrokes('page1', newStrokes)}
+                                />
+
                                 <div className="ipn-doc-box">
                                     <div className="ipn-doc-letterhead">
                                         <div className="ipn-doc-nabh">
@@ -386,363 +658,453 @@ const InpatientClinicalNotesModal = ({
 
                                     <div className="ipn-doc-title">IN PATIENT CLINICAL NOTES</div>
 
+                                    {/* Page 1 Demographics Meta Row (Click to edit inline) */}
                                     <div className="ipn-doc-meta-rows">
                                         <div className="ipn-doc-meta-row">
-                                            <div className="ipn-doc-field" style={{ flex: 4.2 }}><span>Patient&apos;s Name</span><span className="ipn-doc-field-val">{formState.patientName}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>Age</span><span className="ipn-doc-field-val">{formState.age}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 0.9 }}><span>Sex</span><span className="ipn-doc-field-val">{formState.sex}</span></div>
+                                            <div className="ipn-doc-field" style={{ flex: 4.2 }}>
+                                                <span>Patient&apos;s Name :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.patientName || ''}
+                                                        onChange={(e) => updateField('patientName', e.target.value)}
+                                                        placeholder="Full Patient Name"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.2 }}>
+                                                <span>Age :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.age || ''}
+                                                        onChange={(e) => updateField('age', e.target.value)}
+                                                        placeholder="Age"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 0.9 }}>
+                                                <span>Sex :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.sex || ''}
+                                                        onChange={(e) => updateField('sex', e.target.value)}
+                                                        placeholder="M/F"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="ipn-doc-meta-row">
-                                            <div className="ipn-doc-field" style={{ flex: 1.5 }}><span>Regd. No.</span><span className="ipn-doc-field-val">{formState.regdNo}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 1.5 }}><span>IPD No.</span><span className="ipn-doc-field-val">{formState.ipdNo}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 1.1 }}><span>Date</span><span className="ipn-doc-field-val">{formState.noteDate}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 1 }}><span>Time</span><span className="ipn-doc-field-val">{formState.noteTime}</span></div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.5 }}>
+                                                <span>Regd. No. :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.regdNo || ''}
+                                                        onChange={(e) => updateField('regdNo', e.target.value)}
+                                                        placeholder="UHID"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.5 }}>
+                                                <span>IPD No. :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.ipdNo || ''}
+                                                        onChange={(e) => updateField('ipdNo', e.target.value)}
+                                                        placeholder="IPD Number"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.1 }}>
+                                                <span>Date :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.noteDate || ''}
+                                                        onChange={(e) => updateField('noteDate', e.target.value)}
+                                                        placeholder="DD/MM/YYYY"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 1 }}>
+                                                <span>Time :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.noteTime || ''}
+                                                        onChange={(e) => updateField('noteTime', e.target.value)}
+                                                        placeholder="HH:MM"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="ipn-doc-meta-row" style={{ marginBottom: 0 }}>
-                                            <div className="ipn-doc-field" style={{ flex: 1.3 }}><span>Ward</span><span className="ipn-doc-field-val">{formState.ward}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>Bed No.</span><span className="ipn-doc-field-val">{formState.bedNo}</span></div>
-                                            <div className="ipn-doc-field" style={{ flex: 2 }}><span>Consultant</span><span className="ipn-doc-field-val">{formState.consultantName}</span></div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.3 }}>
+                                                <span>Ward :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.ward || ''}
+                                                        onChange={(e) => updateField('ward', e.target.value)}
+                                                        placeholder="Ward"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 1.2 }}>
+                                                <span>Bed No. :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.bedNo || ''}
+                                                        onChange={(e) => updateField('bedNo', e.target.value)}
+                                                        placeholder="Bed"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="ipn-doc-field" style={{ flex: 2 }}>
+                                                <span>Consultant :</span>
+                                                <div className="ipn-doc-field-val">
+                                                    <input
+                                                        className="ipn-inline-field-input"
+                                                        value={formState.consultantName || ''}
+                                                        onChange={(e) => updateField('consultantName', e.target.value)}
+                                                        placeholder="Consultant Doctor"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
+                                    {/* Ruled Sections */}
                                     <div className="ipn-doc-sec-hdr">History &amp; Complaints</div>
-                                    {renderRuledLines(formState.historyAndComplaints, 7)}
+                                    <RuledSectionEditor
+                                        sectionKey="historyAndComplaints"
+                                        text={formState.historyAndComplaints}
+                                        lineCount={7}
+                                        onChange={(val) => updateField('historyAndComplaints', val)}
+                                        placeholder="Click to type clinical complaints or dictate…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">Relevant Physical Examination</div>
-                                    {renderRuledLines(formState.relevantPhysicalExamination, 7)}
+                                    <RuledSectionEditor
+                                        sectionKey="relevantPhysicalExamination"
+                                        text={formState.relevantPhysicalExamination}
+                                        lineCount={7}
+                                        onChange={(val) => updateField('relevantPhysicalExamination', val)}
+                                        placeholder="Click to type physical examination findings…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">History Of Present Illness</div>
-                                    {renderRuledLines(formState.historyOfPresentIllness, 4)}
+                                    <RuledSectionEditor
+                                        sectionKey="historyOfPresentIllness"
+                                        text={formState.historyOfPresentIllness}
+                                        lineCount={4}
+                                        onChange={(val) => updateField('historyOfPresentIllness', val)}
+                                        placeholder="Onset, duration and progress of symptoms…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">Past Medical History / Surgical History</div>
-                                    {renderRuledLines(formState.pastMedicalSurgicalHistory, 3)}
+                                    <RuledSectionEditor
+                                        sectionKey="pastMedicalSurgicalHistory"
+                                        text={formState.pastMedicalSurgicalHistory}
+                                        lineCount={3}
+                                        onChange={(val) => updateField('pastMedicalSurgicalHistory', val)}
+                                        placeholder="Previous illnesses, hospitalizations or surgeries…"
+                                    />
 
                                     <div className="ipn-doc-split-row">
                                         <div className="ipn-doc-split-left">
                                             <div className="ipn-doc-sec-hdr">PERSONAL / SOCIAL HISTORY</div>
-                                            {renderRuledLines(formState.personalSocialHistory, 2)}
+                                            <RuledSectionEditor
+                                                sectionKey="personalSocialHistory"
+                                                text={formState.personalSocialHistory}
+                                                lineCount={2}
+                                                onChange={(val) => updateField('personalSocialHistory', val)}
+                                                placeholder="Habits, lifestyle, smoking/alcohol…"
+                                            />
                                         </div>
                                         <div>
                                             <div className="ipn-doc-sec-hdr">ANY DRUG ALLERGY</div>
-                                            {renderRuledLines(formState.anyDrugAllergy, 2)}
+                                            <RuledSectionEditor
+                                                sectionKey="anyDrugAllergy"
+                                                text={formState.anyDrugAllergy}
+                                                lineCount={2}
+                                                onChange={(val) => updateField('anyDrugAllergy', val)}
+                                                placeholder="Known drug allergies / sensitivities…"
+                                            />
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* PAGE 2 */}
+                            {/* ==================== PAGE 2 ==================== */}
                             <div className="ipn-sheet-paper">
+                                <span className="ipn-sheet-badge">PAGE 2 — GENERAL EXAM &amp; PLAN</span>
                                 {renderBanner()}
+
+                                {/* Tablet Pen Overlay for Page 2 */}
+                                <TabletPenCanvas
+                                    pageKey="page2"
+                                    strokes={formState.handwritingStrokes?.page2 || []}
+                                    activeTool={activeTool}
+                                    penColor={penColor}
+                                    penWidth={penWidth}
+                                    onSaveStrokes={(newStrokes) => handleSavePageStrokes('page2', newStrokes)}
+                                />
+
                                 <div className="ipn-doc-box">
                                     <div className="ipn-doc-sec-hdr" style={{ borderTop: 'none' }}>GENERAL EXAMINATION</div>
                                     <div className="ipn-doc-gen-grid">
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">BP</span><span>{formState.generalExamination?.bp}</span></div>
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Temp.</span><span>{formState.generalExamination?.temp}</span></div>
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Pallor</span><span>{formState.generalExamination?.pallor}</span></div>
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Pulse</span><span>{formState.generalExamination?.pulse}</span></div>
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">SPO2</span><span>{formState.generalExamination?.spo2}</span></div>
-                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Pain</span><span>{formState.generalExamination?.pain}</span></div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">BP</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.bp || ''}
+                                                onChange={(e) => updateGenField('bp', e.target.value)}
+                                                placeholder="120/80 mmHg"
+                                            />
+                                        </div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">Temp.</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.temp || ''}
+                                                onChange={(e) => updateGenField('temp', e.target.value)}
+                                                placeholder="98.6°F"
+                                            />
+                                        </div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">Pallor</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.pallor || ''}
+                                                onChange={(e) => updateGenField('pallor', e.target.value)}
+                                                placeholder="Absent / Mild"
+                                            />
+                                        </div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">Pulse</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.pulse || ''}
+                                                onChange={(e) => updateGenField('pulse', e.target.value)}
+                                                placeholder="72 bpm"
+                                            />
+                                        </div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">SPO2</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.spo2 || ''}
+                                                onChange={(e) => updateGenField('spo2', e.target.value)}
+                                                placeholder="98%"
+                                            />
+                                        </div>
+                                        <div className="ipn-doc-gen-cell">
+                                            <span className="ipn-doc-gen-lbl">Pain</span>
+                                            <input
+                                                className="ipn-inline-cell-input"
+                                                value={formState.generalExamination?.pain || ''}
+                                                onChange={(e) => updateGenField('pain', e.target.value)}
+                                                placeholder="0/10"
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="ipn-doc-sec-hdr" style={{ borderTop: 'none' }}>SYSTEMIC</div>
-                                    {renderRuledLines(formState.systemicExamination, 7)}
+                                    <RuledSectionEditor
+                                        sectionKey="systemicExamination"
+                                        text={formState.systemicExamination}
+                                        lineCount={7}
+                                        onChange={(val) => updateField('systemicExamination', val)}
+                                        placeholder="CNS, CVS, RS, PA examination findings…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">PROV. DIAGNOSIS</div>
-                                    {renderRuledLines(formState.provisionalDiagnosis, 3)}
+                                    <RuledSectionEditor
+                                        sectionKey="provisionalDiagnosis"
+                                        text={formState.provisionalDiagnosis}
+                                        lineCount={3}
+                                        onChange={(val) => updateField('provisionalDiagnosis', val)}
+                                        placeholder="Clinical impression / provisional diagnosis…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">INVESTIGATIONS</div>
-                                    {renderRuledLines(formState.investigations, 8)}
+                                    <RuledSectionEditor
+                                        sectionKey="investigations"
+                                        text={formState.investigations}
+                                        lineCount={8}
+                                        onChange={(val) => updateField('investigations', val)}
+                                        placeholder="Advised diagnostic tests, labs, radiology…"
+                                    />
 
                                     <div className="ipn-doc-sec-hdr">DISCHARGE &amp; FOLLOW UP</div>
-                                    {renderRuledLines(formState.dischargeAndFollowUp, 8)}
-
-                                    <div className="ipn-doc-footer-sign">
-                                        <div className="ipn-doc-field" style={{ flex: 2.3 }}><span>Name of Consultant</span><span className="ipn-doc-field-val">{formState.footer?.consultantName}</span></div>
-                                        <div className="ipn-doc-field" style={{ flex: 1.4 }}><span>Signature</span><span className="ipn-doc-field-val">{formState.footer?.signature}</span></div>
-                                        <div className="ipn-doc-field" style={{ flex: 0.9 }}><span>Date</span><span className="ipn-doc-field-val">{formState.footer?.signDate}</span></div>
-                                        <div className="ipn-doc-field" style={{ flex: 0.8 }}><span>Time</span><span className="ipn-doc-field-val">{formState.footer?.signTime}</span></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeSectionTab === 'notes' && noteViewMode === 'edit' && (
-                        <form className="ipn-editor-card" onSubmit={handleSaveNotes}>
-                            <div className="ipn-editor-section-title" style={{ marginTop: 0 }}>Page 1 — Patient &amp; Admission Header</div>
-                            <div className="ipn-editor-grid-3">
-                                <div className="ipn-form-field">
-                                    <label>Patient&apos;s Name</label>
-                                    <input value={formState.patientName} onChange={e => updateField('patientName', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Age</label>
-                                    <input value={formState.age} onChange={e => updateField('age', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Sex</label>
-                                    <input value={formState.sex} onChange={e => updateField('sex', e.target.value)} />
-                                </div>
-                            </div>
-                            <div className="ipn-editor-grid-4">
-                                <div className="ipn-form-field">
-                                    <label>Regd. No. / UHID</label>
-                                    <input value={formState.regdNo} onChange={e => updateField('regdNo', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>IPD No.</label>
-                                    <input value={formState.ipdNo} onChange={e => updateField('ipdNo', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Date</label>
-                                    <input value={formState.noteDate} onChange={e => updateField('noteDate', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Time</label>
-                                    <input value={formState.noteTime} onChange={e => updateField('noteTime', e.target.value)} />
-                                </div>
-                            </div>
-                            <div className="ipn-editor-grid-3">
-                                <div className="ipn-form-field">
-                                    <label>Ward</label>
-                                    <input value={formState.ward} onChange={e => updateField('ward', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Bed No.</label>
-                                    <input value={formState.bedNo} onChange={e => updateField('bedNo', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>Consultant</label>
-                                    <input value={formState.consultantName} onChange={e => updateField('consultantName', e.target.value)} />
-                                </div>
-                            </div>
-
-                            <div className="ipn-editor-section-title">Page 1 — Clinical Assessment</div>
-                            <div className="ipn-form-field">
-                                <label>History &amp; Complaints</label>
-                                <textarea rows={3} value={formState.historyAndComplaints} onChange={e => updateField('historyAndComplaints', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>Relevant Physical Examination</label>
-                                <textarea rows={3} value={formState.relevantPhysicalExamination} onChange={e => updateField('relevantPhysicalExamination', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>History Of Present Illness</label>
-                                <textarea rows={2} value={formState.historyOfPresentIllness} onChange={e => updateField('historyOfPresentIllness', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>Past Medical History / Surgical History</label>
-                                <textarea rows={2} value={formState.pastMedicalSurgicalHistory} onChange={e => updateField('pastMedicalSurgicalHistory', e.target.value)} />
-                            </div>
-                            <div className="ipn-editor-grid-2">
-                                <div className="ipn-form-field">
-                                    <label>PERSONAL / SOCIAL HISTORY</label>
-                                    <textarea rows={2} value={formState.personalSocialHistory} onChange={e => updateField('personalSocialHistory', e.target.value)} />
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>ANY DRUG ALLERGY</label>
-                                    <textarea rows={2} value={formState.anyDrugAllergy} onChange={e => updateField('anyDrugAllergy', e.target.value)} />
-                                </div>
-                            </div>
-
-                            <div className="ipn-editor-section-title">Page 2 — General Examination &amp; Clinical Plan</div>
-                            <div className="ipn-editor-grid-3">
-                                <div className="ipn-form-field"><label>BP</label><input value={formState.generalExamination.bp} onChange={e => updateGenField('bp', e.target.value)} placeholder="120/80 mmHg" /></div>
-                                <div className="ipn-form-field"><label>Temp.</label><input value={formState.generalExamination.temp} onChange={e => updateGenField('temp', e.target.value)} placeholder="98.6°F" /></div>
-                                <div className="ipn-form-field"><label>Pallor</label><input value={formState.generalExamination.pallor} onChange={e => updateGenField('pallor', e.target.value)} placeholder="Absent / Mild" /></div>
-                                <div className="ipn-form-field"><label>Pulse</label><input value={formState.generalExamination.pulse} onChange={e => updateGenField('pulse', e.target.value)} placeholder="78 bpm" /></div>
-                                <div className="ipn-form-field"><label>SPO2</label><input value={formState.generalExamination.spo2} onChange={e => updateGenField('spo2', e.target.value)} placeholder="98%" /></div>
-                                <div className="ipn-form-field"><label>Pain</label><input value={formState.generalExamination.pain} onChange={e => updateGenField('pain', e.target.value)} placeholder="2/10" /></div>
-                            </div>
-
-                            <div className="ipn-form-field">
-                                <label>SYSTEMIC</label>
-                                <textarea rows={3} value={formState.systemicExamination} onChange={e => updateField('systemicExamination', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>PROV. DIAGNOSIS</label>
-                                <textarea rows={2} value={formState.provisionalDiagnosis} onChange={e => updateField('provisionalDiagnosis', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>INVESTIGATIONS</label>
-                                <textarea rows={3} value={formState.investigations} onChange={e => updateField('investigations', e.target.value)} />
-                            </div>
-                            <div className="ipn-form-field">
-                                <label>DISCHARGE &amp; FOLLOW UP</label>
-                                <textarea rows={3} value={formState.dischargeAndFollowUp} onChange={e => updateField('dischargeAndFollowUp', e.target.value)} />
-                            </div>
-
-                            <div className="ipn-editor-grid-4">
-                                <div className="ipn-form-field"><label>Name of Consultant</label><input value={formState.footer.consultantName} onChange={e => updateFooterField('consultantName', e.target.value)} /></div>
-                                <div className="ipn-form-field"><label>Signature</label><input value={formState.footer.signature} onChange={e => updateFooterField('signature', e.target.value)} /></div>
-                                <div className="ipn-form-field"><label>Date</label><input value={formState.footer.signDate} onChange={e => updateFooterField('signDate', e.target.value)} /></div>
-                                <div className="ipn-form-field"><label>Time</label><input value={formState.footer.signTime} onChange={e => updateFooterField('signTime', e.target.value)} /></div>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-                                <button type="button" className="ipn-btn ipn-btn-outline" onClick={() => setNoteViewMode('preview')}>
-                                    View Exact 2-Page Preview
-                                </button>
-                                <button type="submit" className="ipn-btn ipn-btn-save" disabled={savingNotes}>
-                                    <FiSave size={14} /> {savingNotes ? 'Saving…' : 'Save Clinical Notes'}
-                                </button>
-                            </div>
-                        </form>
-                    )}
-
-                    {activeSectionTab === 'communication' && (
-                        <div className="ipn-comm-wrapper">
-                            <div className="ipn-comm-header">
-                                <div>
-                                    <h4 style={{ margin: 0, fontSize: '15.5px', fontWeight: 800, color: '#0f172a' }}>
-                                        Patient &amp; Nurse Communication
-                                    </h4>
-                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                        Chronological interaction notes for {ptBannerDetails.name} ({ptBannerDetails.ipdNumber}). Original authorship and full edit history are preserved.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="ipn-comm-timeline">
-                                {commMessages.length === 0 ? (
-                                    <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
-                                        No communication notes recorded yet for this admission.
-                                    </div>
-                                ) : (
-                                    commMessages.map(item => {
-                                        const isPatientRole = item.senderRole === 'Patient';
-                                        const isEditingThis = editingCommId === item._id;
-                                        const hasEdits = Array.isArray(item.editHistory) && item.editHistory.length > 0;
-                                        const historyExpanded = Boolean(expandedHistoryMap[item._id]);
-
-                                        return (
-                                            <div key={item._id} className={`ipn-comm-item ${isPatientRole ? 'role-patient' : ''}`}>
-                                                <div className="ipn-comm-item-top">
-                                                    <div className="ipn-comm-sender">
-                                                        <span>{item.senderName}</span>
-                                                        <span className="ipn-comm-role-pill">{item.senderRole}</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span className="ipn-comm-time">
-                                                            <FiClock size={11} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
-                                                            {new Date(item.createdAt).toLocaleString()}
-                                                        </span>
-                                                        {!isEditingThis && (
-                                                            <button
-                                                                type="button"
-                                                                className="ipn-btn ipn-btn-outline"
-                                                                style={{ padding: '3px 8px', fontSize: '11.5px' }}
-                                                                onClick={() => {
-                                                                    setEditingCommId(item._id);
-                                                                    setEditingCommText(item.message);
-                                                                }}
-                                                            >
-                                                                <FiEdit2 size={11} /> Edit
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {isEditingThis ? (
-                                                    <div style={{ marginTop: '6px' }}>
-                                                        <textarea
-                                                            rows={2}
-                                                            value={editingCommText}
-                                                            onChange={e => setEditingCommText(e.target.value)}
-                                                            style={{ width: '100%', padding: '8px', borderRadius: '7px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                                                        />
-                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '6px' }}>
-                                                            <button
-                                                                type="button"
-                                                                className="ipn-btn ipn-btn-outline"
-                                                                onClick={() => { setEditingCommId(null); setEditingCommText(''); }}
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="ipn-btn ipn-btn-save"
-                                                                disabled={commLoading || !editingCommText.trim()}
-                                                                onClick={() => handleSaveCommEdit(item._id)}
-                                                            >
-                                                                Save Edit
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="ipn-comm-msg">{item.message}</div>
-                                                )}
-
-                                                {item.editedAt && (
-                                                    <div className="ipn-comm-edit-meta">
-                                                        <span>
-                                                            Edited by <strong>{item.editedByName || 'Staff'}</strong> at {new Date(item.editedAt).toLocaleString()}
-                                                        </span>
-                                                        {hasEdits && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setExpandedHistoryMap(prev => ({ ...prev, [item._id]: !prev[item._id] }))}
-                                                                style={{ background: 'none', border: 'none', color: '#0f2e7a', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '11px' }}
-                                                            >
-                                                                {historyExpanded ? 'Hide Edit History' : `View Edit History (${item.editHistory.length})`}
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {historyExpanded && hasEdits && (
-                                                    <div className="ipn-comm-history-list">
-                                                        <strong style={{ display: 'block', marginBottom: '4px' }}>Previous Versions (Audit Trail):</strong>
-                                                        {item.editHistory.map((h, hIdx) => (
-                                                            <div key={hIdx} style={{ padding: '4px 0', borderTop: hIdx > 0 ? '1px solid #e2e8f0' : 'none' }}>
-                                                                <div>&ldquo;{h.previousMessage}&rdquo;</div>
-                                                                <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                                                                    Replaced by {h.editedByName} ({h.editedByRole || 'Staff'}) on {new Date(h.editedAt).toLocaleString()}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-
-                            <form className="ipn-comm-composer" onSubmit={handleSendCommunication}>
-                                <div className="ipn-editor-grid-3" style={{ alignItems: 'end', marginBottom: '8px' }}>
-                                    <div className="ipn-form-field" style={{ marginBottom: 0 }}>
-                                        <label>Entry Author / Role</label>
-                                        <select value={commSenderRole} onChange={e => setCommSenderRole(e.target.value)}>
-                                            <option value="Nurse">Nurse / Attending Staff ({user?.name || 'Staff'})</option>
-                                            <option value="Patient">Patient ({ptBannerDetails.name !== '—' ? ptBannerDetails.name : 'Bedside Statement'})</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="ipn-form-field">
-                                    <label>New Message / Clinical Observation</label>
-                                    <textarea
-                                        rows={3}
-                                        placeholder="Record patient symptom report, nurse counseling, bedside query, or follow-up response..."
-                                        value={commInput}
-                                        onChange={e => setCommInput(e.target.value)}
-                                        required
+                                    <RuledSectionEditor
+                                        sectionKey="dischargeAndFollowUp"
+                                        text={formState.dischargeAndFollowUp}
+                                        lineCount={8}
+                                        onChange={(val) => updateField('dischargeAndFollowUp', val)}
+                                        placeholder="Treatment plan, discharge criteria, review date…"
                                     />
+
+                                    {/* Footer Sign-off (Inline editable) */}
+                                    <div className="ipn-doc-footer-sign">
+                                        <div className="ipn-doc-field" style={{ flex: 2.3 }}>
+                                            <span>Name of Consultant :</span>
+                                            <div className="ipn-doc-field-val">
+                                                <input
+                                                    className="ipn-inline-field-input"
+                                                    value={formState.footer?.consultantName || ''}
+                                                    onChange={(e) => updateFooterField('consultantName', e.target.value)}
+                                                    placeholder="Dr. Name"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="ipn-doc-field" style={{ flex: 1.4 }}>
+                                            <span>Signature :</span>
+                                            <div className="ipn-doc-field-val">
+                                                <input
+                                                    className="ipn-inline-field-input"
+                                                    value={formState.footer?.signature || ''}
+                                                    onChange={(e) => updateFooterField('signature', e.target.value)}
+                                                    placeholder="Sign / Initial"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="ipn-doc-field" style={{ flex: 0.9 }}>
+                                            <span>Date :</span>
+                                            <div className="ipn-doc-field-val">
+                                                <input
+                                                    className="ipn-inline-field-input"
+                                                    value={formState.footer?.signDate || ''}
+                                                    onChange={(e) => updateFooterField('signDate', e.target.value)}
+                                                    placeholder="DD/MM/YYYY"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="ipn-doc-field" style={{ flex: 0.8 }}>
+                                            <span>Time :</span>
+                                            <div className="ipn-doc-field-val">
+                                                <input
+                                                    className="ipn-inline-field-input"
+                                                    value={formState.footer?.signTime || ''}
+                                                    onChange={(e) => updateFooterField('signTime', e.target.value)}
+                                                    placeholder="HH:MM"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <button type="submit" className="ipn-btn ipn-btn-save" disabled={commSending || !commInput.trim()}>
-                                        <FiMessageSquare size={14} />
-                                        <span>{commSending ? 'Posting…' : 'Post Communication Note'}</span>
-                                    </button>
-                                </div>
-                            </form>
+                            </div>
+
+                            {/* ==================== CONTINUATION PAGES (PAGE 3+) ==================== */}
+                            {(formState.continuationPages || []).map((cp, idx) => {
+                                const pageNum = cp.pageNumber || idx + 3;
+                                const pageKey = `page${pageNum}`;
+
+                                return (
+                                    <div key={pageNum} className="ipn-sheet-paper">
+                                        <span className="ipn-sheet-badge">PAGE {pageNum} — CONTINUATION SHEET</span>
+                                        <button
+                                            type="button"
+                                            className="ipn-sheet-delete-btn"
+                                            onClick={() => handleDeleteContinuationPage(idx)}
+                                            title="Delete this continuation page"
+                                        >
+                                            <FiTrash2 size={11} /> Delete Page
+                                        </button>
+
+                                        {renderBanner()}
+
+                                        {/* Tablet Pen Overlay for Continuation Page */}
+                                        <TabletPenCanvas
+                                            pageKey={pageKey}
+                                            strokes={formState.handwritingStrokes?.[pageKey] || []}
+                                            activeTool={activeTool}
+                                            penColor={penColor}
+                                            penWidth={penWidth}
+                                            onSaveStrokes={(newStrokes) => handleSavePageStrokes(pageKey, newStrokes)}
+                                        />
+
+                                        <div className="ipn-doc-box">
+                                            <div className="ipn-doc-letterhead">
+                                                <div className="ipn-doc-nabh">
+                                                    {hospitalObj.accreditation?.enabled === true && hospitalObj.accreditation.logoUrl && (
+                                                        <img src={hospitalObj.accreditation.logoUrl} alt="NABH" />
+                                                    )}
+                                                </div>
+                                                <div className="ipn-doc-hosp">
+                                                    {hospitalObj.logoUrl && !hospLogoFailed ? (
+                                                        <img src={hospitalObj.logoUrl} alt={hospitalObj.name} onError={() => setHospLogoFailed(true)} />
+                                                    ) : (
+                                                        <div className="ipn-doc-hosp-name">{hospitalObj.name}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="ipn-doc-title">
+                                                IN PATIENT CLINICAL NOTES — {cp.title || 'CONTINUATION SHEET'} (PAGE {pageNum})
+                                            </div>
+
+                                            <div className="ipn-doc-meta-rows">
+                                                <div className="ipn-doc-meta-row" style={{ marginBottom: 0 }}>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.1 }}><span>Date :</span><span className="ipn-doc-field-val">{formState.noteDate}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1 }}><span>Time :</span><span className="ipn-doc-field-val">{formState.noteTime}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.3 }}><span>Ward :</span><span className="ipn-doc-field-val">{formState.ward}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>Bed No. :</span><span className="ipn-doc-field-val">{formState.bedNo}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 2 }}><span>Consultant :</span><span className="ipn-doc-field-val">{formState.consultantName}</span></div>
+                                                </div>
+                                            </div>
+
+                                            <div className="ipn-doc-sec-hdr">CLINICAL OBSERVATIONS &amp; NOTES (CONTINUED)</div>
+                                            <RuledSectionEditor
+                                                sectionKey={`cont_${pageNum}`}
+                                                text={cp.notes || ''}
+                                                lineCount={26}
+                                                onChange={(val) => handleContinuationNotesChange(idx, val)}
+                                                placeholder="Continue writing clinical notes, daily progress or orders directly on these ruled lines…"
+                                            />
+
+                                            <div className="ipn-doc-footer-sign">
+                                                <div className="ipn-doc-field" style={{ flex: 2.3 }}>
+                                                    <span>Name of Consultant :</span>
+                                                    <div className="ipn-doc-field-val">{formState.footer?.consultantName}</div>
+                                                </div>
+                                                <div className="ipn-doc-field" style={{ flex: 1.4 }}>
+                                                    <span>Signature :</span>
+                                                    <div className="ipn-doc-field-val">{formState.footer?.signature}</div>
+                                                </div>
+                                                <div className="ipn-doc-field" style={{ flex: 0.9 }}>
+                                                    <span>Date :</span>
+                                                    <div className="ipn-doc-field-val">{formState.footer?.signDate}</div>
+                                                </div>
+                                                <div className="ipn-doc-field" style={{ flex: 0.8 }}>
+                                                    <span>Time :</span>
+                                                    <div className="ipn-doc-field-val">{formState.footer?.signTime}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    )}
                 </div>
             </div>
+
+            {/* AI Voice Scribe Modal */}
+            <ClinicalVoiceScribeModal
+                isOpen={isScribeModalOpen}
+                onClose={() => setIsScribeModalOpen(false)}
+                onApproveAndInsert={handleApproveVoiceScribe}
+                patientName={ptBannerDetails.name}
+                uhid={ptBannerDetails.uhid}
+                ipdNumber={ptBannerDetails.ipdNumber}
+            />
         </div>
     );
 };
 
 export default InpatientClinicalNotesModal;
-

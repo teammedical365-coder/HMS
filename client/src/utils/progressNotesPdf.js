@@ -77,7 +77,7 @@ export const buildProgressNotesHeaderData = ({
  * Convert chronological progress notes into paginated sheets of ruled lines (32 rows/page).
  * Preserves wrapped lines cleanly without clipping and flows long notes onto Continuation Sheets.
  */
-export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PER_PAGE) => {
+export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PER_PAGE, manualExtraSheets = 0) => {
     const pages = [];
     let currentRows = [];
 
@@ -89,7 +89,8 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
                 ...Array.from({ length: Math.max(0, rowsPerPage - currentRows.length) }, () => ({
                     dateTimeText: '',
                     noteText: '',
-                    isMeta: false
+                    isMeta: false,
+                    noteId: null
                 }))
             ]
         });
@@ -122,32 +123,56 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
     };
 
     sortedNotes.forEach((entry) => {
+        // Skip empty placeholder notes that have no actual content
+        if (!entry.note || !String(entry.note).trim()) {
+            return;
+        }
+
         const dt = entry.recordedAt || entry.createdAt;
         const dateStr = formatShortDate(dt);
         const timeStr = formatShortTime(dt);
 
         const wrappedLines = wrapParagraph(entry.note || '');
         const hasEdits = Array.isArray(entry.editHistory) && entry.editHistory.length > 0;
+        const isNurseAuthor = /nurse/i.test(entry.authorRole || '');
+        const cleanAuthorName = entry.authorName
+            ? (isNurseAuthor ? entry.authorName.replace(/^dr\.?\s*/i, '') : entry.authorName)
+            : 'Clinical Staff';
+        const cleanUpdatedByName = entry.updatedByName
+            ? (/nurse/i.test(entry.updatedByRole || '') ? entry.updatedByName.replace(/^dr\.?\s*/i, '') : entry.updatedByName)
+            : 'Staff';
         const metaLine = hasEdits
-            ? `— Logged by ${entry.authorName || 'Staff'} (${entry.authorRole || 'Clinician'}) • Edited ${entry.editHistory.length}x, last by ${entry.updatedByName || 'Staff'}`
-            : `— ${entry.authorName || 'Clinical Staff'}${entry.authorRole ? ` (${entry.authorRole})` : ''}`;
+            ? `— Logged by ${cleanAuthorName} (${entry.authorRole || 'Clinician'}) • Edited ${entry.editHistory.length}x, last by ${cleanUpdatedByName}`
+            : `— ${cleanAuthorName}${entry.authorRole ? ` (${entry.authorRole})` : ''}`;
 
         const entryRows = [];
-        const maxCount = Math.max(wrappedLines.length + 1, dateStr && timeStr ? 2 : 1);
 
-        for (let i = 0; i < maxCount; i++) {
+        // All text lines belong to this single note entry
+        for (let i = 0; i < wrappedLines.length; i++) {
             let dtCell = '';
             if (i === 0) dtCell = dateStr;
-            else if (i === 1) dtCell = timeStr;
+            else if (i === 1 && timeStr) dtCell = timeStr;
 
-            const isSigRow = i === wrappedLines.length;
-            const noteCell = i < wrappedLines.length ? wrappedLines[i] : (isSigRow ? metaLine : '');
             entryRows.push({
                 dateTimeText: dtCell,
-                noteText: noteCell,
-                isMeta: isSigRow
+                noteText: wrappedLines[i],
+                isMeta: false,
+                noteId: entry._id || null,
+                lineIdx: i,
+                totalLines: wrappedLines.length,
+                isSigRow: false
             });
         }
+
+        // Author attribution row AFTER the complete multi-line note
+        entryRows.push({
+            dateTimeText: '',
+            noteText: metaLine,
+            isMeta: true,
+            noteId: entry._id || null,
+            lineIdx: wrappedLines.length,
+            isSigRow: true
+        });
 
         // If the start of a new entry only has 1 row left on the page, start cleanly on next continuation sheet
         if (currentRows.length > 0 && currentRows.length + 2 > rowsPerPage && entryRows.length >= 2) {
@@ -161,14 +186,28 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
             currentRows.push(r);
         });
 
-        // Subtle spacer row between distinct chronological entries if space permits
+        // Blank spacer row between distinct chronological entries if space permits
         if (currentRows.length < rowsPerPage) {
-            currentRows.push({ dateTimeText: '', noteText: '', isMeta: false });
+            currentRows.push({ dateTimeText: '', noteText: '', isMeta: false, noteId: null });
         }
     });
 
     if (pages.length === 0 || currentRows.length > 0) {
         pushCurrentPage();
+    }
+
+    // Manual extra sheets created via "+ Add Sheet"
+    const targetPages = Math.max(pages.length, 1 + (Number(manualExtraSheets) || 0));
+    while (pages.length < targetPages) {
+        pages.push({
+            sheetNo: String(pages.length + 1),
+            rows: Array.from({ length: rowsPerPage }, () => ({
+                dateTimeText: '',
+                noteText: '',
+                isMeta: false,
+                noteId: null
+            }))
+        });
     }
 
     return pages;
@@ -307,7 +346,8 @@ export const downloadProgressNotesPdf = async ({
     admission = {},
     progressNotes = [],
     isBlank = false,
-    fileName = ''
+    fileName = '',
+    manualExtraSheets = 0
 }) => {
     const JsPDFCtor = typeof jsPDF === 'function' ? jsPDF : jsPDF?.jsPDF;
     const doc = new JsPDFCtor({
@@ -341,8 +381,8 @@ export const downloadProgressNotesPdf = async ({
     ]);
 
     const pages = isBlank
-        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE)
-        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE);
+        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE, manualExtraSheets)
+        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE, manualExtraSheets);
 
     pages.forEach((pg, pageIndex) => {
         if (pageIndex > 0) doc.addPage();
@@ -451,7 +491,8 @@ export const printProgressNotes = ({
     patient = {},
     admission = {},
     progressNotes = [],
-    isBlank = false
+    isBlank = false,
+    manualExtraSheets = 0
 }) => {
     const ptDetails = resolvePatientChartDetails({ patient, admission, isBlank });
     const headerData = buildProgressNotesHeaderData({ patient, admission, isBlank });
@@ -466,19 +507,15 @@ export const printProgressNotes = ({
         : '';
 
     const pages = isBlank
-        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE)
-        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE);
+        ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE, manualExtraSheets)
+        : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE, manualExtraSheets);
 
     const bannerHtml = `
         <div class="pn-banner">
             <span>Patient Name : ${escapeHtml(ptDetails.name)}</span>
-            <span class="pn-sep">|</span>
             <span>UHID : ${escapeHtml(ptDetails.uhid)}</span>
-            <span class="pn-sep">|</span>
             <span>IPD : ${escapeHtml(ptDetails.ipdNumber)}</span>
-            <span class="pn-sep">|</span>
             <span>Gender : ${escapeHtml(ptDetails.gender)}</span>
-            <span class="pn-sep">|</span>
             <span>Age : ${escapeHtml(ptDetails.age)}</span>
         </div>
     `;
