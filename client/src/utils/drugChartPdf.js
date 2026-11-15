@@ -43,13 +43,19 @@ export const IV_COLS = [
  * Render Drug Chart Page 2 blue Times-serif patient header banner on one clean line
  * (matching original DRUG CHART.pdf Page 2: no '|' pipes, balanced spacing, no wrap).
  */
-export const drawDrugChartPage2Banner = (doc, ptDetails, { x = 10, y = 10.2, maxWidth = 190 } = {}) => {
+export const drawDrugChartPage2Banner = (doc, ptDetails, { x = 10, y = 10.2, maxWidth = 190, headerData = {} } = {}) => {
+    const doa = headerData?.doa || ptDetails?.doa || '—';
+    const wardBed = headerData?.wardBed || ptDetails?.wardBed || '—';
+    const consultant = headerData?.consultant || ptDetails?.consultant || '—';
     const fields = [
         `Patient Name : ${ptDetails?.name || '—'}`,
-        `UHID : ${ptDetails?.uhid || '—'}`,
+        `MRN : ${ptDetails?.uhid || '—'}`,
         `IPD : ${ptDetails?.ipdNumber || '—'}`,
-        `Gender : ${ptDetails?.gender || '—'}`,
-        `Age : ${ptDetails?.age || '—'}`
+        `Age : ${ptDetails?.age || '—'}`,
+        `Sex : ${ptDetails?.gender || '—'}`,
+        `DOA : ${doa}`,
+        `Ward/Bed : ${wardBed}`,
+        `Consultant : ${consultant}`
     ];
 
     doc.setFont('times', 'normal');
@@ -466,7 +472,7 @@ export const downloadDrugChartPdf = async ({
     for (let p1 = 0; p1 < page1SheetCount; p1++) {
         if (p1 > 0) doc.addPage();
 
-        drawPatientBannerPdf(doc, ptDetails, { x: leftX + 1, y: 10.2, maxWidth: tableW - 2 });
+        drawPatientBannerPdf(doc, ptDetails, { x: leftX + 1, y: 10.2, maxWidth: tableW - 2, headerData });
 
         drawClinicalSheetLetterhead({
             doc,
@@ -601,7 +607,7 @@ export const downloadDrugChartPdf = async ({
                 : marOrders.slice(ocIdx * DRUG_CHART_MAR_BLOCKS_PER_PAGE, (ocIdx + 1) * DRUG_CHART_MAR_BLOCKS_PER_PAGE);
 
             // Top Blue Patient Banner (Page 2 reference format: single clean line, no '|' pipes)
-            drawDrugChartPage2Banner(doc, ptDetails, { x: gridLeft + 1, y: 10.2, maxWidth: gridRight - gridLeft - 2 });
+            drawDrugChartPage2Banner(doc, ptDetails, { x: gridLeft + 1, y: 10.2, maxWidth: gridRight - gridLeft - 2, headerData });
 
             // Top Grid Header (y = 14.5mm to 38mm)
             const hdrTopY = 14.5;

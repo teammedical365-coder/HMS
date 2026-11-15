@@ -388,7 +388,7 @@ export const downloadProgressNotesPdf = async ({
         if (pageIndex > 0) doc.addPage();
 
         // Top Patient Banner Strip (light blue text + light slate-black |)
-        drawPatientBannerPdf(doc, ptDetails, { x: leftX + 1, y: 10.2, maxWidth: tableW - 2 });
+        drawPatientBannerPdf(doc, ptDetails, { x: leftX + 1, y: 10.2, maxWidth: tableW - 2, headerData });
 
         // Letterhead (NABH left + Hospital Logo beside it + Patient Info Box right)
         drawClinicalSheetLetterhead({

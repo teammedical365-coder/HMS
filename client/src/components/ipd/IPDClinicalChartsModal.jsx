@@ -128,6 +128,8 @@ const IPDClinicalChartsModal = ({
     const [editableIvRows, setEditableIvRows] = useState([]);
     const [dirtyDrugChart, setDirtyDrugChart] = useState(false);
     const [savingDrugChart, setSavingDrugChart] = useState(false);
+    const [lastSavedProgressTime, setLastSavedProgressTime] = useState(null);
+    const [lastSavedDrugChartTime, setLastSavedDrugChartTime] = useState(null);
 
     const handleUndo = useCallback(() => {
         if (undoStack.length === 0) return;
@@ -460,13 +462,13 @@ const IPDClinicalChartsModal = ({
             while (rows.length < DRUG_CHART_STAT_ROWS_PER_PAGE) {
                 rows.push({
                     _id: null,
-                    date: todayDateDisplay(),
-                    time: nowTime12h(),
+                    date: '',
+                    time: '',
                     drugName: '',
                     dose: '',
-                    route: 'IV',
-                    doctorName: defaultPrescribingDoctor,
-                    givenByName: !isDoctorUser ? (user?.name || '') : '',
+                    route: '',
+                    doctorName: '',
+                    givenByName: '',
                     checkedByName: '',
                     remarks: '',
                     status: 'PENDING',
@@ -486,13 +488,13 @@ const IPDClinicalChartsModal = ({
             while (rows.length < DRUG_CHART_IV_ROWS_PER_PAGE) {
                 rows.push({
                     _id: null,
-                    date: todayDateDisplay(),
+                    date: '',
                     fluidName: '',
                     volume: '',
-                    timeStart: nowTime12h(),
+                    timeStart: '',
                     infusionTimeHrs: '',
-                    doctorName: defaultPrescribingDoctor,
-                    adminByName: !isDoctorUser ? (user?.name || '') : '',
+                    doctorName: '',
+                    adminByName: '',
                     remarks: '',
                     status: 'PENDING',
                     isNew: true
@@ -525,18 +527,17 @@ const IPDClinicalChartsModal = ({
                 });
             });
 
-            const defaultDoc = defaultPrescribingDoctor;
             const minBlockCount = Math.max(DRUG_CHART_MAR_BLOCKS_PER_PAGE, (1 + manualExtraDrugPages) * DRUG_CHART_MAR_BLOCKS_PER_PAGE);
             while (blocks.length < minBlockCount) {
                 blocks.push({
                     _id: null,
                     orderId: null,
                     medicineName: '',
-                    startDate: todayDateDisplay(),
-                    route: 'Oral',
+                    startDate: '',
+                    route: '',
                     dose: '',
-                    doctorName: defaultDoc,
-                    status: 'ACTIVE',
+                    doctorName: '',
+                    status: '',
                     instructions: '',
                     isNew: true
                 });
@@ -642,17 +643,16 @@ const IPDClinicalChartsModal = ({
         setDirtyDrugChart(true);
         setEditableStatRows(prev => {
             const copy = prev.filter((_, idx) => idx !== rIdx);
-            const defaultDoc = defaultPrescribingDoctor;
             while (copy.length < DRUG_CHART_STAT_ROWS_PER_PAGE) {
                 copy.push({
                     _id: null,
-                    date: todayDateDisplay(),
-                    time: nowTime12h(),
+                    date: '',
+                    time: '',
                     drugName: '',
                     dose: '',
-                    route: 'IV',
-                    doctorName: defaultDoc,
-                    givenByName: !isDoctorUser ? (user?.name || '') : '',
+                    route: '',
+                    doctorName: '',
+                    givenByName: '',
                     checkedByName: '',
                     remarks: '',
                     status: 'PENDING',
@@ -671,17 +671,16 @@ const IPDClinicalChartsModal = ({
         setDirtyDrugChart(true);
         setEditableIvRows(prev => {
             const copy = prev.filter((_, idx) => idx !== rIdx);
-            const defaultDoc = defaultPrescribingDoctor;
             while (copy.length < DRUG_CHART_IV_ROWS_PER_PAGE) {
                 copy.push({
                     _id: null,
-                    date: todayDateDisplay(),
+                    date: '',
                     fluidName: '',
                     volume: '',
-                    timeStart: nowTime12h(),
+                    timeStart: '',
                     infusionTimeHrs: '',
-                    doctorName: defaultDoc,
-                    adminByName: !isDoctorUser ? (user?.name || '') : '',
+                    doctorName: '',
+                    adminByName: '',
                     remarks: '',
                     status: 'PENDING',
                     isNew: true
@@ -715,15 +714,14 @@ const IPDClinicalChartsModal = ({
             // Draft block: reset back to empty
             setEditableMedBlocks(prev => {
                 const copy = [...prev];
-                const defaultDoc = defaultPrescribingDoctor;
                 copy[bIdx] = {
                     _id: null,
                     orderId: null,
                     medicineName: '',
-                    startDate: todayDateDisplay(),
-                    route: 'Oral',
+                    startDate: '',
+                    route: '',
                     dose: '',
-                    doctorName: defaultDoc,
+                    doctorName: '',
                     status: 'ACTIVE',
                     instructions: '',
                     isNew: true
@@ -782,17 +780,21 @@ const IPDClinicalChartsModal = ({
                 discontinuedOrderIds
             };
             const res = await ipdClinicalAPI.updateDrugChart(effectiveAdmissionId, payload);
-            if (res?.drugChart) {
-                setDrugChart(res.drugChart);
+            if (res?.drugChart || res?.success) {
+                if (res.drugChart) setDrugChart(res.drugChart);
                 setDirtyDrugChart(false);
                 setDeletedStatIds([]);
                 setDeletedIvIds([]);
                 setDiscontinuedOrderIds([]);
-                toast.success('Drug Chart (STAT, IV Fluids, Regular Orders & Allergies) saved successfully');
+                setLastSavedDrugChartTime(new Date());
+                toast.success('Drug Chart saved successfully.');
                 await loadAllData();
+            } else {
+                throw new Error(res?.message || 'Save failed — please retry');
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || err.message || 'Failed to save Drug Chart');
+            console.error('Save drug chart error:', err);
+            toast.error(err.response?.data?.message || err.message || 'Save failed — please retry');
         } finally {
             setSavingDrugChart(false);
         }
@@ -925,29 +927,37 @@ const IPDClinicalChartsModal = ({
             // 1. Create all newly written notes
             const newEntries = progressNotes.filter(n => n.isNew && n.note && n.note.trim());
             for (const n of newEntries) {
-                await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
+                const res = await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
                     recordedAt: n.recordedAt || new Date().toISOString(),
                     sheetNo: n.sheetNo || '1',
                     note: n.note.trim()
                 });
+                if (!res || !res.success) {
+                    throw new Error(res?.message || 'Failed to save new progress note');
+                }
             }
 
             // 2. Update modified existing notes
             const modifiedEntries = progressNotes.filter(n => !n.isNew && n._id && n.note);
             for (const n of modifiedEntries) {
-                await ipdClinicalAPI.updateProgressNote(effectiveAdmissionId, n._id, {
+                const res = await ipdClinicalAPI.updateProgressNote(effectiveAdmissionId, n._id, {
                     note: n.note.trim(),
                     recordedAt: n.recordedAt,
                     sheetNo: n.sheetNo || '1',
                     editReason: 'Inline clinical documentation update'
-                }).catch(() => null);
+                });
+                if (!res || !res.success) {
+                    throw new Error(res?.message || `Failed to update progress note ${n._id}`);
+                }
             }
 
             setDirtyNotes(false);
-            toast.success('Clinical progress notes saved successfully');
+            setLastSavedProgressTime(new Date());
+            toast.success('Clinical Progress Notes saved successfully.');
             await loadAllData();
         } catch (err) {
-            toast.error(err.response?.data?.message || err.message || 'Failed to save notes');
+            console.error('Save progress notes error:', err);
+            toast.error(err.response?.data?.message || err.message || 'Save failed — please retry');
         } finally {
             setSavingProgress(false);
         }
@@ -1349,39 +1359,45 @@ const IPDClinicalChartsModal = ({
     const hospName = hospitalObj.name || hospitalObj.appName || 'Hospital';
 
     const renderPatientStrip = () => {
-        const totalChars =
-            String(ptDetails.name || '').length +
-            String(ptDetails.uhid || '').length +
-            String(ptDetails.ipdNumber || '').length +
-            String(ptDetails.gender || '').length +
-            String(ptDetails.age || '').length;
-        const dynamicFontPx = totalChars > 72 ? 10 : totalChars > 56 ? 11 : 12.2;
         return (
-            <div className="ipdc-banner dc-p2-banner" style={{ fontSize: `${dynamicFontPx}px` }}>
-                <span>Patient Name : {ptDetails.name}</span>
-                <span>UHID : {ptDetails.uhid}</span>
-                <span>IPD : {ptDetails.ipdNumber}</span>
-                <span>Gender : {ptDetails.gender}</span>
-                <span>Age : {ptDetails.age}</span>
+            <div className="ipdc-banner dc-p2-banner">
+                <span>Patient Name : {ptDetails.name || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>MRN : {ptDetails.uhid || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>IPD : {ptDetails.ipdNumber || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Age : {ptDetails.age || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Sex : {ptDetails.gender || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>DOA : {headerData.doa || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Ward/Bed : {headerData.wardBed || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Consultant : {headerData.consultant || '—'}</span>
             </div>
         );
     };
 
     const renderDrugPage2PatientStrip = () => {
-        const totalChars =
-            String(ptDetails.name || '').length +
-            String(ptDetails.uhid || '').length +
-            String(ptDetails.ipdNumber || '').length +
-            String(ptDetails.gender || '').length +
-            String(ptDetails.age || '').length;
-        const dynamicFontPx = totalChars > 72 ? 10 : totalChars > 56 ? 11 : 12.2;
         return (
-            <div className="ipdc-banner dc-p2-banner" style={{ fontSize: `${dynamicFontPx}px` }}>
-                <span>Patient Name : {ptDetails.name}</span>
-                <span>UHID : {ptDetails.uhid}</span>
-                <span>IPD : {ptDetails.ipdNumber}</span>
-                <span>Gender : {ptDetails.gender}</span>
-                <span>Age : {ptDetails.age}</span>
+            <div className="ipdc-banner dc-p2-banner">
+                <span>Patient Name : {ptDetails.name || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>MRN : {ptDetails.uhid || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>IPD : {ptDetails.ipdNumber || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Age : {ptDetails.age || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Sex : {ptDetails.gender || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>DOA : {headerData.doa || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Ward/Bed : {headerData.wardBed || '—'}</span>
+                <span className="ipdc-sep">|</span>
+                <span>Consultant : {headerData.consultant || '—'}</span>
             </div>
         );
     };
@@ -1502,18 +1518,7 @@ const IPDClinicalChartsModal = ({
                     </div>
                 </div>
 
-                {/* ── Accessible Patient Summary Bar ── */}
-                {!isBlank && (
-                    <div className="ipdc-quick-pt-bar">
-                        <span><strong>Patient:</strong> {ptDetails.name}</span>
-                        <span><strong>UHID:</strong> {ptDetails.uhid}</span>
-                        <span><strong>IPD:</strong> {ptDetails.ipdNumber}</span>
-                        <span><strong>Age/Sex:</strong> {ptDetails.age} / {ptDetails.gender}</span>
-                        <span><strong>DOA:</strong> {headerData.doa || '—'}</span>
-                        <span><strong>Ward/Bed:</strong> {headerData.wardBed || '—'}</span>
-                        <span><strong>Consultant:</strong> {headerData.consultant || '—'}</span>
-                    </div>
-                )}
+
 
                 {/* ── 2 Unified Clinical Document Tabs ── */}
                 <div className="ipdc-tabs">
@@ -1661,29 +1666,43 @@ const IPDClinicalChartsModal = ({
                             )}
 
                             {activeTab === 'progress_notes' && (
-                                <button
-                                    type="button"
-                                    className="ipdc-btn-save-inline"
-                                    onClick={handleSaveAllInline}
-                                    disabled={savingProgress || !dirtyNotes}
-                                    title="Save Clinical Progress Notes to database"
-                                >
-                                    <FiSave size={13} />
-                                    <span>{savingProgress ? 'Saving…' : dirtyNotes ? 'Save Changes ●' : 'Notes Saved'}</span>
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                    {lastSavedProgressTime && (
+                                        <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600 }}>
+                                            Saved {lastSavedProgressTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="ipdc-btn-save-inline"
+                                        onClick={handleSaveAllInline}
+                                        disabled={savingProgress || !dirtyNotes}
+                                        title="Save Clinical Progress Notes to database"
+                                    >
+                                        <FiSave size={13} />
+                                        <span>{savingProgress ? 'Saving…' : dirtyNotes ? 'Save Changes ●' : 'Notes Saved'}</span>
+                                    </button>
+                                </div>
                             )}
 
                             {activeTab === 'drug_chart' && (
-                                <button
-                                    type="button"
-                                    className="ipdc-btn-save-inline"
-                                    onClick={handleSaveDrugChartInline}
-                                    disabled={savingDrugChart || !dirtyDrugChart}
-                                    title="Save Drug Chart (STAT, IV Fluids & Allergies) to database"
-                                >
-                                    <FiSave size={13} />
-                                    <span>{savingDrugChart ? 'Saving…' : dirtyDrugChart ? 'Save Drug Chart ●' : 'Drug Chart Saved'}</span>
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                    {lastSavedDrugChartTime && (
+                                        <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600 }}>
+                                            Saved {lastSavedDrugChartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="ipdc-btn-save-inline"
+                                        onClick={handleSaveDrugChartInline}
+                                        disabled={savingDrugChart || !dirtyDrugChart}
+                                        title="Save Drug Chart (STAT, IV Fluids & Allergies) to database"
+                                    >
+                                        <FiSave size={13} />
+                                        <span>{savingDrugChart ? 'Saving…' : dirtyDrugChart ? 'Save Drug Chart ●' : 'Drug Chart Saved'}</span>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -1905,13 +1924,13 @@ const IPDClinicalChartsModal = ({
                                                     ...prev,
                                                     {
                                                         _id: null,
-                                                        date: todayDateDisplay(),
-                                                        time: nowTime12h(),
+                                                        date: '',
+                                                        time: '',
                                                         drugName: '',
                                                         dose: '',
-                                                        route: 'IV',
-                                                        doctorName: defaultPrescribingDoctor,
-                                                        givenByName: !isDoctorUser ? (user?.name || '') : '',
+                                                        route: '',
+                                                        doctorName: '',
+                                                        givenByName: '',
                                                         checkedByName: '',
                                                         remarks: '',
                                                         status: 'PENDING',
@@ -1974,7 +1993,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_drugName`] = el; }}
                                                                 className="dc-cell-input bold"
                                                                 value={s.drugName || ''}
-                                                                placeholder={rIdx === 0 && !s.drugName ? 'Click to prescribe drug…' : ''}
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'drugName', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_drugName`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'drugName')}
@@ -1998,7 +2016,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_dose`] = el; }}
                                                                 className="dc-cell-input c"
                                                                 value={s.dose || ''}
-                                                                placeholder="Dose"
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'dose', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_dose`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'dose')}
@@ -2022,7 +2039,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_route`] = el; }}
                                                                 className="dc-cell-input c"
                                                                 value={s.route || ''}
-                                                                placeholder="Route"
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'route', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_route`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'route')}
@@ -2049,7 +2065,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_doctorName`] = el; }}
                                                                 className="dc-cell-input"
                                                                 value={s.doctorName || ''}
-                                                                placeholder="Doctor"
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'doctorName', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_doctorName`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'doctorName')}
@@ -2076,7 +2091,6 @@ const IPDClinicalChartsModal = ({
                                                                         ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_givenByName`] = el; }}
                                                                         className="dc-cell-input"
                                                                         value={s.givenByName || ''}
-                                                                        placeholder="or type"
                                                                         onChange={(e) => handleStatCellChange(rIdx, 'givenByName', e.target.value)}
                                                                         onFocus={() => setActiveFocusedKey(`stat_${rIdx}_givenByName`)}
                                                                         onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'givenByName')}
@@ -2087,7 +2101,6 @@ const IPDClinicalChartsModal = ({
                                                                     ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_givenByName`] = el; }}
                                                                     className="dc-cell-input"
                                                                     value={s.givenByName || ''}
-                                                                    placeholder={s.drugName ? 'Given by…' : ''}
                                                                     onChange={(e) => handleStatCellChange(rIdx, 'givenByName', e.target.value)}
                                                                     onFocus={() => setActiveFocusedKey(`stat_${rIdx}_givenByName`)}
                                                                     onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'givenByName')}
@@ -2102,7 +2115,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_checkedByName`] = el; }}
                                                                 className="dc-cell-input"
                                                                 value={s.checkedByName || ''}
-                                                                placeholder={s.drugName ? 'Checked by…' : ''}
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'checkedByName', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_checkedByName`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'checkedByName')}
@@ -2116,7 +2128,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`stat_${rIdx}_remarks`] = el; }}
                                                                 className="dc-cell-input"
                                                                 value={s.remarks || ''}
-                                                                placeholder={s.drugName ? 'Remarks…' : ''}
                                                                 onChange={(e) => handleStatCellChange(rIdx, 'remarks', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`stat_${rIdx}_remarks`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'stat', rIdx, 'remarks')}
@@ -2163,12 +2174,12 @@ const IPDClinicalChartsModal = ({
                                                     ...prev,
                                                     {
                                                         _id: null,
-                                                        date: todayDateDisplay(),
+                                                        date: '',
                                                         fluidName: '',
                                                         volume: '',
-                                                        timeStart: nowTime12h(),
+                                                        timeStart: '',
                                                         infusionTimeHrs: '',
-                                                        doctorName: user?.name ? (isDoctorOrAdmin ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name) : '',
+                                                        doctorName: '',
                                                         adminByName: '',
                                                         remarks: '',
                                                         status: 'PENDING',
@@ -2231,7 +2242,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_fluidName`] = el; }}
                                                                 className="dc-cell-input bold"
                                                                 value={iv.fluidName || ''}
-                                                                placeholder={rIdx === 0 && !iv.fluidName ? 'Click to prescribe IV fluid…' : ''}
                                                                 onChange={(e) => handleIvCellChange(rIdx, 'fluidName', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`iv_${rIdx}_fluidName`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'fluidName')}
@@ -2255,7 +2265,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_volume`] = el; }}
                                                                 className="dc-cell-input c"
                                                                 value={iv.volume || ''}
-                                                                placeholder="500 ml"
                                                                 onChange={(e) => handleIvCellChange(rIdx, 'volume', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`iv_${rIdx}_volume`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'volume')}
@@ -2292,7 +2301,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_infusionTimeHrs`] = el; }}
                                                                 className="dc-cell-input c"
                                                                 value={iv.infusionTimeHrs || ''}
-                                                                placeholder="4 hrs"
                                                                 onChange={(e) => handleIvCellChange(rIdx, 'infusionTimeHrs', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`iv_${rIdx}_infusionTimeHrs`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'infusionTimeHrs')}
@@ -2306,7 +2314,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_doctorName`] = el; }}
                                                                 className="dc-cell-input"
                                                                 value={iv.doctorName || ''}
-                                                                placeholder="Doctor"
                                                                 onChange={(e) => handleIvCellChange(rIdx, 'doctorName', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`iv_${rIdx}_doctorName`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'doctorName')}
@@ -2333,7 +2340,6 @@ const IPDClinicalChartsModal = ({
                                                                         ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_adminByName`] = el; }}
                                                                         className="dc-cell-input"
                                                                         value={iv.adminByName || ''}
-                                                                        placeholder="or type"
                                                                         onChange={(e) => handleIvCellChange(rIdx, 'adminByName', e.target.value)}
                                                                         onFocus={() => setActiveFocusedKey(`iv_${rIdx}_adminByName`)}
                                                                         onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'adminByName')}
@@ -2344,7 +2350,6 @@ const IPDClinicalChartsModal = ({
                                                                     ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_adminByName`] = el; }}
                                                                     className="dc-cell-input"
                                                                     value={iv.adminByName || ''}
-                                                                    placeholder={iv.fluidName ? 'Admin. by…' : ''}
                                                                     onChange={(e) => handleIvCellChange(rIdx, 'adminByName', e.target.value)}
                                                                     onFocus={() => setActiveFocusedKey(`iv_${rIdx}_adminByName`)}
                                                                     onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'adminByName')}
@@ -2359,7 +2364,6 @@ const IPDClinicalChartsModal = ({
                                                                 ref={(el) => { if (el) inputsRef.current[`iv_${rIdx}_remarks`] = el; }}
                                                                 className="dc-cell-input"
                                                                 value={iv.remarks || ''}
-                                                                placeholder={iv.fluidName ? 'Remarks…' : ''}
                                                                 onChange={(e) => handleIvCellChange(rIdx, 'remarks', e.target.value)}
                                                                 onFocus={() => setActiveFocusedKey(`iv_${rIdx}_remarks`)}
                                                                 onKeyDown={(e) => handleCellNav(e, 'iv', rIdx, 'remarks')}
@@ -2486,7 +2490,6 @@ const IPDClinicalChartsModal = ({
                                                                         ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_name`] = el; }}
                                                                         className="dc-cell-input bold"
                                                                         value={blk.medicineName || ''}
-                                                                        placeholder={bIdx === 0 && !blk.medicineName ? 'Click to prescribe medication...' : 'Drug name...'}
                                                                         disabled={!isDoctorOrAdmin && blk.orderId}
                                                                         onChange={(e) => handleMedBlockChange(bIdx, 'medicineName', e.target.value)}
                                                                         onFocus={() => setActiveFocusedKey(`med_${bIdx}_name`)}
@@ -2575,7 +2578,6 @@ const IPDClinicalChartsModal = ({
                                                                     ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_date`] = el; }}
                                                                     className="dc-cell-input c"
                                                                     value={blk.startDate || ''}
-                                                                    placeholder="DD/MM/YYYY"
                                                                     disabled={!isDoctorOrAdmin && blk.orderId}
                                                                     onChange={(e) => handleMedBlockChange(bIdx, 'startDate', e.target.value)}
                                                                     onFocus={() => setActiveFocusedKey(`med_${bIdx}_date`)}
@@ -2586,7 +2588,6 @@ const IPDClinicalChartsModal = ({
                                                                     ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_route`] = el; }}
                                                                     className="dc-cell-input c"
                                                                     value={blk.route || ''}
-                                                                    placeholder="Route"
                                                                     disabled={!isDoctorOrAdmin && blk.orderId}
                                                                     onChange={(e) => handleMedBlockChange(bIdx, 'route', e.target.value)}
                                                                     onFocus={() => setActiveFocusedKey(`med_${bIdx}_route`)}
@@ -2598,7 +2599,6 @@ const IPDClinicalChartsModal = ({
                                                                         ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_dose`] = el; }}
                                                                         className="dc-cell-input c bold"
                                                                         value={blk.dose || ''}
-                                                                        placeholder="Dose"
                                                                         disabled={!isDoctorOrAdmin && blk.orderId}
                                                                         onChange={(e) => handleMedBlockChange(bIdx, 'dose', e.target.value)}
                                                                         onFocus={() => setActiveFocusedKey(`med_${bIdx}_dose`)}
@@ -2620,7 +2620,6 @@ const IPDClinicalChartsModal = ({
                                                                     ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_doctor`] = el; }}
                                                                     className="dc-cell-input"
                                                                     value={blk.doctorName || ''}
-                                                                    placeholder="Prescribed by"
                                                                     disabled={!isDoctorOrAdmin && blk.orderId}
                                                                     onChange={(e) => handleMedBlockChange(bIdx, 'doctorName', e.target.value)}
                                                                     onFocus={() => setActiveFocusedKey(`med_${bIdx}_doctor`)}
@@ -2695,7 +2694,6 @@ const IPDClinicalChartsModal = ({
                                                                                 ref={(el) => { if (el) inputsRef.current[`med_${bIdx}_name`] = el; }}
                                                                                 className="dc-cell-input bold"
                                                                                 value={blk.medicineName || ''}
-                                                                                placeholder="Drug name..."
                                                                                 disabled={!isDoctorOrAdmin && blk.orderId}
                                                                                 onChange={(e) => handleMedBlockChange(bIdx, 'medicineName', e.target.value)}
                                                                                 onFocus={() => setActiveFocusedKey(`med_${bIdx}_name`)}
@@ -2763,7 +2761,6 @@ const IPDClinicalChartsModal = ({
                                                                         <input
                                                                             className="dc-cell-input c"
                                                                             value={blk.startDate || ''}
-                                                                            placeholder="DD/MM/YYYY"
                                                                             disabled={!isDoctorOrAdmin && blk.orderId}
                                                                             onChange={(e) => handleMedBlockChange(bIdx, 'startDate', e.target.value)}
                                                                         />
@@ -2772,7 +2769,6 @@ const IPDClinicalChartsModal = ({
                                                                         <input
                                                                             className="dc-cell-input c"
                                                                             value={blk.route || ''}
-                                                                            placeholder="Route"
                                                                             disabled={!isDoctorOrAdmin && blk.orderId}
                                                                             onChange={(e) => handleMedBlockChange(bIdx, 'route', e.target.value)}
                                                                         />
@@ -2781,7 +2777,6 @@ const IPDClinicalChartsModal = ({
                                                                         <input
                                                                             className="dc-cell-input c bold"
                                                                             value={blk.dose || ''}
-                                                                            placeholder="Dose"
                                                                             disabled={!isDoctorOrAdmin && blk.orderId}
                                                                             onChange={(e) => handleMedBlockChange(bIdx, 'dose', e.target.value)}
                                                                         />
@@ -2790,7 +2785,6 @@ const IPDClinicalChartsModal = ({
                                                                         <input
                                                                             className="dc-cell-input"
                                                                             value={blk.doctorName || ''}
-                                                                            placeholder="Prescribed by"
                                                                             disabled={!isDoctorOrAdmin && blk.orderId}
                                                                             onChange={(e) => handleMedBlockChange(bIdx, 'doctorName', e.target.value)}
                                                                         />

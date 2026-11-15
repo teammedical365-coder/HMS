@@ -2342,8 +2342,8 @@ router.post('/admissions/:admissionId/progress-notes', verifyToken, resolveTenan
     }
 });
 
-// PATCH /api/ipd-clinical/admissions/:admissionId/progress-notes/:noteId
-router.patch('/admissions/:admissionId/progress-notes/:noteId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+// PATCH or PUT /api/ipd-clinical/admissions/:admissionId/progress-notes/:noteId
+const handleUpdateProgressNote = async (req, res) => {
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId, noteId } = req.params;
@@ -2368,9 +2368,9 @@ router.patch('/admissions/:admissionId/progress-notes/:noteId', verifyToken, res
         const actorRole = req.user._roleData?.name || req.user.role || 'Staff';
         const sanitizedRole = getUserRole(req);
 
-        // Edit permission: original author, Doctors, Head Nurses, or Hospital/Central/Super Admins
+        // Edit permission: original author, Doctors, Nurses, or Hospital/Central/Super Admins
         const isAuthor = noteDoc.authorId && String(noteDoc.authorId) === String(actorId);
-        const canEditOthers = isDoctorOrAdminRole(req) || sanitizedRole === 'headnurse';
+        const canEditOthers = isDoctorOrAdminRole(req) || ['headnurse', 'nurse', 'staffnurse', 'doctorassistant'].includes(sanitizedRole);
         if (!isAuthor && !canEditOthers) {
             return res.status(403).json({
                 success: false,
@@ -2440,7 +2440,10 @@ router.patch('/admissions/:admissionId/progress-notes/:noteId', verifyToken, res
         console.error('Edit progress note error:', err);
         res.status(500).json({ success: false, message: 'Error updating progress note' });
     }
-});
+};
+
+router.patch('/admissions/:admissionId/progress-notes/:noteId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, handleUpdateProgressNote);
+router.put('/admissions/:admissionId/progress-notes/:noteId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, handleUpdateProgressNote);
 
 // ============================================================================
 // SECTION J: 2-PAGE IPD DRUG CHART (ALLERGY, STAT, IV FLUIDS & MAR GRID)

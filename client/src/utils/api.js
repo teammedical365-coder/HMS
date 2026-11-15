@@ -1684,6 +1684,7 @@ export const ipdClinicalAPI = {
     getProgressNotes: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`)).data,
     addProgressNote: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`, data)).data,
     editProgressNote: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/progress-notes/${noteId}`, data)).data,
+    updateProgressNote: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/progress-notes/${noteId}`, data)).data,
 
     // Exact 2-Page IPD Drug Chart (Allergies, STAT Doses, IV Fluids & MAR Grid)
     getDrugChart: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/drug-chart`)).data,
