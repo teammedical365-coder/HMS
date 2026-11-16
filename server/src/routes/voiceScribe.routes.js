@@ -16,13 +16,36 @@ const upload = multer({
     }
 });
 
-// All routes require authentication + doctor-level permissions
+const CLINICAL_VOICE_PERMS = [
+    'visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats',
+    'emr_access', 'reception_access', 'nurse_access', 'nurse_dashboard',
+    'doctor_assistant_access', 'resident_access', 'clinical_manage', 'ipd_access', '*'
+];
+
+const CLINICAL_ROLES = [
+    'nurse', 'staffnurse', 'headnurse', 'doctor', 'clinicdoctor', 'clinic doctor', 'surgeon',
+    'consultant', 'physician', 'doctorassistant', 'doctor assistant', 'doctor_assistant', 'assistant',
+    'clinicalassistant', 'clinical assistant', 'resident', 'residentdoctor', 'resident doctor',
+    'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
+];
+
+const requireClinicalAccess = (req, res, next) => {
+    const rawRole = req.user?._roleData?.name || req.user?.role || '';
+    const normRole = String(rawRole).toLowerCase().replace(/[\s_-]+/g, '');
+    const userPerms = req.user?._roleData?.permissions || [];
+    if (CLINICAL_ROLES.some(r => r.replace(/[\s_-]+/g, '') === normRole) || userPerms.includes('*') || CLINICAL_VOICE_PERMS.some(p => userPerms.includes(p))) {
+        return next();
+    }
+    return res.status(403).json({ success: false, message: 'Clinical authorization required for Voice Scribe' });
+};
+
+// All routes require authentication + clinical-level permissions
 router.use(verifyToken);
 
 // ── POST /api/voice-scribe/analyze ─────────────────────────────────────────────
 // Upload audio → transcribe via Gemini → return structured clinical analysis
 router.post('/analyze',
-    requirePermission('visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats', 'emr_access', 'reception_access'),
+    requireClinicalAccess,
     (req, res, next) => {
         const ct = req.headers['content-type'] || '';
         if (ct.includes('multipart/form-data')) {
@@ -52,16 +75,17 @@ router.post('/analyze',
                 }
             }
 
-            if (!audioBase64) {
+            const liveTranscript = (req.body?.liveTranscript || '').trim();
+
+            if (!audioBase64 && !liveTranscript) {
                 return res.status(400).json({
                     success: false,
-                    message: 'No audio data received. Please ensure your microphone is working and try recording again.'
+                    message: 'No audio data or consultation speech received. Please ensure your microphone is working and try recording again.'
                 });
             }
 
             const mimeType = req.body?.mimeType || req.file?.mimetype || 'audio/webm';
             const outputLanguage = req.body?.outputLanguage || 'English';
-            const liveTranscript = req.body?.liveTranscript || '';
 
             const userContext = {
                 hospitalId: req.user?.hospitalId,
@@ -97,7 +121,7 @@ router.post('/analyze',
 // ── POST /api/voice-scribe/save-draft ──────────────────────────────────────────
 // Save a draft voice scribe session (before doctor approval)
 router.post('/save-draft',
-    requirePermission('visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats', 'emr_access', 'reception_access'),
+    requireClinicalAccess,
     async (req, res) => {
         try {
             const hospitalId = req.user.hospitalId;
@@ -159,7 +183,7 @@ router.post('/save-draft',
 // ── PUT /api/voice-scribe/:id/approve ──────────────────────────────────────────
 // Doctor approves the AI-generated note → merge into appointment record
 router.put('/:id/approve',
-    requirePermission('visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats', 'emr_access', 'reception_access'),
+    requireClinicalAccess,
     async (req, res) => {
         try {
             const hospitalId = req.user.hospitalId;
@@ -273,7 +297,7 @@ router.put('/:id/approve',
 // ── PUT /api/voice-scribe/:id/discard ──────────────────────────────────────────
 // Doctor discards the AI-generated note
 router.put('/:id/discard',
-    requirePermission('visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats', 'emr_access', 'reception_access'),
+    requireClinicalAccess,
     async (req, res) => {
         try {
             const hospitalId = req.user.hospitalId;
@@ -319,7 +343,7 @@ router.put('/:id/discard',
 // ── GET /api/voice-scribe/appointment/:appointmentId ───────────────────────────
 // Get the voice scribe session for a specific appointment
 router.get('/appointment/:appointmentId',
-    requirePermission('visit_diagnose', 'doctor_dashboard', 'admin_manage_roles', 'admin_view_stats', 'emr_access', 'reception_access'),
+    requireClinicalAccess,
     async (req, res) => {
         try {
             const hospitalId = req.user.hospitalId;

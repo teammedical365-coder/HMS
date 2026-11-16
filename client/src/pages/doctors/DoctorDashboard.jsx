@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/hooks';
-import { doctorAPI } from '../../utils/api';
+import { doctorAPI, admissionAPI } from '../../utils/api';
 import { 
     FiUsers, FiActivity, FiFileText, FiHeart, FiLock, 
-    FiZap, FiPackage, FiClipboard, FiCheckCircle, FiCpu
+    FiZap, FiPackage, FiClipboard, FiCheckCircle, FiCpu,
+    FiChevronRight, FiLayers
 } from 'react-icons/fi';
 import { FaFlask, FaCapsules, FaStethoscope } from 'react-icons/fa';
 import './DoctorDashboard.css';
@@ -22,6 +23,7 @@ const DoctorDashboard = () => {
 
     const user = authUser || localUser || {};
     const [stats, setStats] = useState({ today: 0, pending: 0, completed: 0, total: 0 });
+    const [activeAdmissions, setActiveAdmissions] = useState([]);
     const [loading, setLoading] = useState(false);
 
     // Time-based greeting (Morning, Afternoon, Evening)
@@ -39,32 +41,45 @@ const DoctorDashboard = () => {
     }, [user.name]);
 
     useEffect(() => {
+        let isMounted = true;
         const fetchDoctorStats = async () => {
             try {
                 setLoading(true);
-                const aptRes = await doctorAPI.getAppointments();
-                if (aptRes?.success) {
-                    const apts = aptRes.appointments || [];
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const todayApts = apts.filter(a => a.appointmentDate && String(a.appointmentDate).startsWith(todayStr));
-                    const pendingApts = apts.filter(a => ['pending', 'confirmed', 'scheduled', 'in_progress'].includes(a.status));
-                    const completedApts = apts.filter(a => a.status === 'completed');
+                const [aptRes, admRes] = await Promise.all([
+                    doctorAPI.getAppointments().catch(() => null),
+                    admissionAPI.getActiveAdmissions().catch(() => null)
+                ]);
 
-                    setStats({
-                        today: todayApts.length,
-                        pending: pendingApts.length,
-                        completed: completedApts.length,
-                        total: apts.length
-                    });
+                if (isMounted) {
+                    if (aptRes?.success) {
+                        const apts = Array.isArray(aptRes.appointments) ? aptRes.appointments : [];
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const todayApts = apts.filter(a => a.appointmentDate && String(a.appointmentDate).startsWith(todayStr));
+                        const pendingApts = apts.filter(a => ['pending', 'confirmed', 'scheduled', 'in_progress'].includes(a.status));
+                        const completedApts = apts.filter(a => a.status === 'completed');
+
+                        setStats({
+                            today: todayApts.length,
+                            pending: pendingApts.length,
+                            completed: completedApts.length,
+                            total: apts.length
+                        });
+                    }
+
+                    if (admRes) {
+                        const list = admRes.admissions || admRes.data || (Array.isArray(admRes) ? admRes : []);
+                        setActiveAdmissions(list);
+                    }
                 }
             } catch (err) {
-                console.error("Error fetching doctor stats:", err);
+                console.warn("Could not load doctor stats or active admissions:", err?.message || err);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
             }
         };
 
         fetchDoctorStats();
+        return () => { isMounted = false; };
     }, []);
 
     // Non-clickable display-only permission items
@@ -110,6 +125,13 @@ const DoctorDashboard = () => {
             icon: <FaCapsules />,
             iconBg: '#fdf2f8',
             iconColor: '#db2777'
+        },
+        {
+            id: 'ipd_charts_view',
+            title: 'IPD Clinical Records & Charts',
+            icon: <FiActivity />,
+            iconBg: '#e0f2fe',
+            iconColor: '#0284c7'
         }
     ];
 
@@ -177,6 +199,31 @@ const DoctorDashboard = () => {
                         </div>
 
                         <div 
+                            className="doc-quick-access-card doc-quick-ipd-card" 
+                            onClick={() => navigate('/doctor/ipd-patients')}
+                            title="Click to access Admitted IPD Patients & Clinical Charts"
+                        >
+                            <div className="doc-quick-left">
+                                <div className="doc-quick-icon-wrapper doc-ipd-icon-wrap">
+                                    <FiActivity className="doc-quick-icon" />
+                                </div>
+                                <div className="doc-quick-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h3 className="doc-quick-title">IPD Clinical Records</h3>
+                                        <span className="doc-quick-ipd-badge">
+                                            🏥 {activeAdmissions.length} ADMITTED
+                                        </span>
+                                    </div>
+                                    <p className="doc-quick-desc">ICU charts, TPR vitals, progress notes, MAR & drug charts</p>
+                                </div>
+                            </div>
+
+                            <div className="doc-quick-art-wrapper doc-quick-ipd-art">
+                                <div className="doc-quick-ipd-pulse"></div>
+                            </div>
+                        </div>
+
+                        <div 
                             className="doc-quick-access-card doc-quick-ai-card" 
                             onClick={() => navigate('/doctor/ai-assistant')}
                             title="Click to launch AI Clinical Assistant"
@@ -199,6 +246,136 @@ const DoctorDashboard = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* ACTIVE IPD PATIENTS (HOSPITALIZED) */}
+                <div className="doc-section-block">
+                    <div className="doc-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <FiActivity className="doc-section-icon" />
+                            <h2>ACTIVE IPD PATIENTS ({activeAdmissions.length})</h2>
+                        </div>
+                        <button 
+                            type="button" 
+                            className="doc-ipd-view-all-btn"
+                            onClick={() => navigate('/doctor/ipd-patients')}
+                        >
+                            <span>View All IPD Records</span>
+                            <FiChevronRight size={14} />
+                        </button>
+                    </div>
+
+                    {activeAdmissions.length === 0 ? (
+                        <div className="doc-empty-ipd-card">
+                            <FiCheckCircle size={24} color="#059669" />
+                            <span>No patients currently admitted under your hospital/ward.</span>
+                            <button 
+                                type="button" 
+                                className="doc-ipd-open-dir-btn"
+                                onClick={() => navigate('/doctor/ipd-patients')}
+                            >
+                                Open IPD Directory
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="doc-ipd-mini-grid">
+                            {activeAdmissions.slice(0, 4).map((adm) => {
+                                const pt = adm.patientId || {};
+                                const name = pt.name || adm.patientName || 'Patient';
+                                const uhid = pt.uhid || adm.uhid || '—';
+                                const ipdNo = adm.admissionNumber || adm.ipdNumber || '—';
+                                const ward = adm.ward || adm.bed?.ward || 'General';
+                                const bed = adm.bedNumber || adm.bed?.bedNumber || '—';
+                                const isICU = /icu|ccu|nicu|picu/i.test(`${ward} ${bed}`);
+
+                                return (
+                                    <div 
+                                        key={adm._id} 
+                                        className={`doc-ipd-card ${isICU ? 'icu-accent' : ''}`}
+                                        onClick={() => navigate(`/doctor/ipd/patient/${adm._id}`)}
+                                    >
+                                        <div className="doc-ipd-card-head">
+                                            <div className="doc-ipd-head-left">
+                                                <h4 className="doc-ipd-name">{name}</h4>
+                                                <div className="doc-ipd-meta-row">
+                                                    <span>UHID: <strong>{uhid}</strong></span>
+                                                    <span>•</span>
+                                                    <span>IPD: <strong>{ipdNo}</strong></span>
+                                                </div>
+                                            </div>
+                                            {isICU ? (
+                                                <span className="doc-ipd-pill-badge icu-badge">ICU</span>
+                                            ) : (
+                                                <span className="doc-ipd-pill-badge">Admitted</span>
+                                            )}
+                                        </div>
+
+                                        <div className="doc-ipd-loc-row">
+                                            <span className="doc-ipd-ward-box">{ward} • Bed {bed}</span>
+                                            <span className="doc-ipd-diag-text" title={adm.diagnosis || 'Active Inpatient'}>
+                                                {adm.diagnosis || 'Active Inpatient'}
+                                            </span>
+                                        </div>
+
+                                        <div className="doc-ipd-card-btns">
+                                            <button 
+                                                type="button" 
+                                                className="doc-ipd-btn-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/doctor/ipd/patient/${adm._id}?tab=tpr_vitals`);
+                                                }}
+                                            >
+                                                TPR Vitals
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="doc-ipd-btn-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/doctor/ipd/patient/${adm._id}?tab=progress_notes`);
+                                                }}
+                                            >
+                                                Progress
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="doc-ipd-btn-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/doctor/ipd/patient/${adm._id}?tab=drug_chart`);
+                                                }}
+                                            >
+                                                Drug Chart
+                                            </button>
+                                            {isICU && (
+                                                <button 
+                                                    type="button" 
+                                                    className="doc-ipd-btn-sm icu-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigate(`/doctor/ipd/patient/${adm._id}?tab=icu_chart`);
+                                                    }}
+                                                >
+                                                    ICU Chart
+                                                </button>
+                                            )}
+                                            <button 
+                                                type="button" 
+                                                className="doc-ipd-btn-open"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/doctor/ipd/patient/${adm._id}`);
+                                                }}
+                                            >
+                                                Clinical Workspace &rarr;
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 {/* 3. YOUR PERMISSIONS SECTION (Display-Only / Non-Clickable Badges) */}

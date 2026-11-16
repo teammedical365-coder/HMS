@@ -1,0 +1,341 @@
+.icu-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.icu-modal-container {
+    background: #ffffff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 1320px;
+    max-height: 96vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    animation: icuFadeIn 0.2s ease-out;
+}
+
+@keyframes icuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.icu-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.icu-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.icu-header-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.icu-header-badge {
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+}
+
+.icu-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.icu-date-picker-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: #334155;
+    font-weight: 600;
+}
+
+.icu-date-picker-wrap input {
+    border: none;
+    outline: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    background: transparent;
+    cursor: pointer;
+}
+
+.icu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.icu-btn-download {
+    background: #0d9488;
+    color: #ffffff;
+}
+
+.icu-btn-download:hover:not(:disabled) {
+    background: #0f766e;
+}
+
+.icu-btn-print {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.icu-btn-print:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.icu-btn-scribe {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+    font-weight: 600;
+}
+
+.icu-btn-scribe:hover:not(:disabled) {
+    background: #dbeafe;
+    border-color: #60a5fa;
+}
+
+.icu-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.icu-btn-close {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.icu-btn-close:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.icu-subbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 24px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 12.5px;
+    color: #475569;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.icu-patient-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.icu-patient-summary strong {
+    color: #0f172a;
+}
+
+.icu-stream-stats {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.icu-stat-pill {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.icu-stat-pill.active {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.icu-nav-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 24px 0 24px;
+    background: #f8fafc;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+.icu-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.icu-tab-btn:hover {
+    color: #0f172a;
+}
+
+.icu-tab-btn.active {
+    color: #0284c7;
+    border-bottom-color: #0284c7;
+    background: #ffffff;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.icu-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 24px;
+    background: #475569;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.icu-sheet-container {
+    width: 100%;
+    max-width: 1200px;
+    background: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    margin-bottom: 24px;
+}
+
+.icu-sheet-header-label {
+    background: #0f172a;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.icu-sheet-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1600 / 1324;
+    background: #ffffff;
+    display: block;
+}
+
+.icu-sheet-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    display: block;
+    user-select: none;
+    pointer-events: none;
+}
+
+.icu-sheet-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+}
+
+.icu-loading-overlay {
+    padding: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 15px;
+    gap: 12px;
+}
+
+.icu-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #38bdf8;
+    border-radius: 50%;
+    animation: icuSpin 0.8s linear infinite;
+}
+
+@keyframes icuSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}

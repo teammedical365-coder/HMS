@@ -1,0 +1,584 @@
+/* Doctor IPD Patients Directory Styles */
+.doc-ipd-container {
+    padding: 24px;
+    background: #f8fafc;
+    min-height: calc(100vh - 70px);
+    box-sizing: border-box;
+}
+
+/* Header Banner */
+.doc-ipd-header-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 16px;
+    padding: 24px 28px;
+    color: #ffffff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-title-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.doc-ipd-icon-circle {
+    width: 52px;
+    height: 52px;
+    background: rgba(2, 132, 199, 0.2);
+    border: 1.5px solid rgba(56, 189, 248, 0.4);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #38bdf8;
+    flex-shrink: 0;
+}
+
+.doc-ipd-main-title {
+    margin: 0 0 6px 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+}
+
+.doc-ipd-subtitle {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #94a3b8;
+    max-width: 680px;
+    line-height: 1.45;
+}
+
+.doc-ipd-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.doc-ipd-refresh-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+.doc-ipd-refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinning {
+    animation: docIpdSpin 1s linear infinite;
+}
+
+@keyframes docIpdSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Metric Cards */
+.doc-ipd-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.doc-ipd-metric-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.doc-ipd-metric-card:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 14px -3px rgba(0, 0, 0, 0.06);
+}
+
+.doc-ipd-metric-card.critical {
+    border-left: 4px solid #ef4444;
+}
+
+.doc-ipd-metric-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.doc-ipd-metric-icon.blue {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.doc-ipd-metric-icon.red {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.doc-ipd-metric-icon.emerald {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.doc-ipd-metric-icon.purple {
+    background: #f3e8ff;
+    color: #7c3aed;
+}
+
+.doc-ipd-metric-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.doc-ipd-metric-val {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+
+.doc-ipd-metric-lbl {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+.doc-ipd-mini-badge.red {
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.03em;
+}
+
+/* Toolbar */
+.doc-ipd-toolbar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-search-box {
+    position: relative;
+    flex: 1;
+    min-width: 260px;
+}
+
+.doc-ipd-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+.doc-ipd-search-box input {
+    width: 100%;
+    padding: 9px 36px 9px 38px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: #0f172a;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.doc-ipd-search-box input:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.doc-ipd-clear-search {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.doc-ipd-ward-tabs {
+    display: flex;
+    gap: 6px;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.doc-ipd-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.doc-ipd-tab-btn.active {
+    background: #ffffff;
+    color: #0284c7;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Patients Grid */
+.doc-ipd-patient-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+}
+
+.doc-ipd-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.doc-ipd-card:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.08);
+    transform: translateY(-2px);
+}
+
+.doc-ipd-card.is-icu-card {
+    border-color: #fca5a5;
+    background: linear-gradient(180deg, #fffbfb 0%, #ffffff 40%);
+}
+
+.doc-ipd-card.is-icu-card:hover {
+    border-color: #ef4444;
+}
+
+.doc-ipd-card-header {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.doc-ipd-pt-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.doc-ipd-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.doc-ipd-card.is-icu-card .doc-ipd-avatar {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+}
+
+.doc-ipd-pt-name {
+    margin: 0 0 4px 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.doc-ipd-demographics-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: #64748b;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-mrn-badge {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.doc-ipd-ipd-badge {
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+.doc-ipd-location-pills {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.doc-ipd-ward-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.doc-ipd-bed-pill {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.doc-ipd-ward-pill.icu,
+.doc-ipd-bed-pill.icu {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+}
+
+.doc-ipd-icu-badge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    background: #dc2626;
+    color: #ffffff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    animation: icuPulse 2s infinite;
+}
+
+@keyframes icuPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+}
+
+/* Card Body */
+.doc-ipd-card-body {
+    padding: 14px 20px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.doc-ipd-info-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.doc-ipd-lbl {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.doc-ipd-val {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+.doc-ipd-val.diagnosis-text {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.doc-ipd-vitals-strip {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-v-pill {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.doc-ipd-v-pill.warn {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+
+/* Quick Docs Bar */
+.doc-ipd-quick-docs-bar {
+    padding: 10px 20px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.doc-ipd-mini-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #334155;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.doc-ipd-mini-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.doc-ipd-mini-btn.icu-btn {
+    border-color: #f87171;
+    background: #fff5f5;
+    color: #b91c1c;
+}
+
+.doc-ipd-mini-btn.icu-btn:hover {
+    background: #fee2e2;
+}
+
+/* Card Footer */
+.doc-ipd-card-footer {
+    padding: 12px 20px 16px;
+}
+
+.doc-ipd-open-btn {
+    width: 100%;
+    background: #0284c7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s ease;
+    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
+}
+
+.doc-ipd-open-btn:hover {
+    background: #0369a1;
+}
+
+.doc-ipd-card.is-icu-card .doc-ipd-open-btn {
+    background: #dc2626;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+}
+
+.doc-ipd-card.is-icu-card .doc-ipd-open-btn:hover {
+    background: #b91c1c;
+}
+
+/* Empty & Loading States */
+.doc-ipd-loading-state,
+.doc-ipd-empty-state {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 60px 24px;
+    text-align: center;
+    color: #64748b;
+}
+
+.doc-ipd-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.doc-ipd-empty-state h3 {
+    margin: 0 0 6px 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.doc-ipd-empty-state p {
+    margin: 0 auto;
+    max-width: 480px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+

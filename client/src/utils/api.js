@@ -1684,16 +1684,23 @@ export const ipdClinicalAPI = {
     getProgressNotes: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`)).data,
     addProgressNote: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/progress-notes`, data)).data,
     editProgressNote: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/progress-notes/${noteId}`, data)).data,
+    updateProgressNote: async (admissionId, noteId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/progress-notes/${noteId}`, data)).data,
 
     // Exact 2-Page IPD Drug Chart (Allergies, STAT Doses, IV Fluids & MAR Grid)
     getDrugChart: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/drug-chart`)).data,
+    updateDrugChart: async (admissionId, data) => (await apiClient.put(`/api/ipd-clinical/admissions/${admissionId}/drug-chart`, data)).data,
     saveDrugChartAllergies: async (admissionId, data) => (await apiClient.put(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/allergies`, data)).data,
     addDrugChartStatDose: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/stat-doses`, data)).data,
     updateDrugChartStatDose: async (admissionId, entryId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/stat-doses/${entryId}`, data)).data,
+    deleteDrugChartStatDose: async (admissionId, entryId) => (await apiClient.delete(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/stat-doses/${entryId}`)).data,
     addDrugChartIVFluid: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/iv-fluids`, data)).data,
     updateDrugChartIVFluid: async (admissionId, entryId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/iv-fluids/${entryId}`, data)).data,
+    deleteDrugChartIVFluid: async (admissionId, entryId) => (await apiClient.delete(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/iv-fluids/${entryId}`)).data,
     administerDrugChartMAR: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/mar-administer`, data)).data,
     correctDrugChartMAR: async (admissionId, marId, data) => (await apiClient.patch(`/api/ipd-clinical/admissions/${admissionId}/drug-chart/mar/${marId}/correct`, data)).data,
+
+    // Exact 2-Page ICU Daily Observation Chart (Auto-Populated from Existing Clinical Streams)
+    getICUChart: async (admissionId, params = {}) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/icu-chart`, { params })).data,
 };
 
 // ── IPD Nursing Workflow APIs ──

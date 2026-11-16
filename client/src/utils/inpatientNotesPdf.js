@@ -53,7 +53,10 @@ export const buildDefaultClinicalNoteState = ({
             provisionalDiagnosis: '',
             investigations: '',
             dischargeAndFollowUp: '',
-            footer: { consultantName: '', signature: '', signDate: '', signTime: '' }
+            footer: { consultantName: '', signature: '', signDate: '', signTime: '' },
+            continuationPages: [],
+            handwritingStrokes: { page1: [], page2: [] },
+            aiScribeSessions: []
         };
     }
 
@@ -116,7 +119,10 @@ export const buildDefaultClinicalNoteState = ({
             signature: savedFoot.signature || '',
             signDate: savedFoot.signDate || '',
             signTime: savedFoot.signTime || ''
-        }
+        },
+        continuationPages: Array.isArray(saved.continuationPages) ? saved.continuationPages : [],
+        handwritingStrokes: saved.handwritingStrokes || { page1: [], page2: [] },
+        aiScribeSessions: Array.isArray(saved.aiScribeSessions) ? saved.aiScribeSessions : []
     };
 };
 
@@ -403,6 +409,38 @@ export const downloadInpatientClinicalNotesPdf = async ({
         lineHeightMm: splitLineH
     });
 
+    // Helper to draw vector pen strokes from tablet canvas onto jsPDF
+    const drawVectorStrokes = (strokes) => {
+        if (!Array.isArray(strokes) || strokes.length === 0) return;
+        const screenW = 746;
+        const screenH = 1055;
+        strokes.forEach((stroke) => {
+            if (!stroke.points || stroke.points.length < 2) return;
+            const colorHex = stroke.color || '#1d4ed8';
+            let r = 29, g = 78, b = 216;
+            if (colorHex.startsWith('#') && colorHex.length >= 7) {
+                r = parseInt(colorHex.slice(1, 3), 16) || 29;
+                g = parseInt(colorHex.slice(3, 5), 16) || 78;
+                b = parseInt(colorHex.slice(5, 7), 16) || 216;
+            }
+            doc.setDrawColor(r, g, b);
+            doc.setLineWidth(Math.max(0.2, (stroke.width || 2) * 0.15));
+
+            for (let i = 1; i < stroke.points.length; i++) {
+                const p1 = stroke.points[i - 1];
+                const p2 = stroke.points[i];
+                const x1 = boxLeft + (p1.x / screenW) * boxWidth;
+                const y1 = boxTopY + (p1.y / screenH) * boxHeight;
+                const x2 = boxLeft + (p2.x / screenW) * boxWidth;
+                const y2 = boxTopY + (p2.y / screenH) * boxHeight;
+                doc.line(x1, y1, x2, y2);
+            }
+        });
+    };
+
+    // Render Page 1 vector strokes
+    drawVectorStrokes(data.handwritingStrokes?.page1);
+
     // Outer frame redraw cleanly on Page 1
     drawOuterFrame();
 
@@ -509,6 +547,61 @@ export const downloadInpatientClinicalNotesPdf = async ({
     drawInlineField('Time', data.footer?.signTime, boxLeft + 171, boxRight - 2.5, footerY);
 
     drawOuterFrame();
+    drawVectorStrokes(data.handwritingStrokes?.page2);
+
+    // ==================== CONTINUATION PAGES (PAGE 3+) ====================
+    if (Array.isArray(data.continuationPages) && data.continuationPages.length > 0) {
+        data.continuationPages.forEach((cp, cpIdx) => {
+            const pageNum = cp.pageNumber || (cpIdx + 3);
+            doc.addPage();
+            drawTopBluePatientBanner();
+            drawOuterFrame();
+
+            let contY = drawHospitalHeader();
+
+            // Continuation Title
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10.5);
+            doc.setTextColor(15, 23, 42);
+            const titleText = `IN PATIENT CLINICAL NOTES — ${cp.title || 'CONTINUATION SHEET'} (PAGE ${pageNum})`;
+            const titleW = doc.getTextWidth(titleText);
+            doc.text(titleText, (pageWidth - titleW) / 2, contY + 5.5);
+            doc.setDrawColor(15, 23, 42);
+            doc.setLineWidth(0.3);
+            doc.line((pageWidth - titleW) / 2, contY + 6.5, (pageWidth + titleW) / 2, contY + 6.5);
+            contY += 8.5;
+
+            // Demographic meta row
+            drawInlineField('Date', data.noteDate, boxLeft + 2, boxLeft + 35, contY);
+            drawInlineField('Time', data.noteTime, boxLeft + 37, boxLeft + 70, contY);
+            drawInlineField('Ward', data.ward, boxLeft + 72, boxLeft + 105, contY);
+            drawInlineField('Bed No.', data.bedNo, boxLeft + 107, boxLeft + 140, contY);
+            drawInlineField('Consultant', data.consultantName, boxLeft + 142, boxRight - 2, contY);
+            contY += 7.2;
+
+            // 26 ruled observation lines
+            contY = drawRuledTextSection({
+                doc,
+                x: boxLeft,
+                y: contY,
+                width: boxWidth,
+                title: 'CLINICAL OBSERVATIONS & NOTES (CONTINUED)',
+                text: cp.notes || '',
+                lineCount: 26,
+                lineHeightMm: 6.8
+            });
+
+            // Footer
+            const contFooterY = Math.min(boxBottomY - 4.5, Math.max(contY + 7, boxBottomY - 5));
+            drawInlineField('Name of Consultant', data.footer?.consultantName, boxLeft + 2.5, boxLeft + 92, contFooterY);
+            drawInlineField('Signature', data.footer?.signature, boxLeft + 94, boxLeft + 140, contFooterY);
+            drawInlineField('Date', data.footer?.signDate, boxLeft + 141.5, boxLeft + 170, contFooterY);
+            drawInlineField('Time', data.footer?.signTime, boxLeft + 171, boxRight - 2.5, contFooterY);
+
+            drawOuterFrame();
+            drawVectorStrokes(data.handwritingStrokes?.[`page${pageNum}`]);
+        });
+    }
 
     const cleanName = (isBlank ? 'Blank' : ptDetails.name).replace(/[^a-zA-Z0-9_-]/g, '_');
     const cleanIpd = (isBlank ? 'Template' : ptDetails.ipdNumber).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -725,6 +818,50 @@ export const printInpatientClinicalNotes = ({
                     </div>
                 </div>
             </div>
+
+            ${(data.continuationPages || []).map((cp, idx) => `
+                <div class="ipn-page">
+                    ${bannerHtml}
+                    <div class="ipn-box">
+                        <div class="ipn-letterhead">
+                            <div class="ipn-nabh">
+                                ${isAccredited ? `
+                                    ${accreditationLogo ? `<img src="${escapeHtml(accreditationLogo)}" alt="NABH" onerror="this.style.display='none'" />` : ''}
+                                    ${certNumber ? `<div class="ipn-cert">${escapeHtml(certNumber)}</div>` : ''}
+                                ` : ''}
+                            </div>
+                            <div class="ipn-hosp">
+                                ${hospitalLogo
+                                    ? `<img src="${escapeHtml(hospitalLogo)}" alt="${escapeHtml(hospitalName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" /><div class="ipn-hosp-name" style="display:none;">${escapeHtml(hospitalName)}</div>`
+                                    : `<div class="ipn-hosp-name">${escapeHtml(hospitalName)}</div>`
+                                }
+                            </div>
+                        </div>
+
+                        <div class="ipn-title">IN PATIENT CLINICAL NOTES — ${escapeHtml(cp.title || 'CONTINUATION SHEET')} (PAGE ${cp.pageNumber || idx + 3})</div>
+
+                        <div class="ipn-meta-rows">
+                            <div class="ipn-meta-row" style="margin-bottom:0;">
+                                <div class="ipn-field" style="flex:1.1"><span>Date</span><span class="ipn-field-val">${escapeHtml(data.noteDate)}</span></div>
+                                <div class="ipn-field" style="flex:1"><span>Time</span><span class="ipn-field-val">${escapeHtml(data.noteTime)}</span></div>
+                                <div class="ipn-field" style="flex:1.3"><span>Ward</span><span class="ipn-field-val">${escapeHtml(data.ward)}</span></div>
+                                <div class="ipn-field" style="flex:1.2"><span>Bed No.</span><span class="ipn-field-val">${escapeHtml(data.bedNo)}</span></div>
+                                <div class="ipn-field" style="flex:2"><span>Consultant</span><span class="ipn-field-val">${escapeHtml(data.consultantName)}</span></div>
+                            </div>
+                        </div>
+
+                        <div class="ipn-sec-hdr">CLINICAL OBSERVATIONS &amp; NOTES (CONTINUED)</div>
+                        ${buildPrintRuledLinesHtml(cp.notes || '', 26)}
+
+                        <div class="ipn-footer-sign">
+                            <div class="ipn-field" style="flex:2.4"><span>Name of Consultant</span><span class="ipn-field-val">${escapeHtml(data.footer?.consultantName || '')}</span></div>
+                            <div class="ipn-field" style="flex:1.4"><span>Signature</span><span class="ipn-field-val">${escapeHtml(data.footer?.signature || '')}</span></div>
+                            <div class="ipn-field" style="flex:0.9"><span>Date</span><span class="ipn-field-val">${escapeHtml(data.footer?.signDate || '')}</span></div>
+                            <div class="ipn-field" style="flex:0.8"><span>Time</span><span class="ipn-field-val">${escapeHtml(data.footer?.signTime || '')}</span></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
 
             <script>
                 window.onload = function() {

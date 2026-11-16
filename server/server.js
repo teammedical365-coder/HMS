@@ -3,6 +3,11 @@ require('./src/utils/fsGuard');
 
 // Global Exception & Rejection Handlers to prevent server crash
 process.on('uncaughtException', (err) => {
+    // If it's EADDRINUSE, allow server.on('error') / portManager to handle it rather than crashing
+    if (err && err.code === 'EADDRINUSE') {
+        console.warn('⚠️ [EADDRINUSE Intercepted]: Handled by Port Manager.');
+        return;
+    }
     console.error('💥 [Uncaught Exception]:', err);
 });
 
@@ -14,6 +19,7 @@ process.on('unhandledRejection', (reason, promise) => {
 require('dotenv').config();
 const app = require('./src/app');
 const connectDB = require('./src/db/db');
+const { ensurePortAvailableSync, killProcessOnPort } = require('./src/utils/portManager');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -25,7 +31,7 @@ const PORT = process.env.PORT || 3000;
 const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
 
 // 1. Connect to Database
-connectDB();
+const dbPromise = connectDB();
 
 // 4. HTTP Server and Socket.io Setup
 const server = http.createServer(app);
@@ -134,16 +140,48 @@ if (DEPLOYMENT_MODE !== 'local') {
     tunnelServer.attach(server);
 }
 
-// 4. Start Server
+// 4. Server error handling & automatic port conflict resolution (EADDRINUSE)
+server.on('error', async (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.warn(`⚠️ [Port Conflict] Port ${PORT} is occupied by another process.`);
+        console.log(`🧹 [Port Conflict] Automatically reclaiming port ${PORT}...`);
+        const freed = await killProcessOnPort(PORT);
+        if (freed) {
+            console.log(`✅ [Port Conflict] Successfully reclaimed port ${PORT}. Resuming server on port ${PORT}...`);
+            setTimeout(() => {
+                server.listen(PORT, '0.0.0.0');
+            }, 600);
+            return;
+        } else {
+            console.error(`❌ [Port Conflict] Could not free port ${PORT}. Please check permissions.`);
+            process.exit(1);
+        }
+    } else {
+        console.error('💥 [Server Error]:', err);
+        process.exit(1);
+    }
+});
+
+// Proactively free port from any stale/zombie process before listening
+ensurePortAvailableSync(PORT);
+
+// 5. Start Server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT} [mode: ${DEPLOYMENT_MODE}] and listening on all interfaces (0.0.0.0)`);
 
-    // 5. Post-startup services (after DB is ready — give it 3s)
-    setTimeout(() => {
+    // 5. Post-startup services (guaranteed execution after DB is fully connected)
+    (async () => {
+        try {
+            await dbPromise;
+        } catch (dbErr) {
+            console.error('❌ [Startup Error] Post-startup initialization skipped: DB connection failed:', dbErr.message);
+            return;
+        }
+
         // Ensure all hospitals have an initialized AI Wallet
         try {
             const aiWalletService = require('./src/services/ai/aiWallet.service');
-            aiWalletService.ensureAllHospitalsHaveWallets();
+            await aiWalletService.ensureAllHospitalsHaveWallets();
         } catch (walletInitErr) {
             console.warn('⚠️ [AI Wallet Init Warning]:', walletInitErr.message);
         }
@@ -166,7 +204,7 @@ server.listen(PORT, '0.0.0.0', () => {
             tunnelClient.setApp(app);
             tunnelClient.connect();
         }
-    }, 3000);
+    })();
 });
 
 // 5. Graceful Process Termination (Handles SIGTERM/SIGINT from Render & Docker)

@@ -350,24 +350,30 @@ export const loadImageForPdf = async (url) => {
 /**
  * Draw formatted patient demographic banner in pleasant light blue with light slate/black "|" dividers.
  */
-export const drawPatientBannerPdf = (doc, ptDetails = {}, { x = 14, y = 10.5, maxWidth = 182 } = {}) => {
+export const drawPatientBannerPdf = (doc, ptDetails = {}, { x = 14, y = 10.5, maxWidth = 182, headerData = {} } = {}) => {
+    const doa = headerData?.doa || ptDetails.doa || '—';
+    const wardBed = headerData?.wardBed || ptDetails.wardBed || '—';
+    const consultant = headerData?.consultant || ptDetails.consultant || '—';
     const segments = [
         `Patient Name : ${ptDetails.name || '—'}`,
-        `UHID : ${ptDetails.uhid || '—'}`,
+        `MRN : ${ptDetails.uhid || '—'}`,
         `IPD : ${ptDetails.ipdNumber || '—'}`,
-        `Gender : ${ptDetails.gender || '—'}`,
-        `Age : ${ptDetails.age || '—'}`
+        `Age : ${ptDetails.age || '—'}`,
+        `Sex : ${ptDetails.gender || '—'}`,
+        `DOA : ${doa}`,
+        `Ward/Bed : ${wardBed}`,
+        `Consultant : ${consultant}`
     ];
 
     doc.setFont('times', 'normal');
-    let fontSize = 10;
+    let fontSize = 9;
     doc.setFontSize(fontSize);
 
     const sepStr = '  |  ';
     const fullStr = segments.join(sepStr);
     const totalW = doc.getTextWidth(fullStr);
     if (totalW > maxWidth && totalW > 0) {
-        fontSize = Math.max(8, (fontSize * maxWidth) / totalW);
+        fontSize = Math.max(6.5, (fontSize * maxWidth) / totalW);
         doc.setFontSize(fontSize);
     }
 

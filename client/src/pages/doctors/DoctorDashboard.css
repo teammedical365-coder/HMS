@@ -415,3 +415,264 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* --- IPD CLINICAL QUICK CARD & PATIENT SECTION STYLES --- */
+.doc-quick-ipd-card {
+  border-color: rgba(2, 132, 199, 0.25);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+.doc-quick-ipd-card:hover {
+  border-color: #0284c7;
+  box-shadow: 0 8px 20px -4px rgba(2, 132, 199, 0.18);
+}
+
+.doc-ipd-icon-wrap {
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+}
+
+.doc-quick-ipd-card:hover .doc-ipd-icon-wrap {
+  background: #bae6fd !important;
+}
+
+.doc-quick-ipd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #0369a1;
+  background: rgba(2, 132, 199, 0.12);
+  padding: 2px 8px;
+  border-radius: 12px;
+  letter-spacing: 0.04em;
+}
+
+.doc-quick-ipd-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-quick-ipd-pulse {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(2, 132, 199, 0.25) 0%, rgba(2, 132, 199, 0.02) 70%);
+  animation: ipdCardPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes ipdCardPulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.doc-ipd-view-all-btn {
+  background: transparent;
+  border: none;
+  color: #0284c7;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.doc-ipd-view-all-btn:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.doc-empty-ipd-card {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.doc-ipd-open-dir-btn {
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.doc-ipd-open-dir-btn:hover {
+  background: #0369a1;
+}
+
+.doc-ipd-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.doc-ipd-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.doc-ipd-card:hover {
+  border-color: #93c5fd;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px -2px rgba(2, 132, 199, 0.12);
+}
+
+.doc-ipd-card.icu-accent {
+  border-left: 4px solid #dc2626;
+  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.doc-ipd-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.doc-ipd-head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doc-ipd-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.doc-ipd-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #64748b;
+}
+
+.doc-ipd-pill-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
+}
+
+.doc-ipd-pill-badge.icu-badge {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+  font-weight: 800;
+}
+
+.doc-ipd-loc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.doc-ipd-ward-box {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.doc-ipd-diag-text {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.doc-ipd-card-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.doc-ipd-btn-sm {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-ipd-btn-sm:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.doc-ipd-btn-sm.icu-btn {
+  border-color: #fca5a5;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.doc-ipd-btn-sm.icu-btn:hover {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.doc-ipd-btn-open {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #0284c7;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.doc-ipd-btn-open:hover {
+  background: #e0f2fe;
+}

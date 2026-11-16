@@ -72,6 +72,16 @@ const customFieldSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
+const entityBreakdownSchema = new mongoose.Schema({
+    entity: { type: String },
+    totalRecords: { type: Number, default: 0 },
+    valid: { type: Number, default: 0 },
+    warnings: { type: Number, default: 0 },
+    errors: { type: Number, default: 0 },
+    duplicates: { type: Number, default: 0 },
+    skipped: { type: Number, default: 0 }
+}, { _id: false, suppressReservedKeysWarning: true });
+
 const migrationSessionSchema = new mongoose.Schema({
     migrationId: { 
         type: String, 
@@ -124,15 +134,7 @@ const migrationSessionSchema = new mongoose.Schema({
         errorRecords: { type: Number, default: 0 },
         duplicateRecords: { type: Number, default: 0 },
         skippedRecords: { type: Number, default: 0 },
-        entitiesBreakdown: [{
-            entity: { type: String },
-            totalRecords: { type: Number, default: 0 },
-            valid: { type: Number, default: 0 },
-            warnings: { type: Number, default: 0 },
-            errors: { type: Number, default: 0 },
-            duplicates: { type: Number, default: 0 },
-            skipped: { type: Number, default: 0 }
-        }],
+        entitiesBreakdown: [entityBreakdownSchema],
         relationshipsSummary: {
             totalReferences: { type: Number, default: 0 },
             resolvedReferences: { type: Number, default: 0 },
@@ -180,7 +182,8 @@ const migrationSessionSchema = new mongoose.Schema({
     templateId: { type: String, default: '' },
     notes: { type: String, default: '' }
 }, {
-    timestamps: true
+    timestamps: true,
+    suppressReservedKeysWarning: true
 });
 
 migrationSessionSchema.index({ hospitalId: 1, migrationId: 1 }, { unique: true });

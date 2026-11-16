@@ -61,13 +61,14 @@ function sanitizeDbName(hospitalId) {
 async function getTenantConnection(hospitalId) {
     const dbName = sanitizeDbName(hospitalId);
 
-    // Return cached connection if it already exists (whether connected or still connecting)
+    // Return cached connection if it already exists and is open/connecting
     if (connectionCache.has(dbName)) {
         const cached = connectionCache.get(dbName);
-        if (cached.readyState !== 0) { // 0 = disconnected
+        if (cached.readyState === 1 || cached.readyState === 2) { // 1 = connected, 2 = connecting
             cached.__lastUsedAt = Date.now();
             return cached;
         }
+        try { cached.close(); } catch (_) {}
         connectionCache.delete(dbName);
     }
 
@@ -86,10 +87,17 @@ async function getTenantConnection(hospitalId) {
     connectionCache.set(dbName, connection);
 
     // Wait for the connection to be established
-    await new Promise((resolve, reject) => {
-        connection.once('open', resolve);
-        connection.once('error', reject);
-    });
+    try {
+        await new Promise((resolve, reject) => {
+            if (connection.readyState === 1) return resolve();
+            connection.once('open', resolve);
+            connection.once('error', reject);
+        });
+    } catch (connErr) {
+        connectionCache.delete(dbName);
+        try { connection.close(); } catch (_) {}
+        throw connErr;
+    }
 
     console.log(`✅ Tenant DB connected: ${dbName}`);
     connection.__lastUsedAt = Date.now();

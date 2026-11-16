@@ -50,6 +50,8 @@ const AIAssistant = lazy(() => import('../pages/doctors/AIAssistant'));
 const SurgeryReferrals = lazy(() => import('../pages/doctors/SurgeryReferrals'));
 const MySurgeryPlans = lazy(() => import('../pages/doctors/MySurgeryPlans'));
 const DoctorSurgeries = lazy(() => import('../pages/doctors/DoctorSurgeries'));
+const DoctorIPDPatients = lazy(() => import('../pages/doctors/DoctorIPDPatients'));
+const DoctorIPDWorkspace = lazy(() => import('../pages/doctors/DoctorIPDWorkspace'));
 const UnifiedPatientProfile = lazy(() => import('../pages/patient/UnifiedPatientProfile'));
 const PatientPortalLogin = lazy(() => import('../pages/patient/PatientPortalLogin'));
 const PatientSignup = lazy(() => import('../pages/patient/PatientSignup'));
@@ -511,15 +513,15 @@ const MainRoutes = () => {
                                 <Route path="pharmacy" element={<Pharmacy />} />
 
                                 {/* Transitions between roles/admin */}
-                                <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}>
+                                <Route path="doctor/dashboard" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'resident', 'resident doctor', 'residentdoctor']}>
                                     {(() => {
                                         const u = JSON.parse(localStorage.getItem('user') || '{}');
                                         if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/tray" replace />;
                                         return <DoctorDashboard />;
                                     })()}
                                 </ProtectedRoute>} />
-                                <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
-                                <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}>
+                                <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'resident', 'resident doctor', 'residentdoctor']}><DoctorDashboard /></ProtectedRoute>} />
+                                <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'resident', 'resident doctor', 'residentdoctor']}>
                                     {(() => {
                                         const u = JSON.parse(localStorage.getItem('user') || '{}');
                                         if (u.subscriptionPlan === 'free_doctor_opd') return <Navigate to="/opd/tray" replace />;
@@ -544,6 +546,8 @@ const MainRoutes = () => {
                                 </ProtectedRoute>} />
                                 <Route path="doctor/surgery-referrals" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="referrals" /></ProtectedRoute>} />
                                 <Route path="doctor/surgery-plans" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="plans" /></ProtectedRoute>} />
+                                <Route path="doctor/ipd-patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'resident', 'resident doctor', 'residentdoctor', 'doctor assistant', 'doctorassistant', 'doctor_assistant', 'assistant', 'clinical assistant', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorIPDPatients /></ProtectedRoute>} />
+                                <Route path="doctor/ipd/patient/:admissionId" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'resident', 'resident doctor', 'residentdoctor', 'doctor assistant', 'doctorassistant', 'doctor_assistant', 'assistant', 'clinical assistant', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorIPDWorkspace /></ProtectedRoute>} />
 
                                 {/* ── Dedicated Single Doctor Free OPD Routes (Strictly 5 Modules) ── */}
                                 <Route path="opd/patients" element={<Navigate to="/opd/appointments" replace />} />
@@ -623,8 +627,8 @@ const MainRoutes = () => {
                                 <Route path="nurse/patient-documents" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientDocuments /></ProtectedRoute>} />
                                 <Route path="nurse/opd-queue" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseOPDQueue /></ProtectedRoute>} />
                                 <Route path="nurse/appointments" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseAppointments /></ProtectedRoute>} />
-                                <Route path="nurse/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
-                                <Route path="nurse/ipd/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
+                                <Route path="nurse/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
+                                <Route path="nurse/ipd/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
                                 <Route path="ipd/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
                                 <Route path="nurse/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
 

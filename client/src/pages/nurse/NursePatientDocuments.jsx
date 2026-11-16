@@ -19,6 +19,7 @@ import {
 import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
+import ICUChartModal from '../../components/ipd/ICUChartModal';
 import './NursePatientDocuments.css';
 
 const REPORT_CATEGORIES = [
@@ -56,6 +57,12 @@ const CONSENT_TEMPLATES = [
         label: 'Drug Chart (2-Page STAT, IV Fluids & MAR Grid)',
         title: 'IPD DRUG CHART',
         description: 'Official two-page inpatient drug chart containing Drug Allergies, Once-Only STAT Doses, I.V. Fluids, and 4-Day Scheduled Medication Administration Record.'
+    },
+    {
+        value: 'ICU_CHART',
+        label: 'ICU Daily Observation Chart (2-Page Official)',
+        title: 'ICU DAILY OBSERVATION CHART',
+        description: 'Official two-page intensive care unit daily observation chart with hourly vitals, intake/output, medication administration, ventilatory parameters, nursing notes, diabetic monitoring, and diet orders.'
     },
     {
         value: 'GENERAL_ADMISSION',
@@ -166,6 +173,8 @@ const NursePatientDocuments = () => {
     const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
     const [clinicalNotesBlankMode, setClinicalNotesBlankMode] = useState(false);
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes', isBlank: false });
+    const [icuChartModalOpen, setIcuChartModalOpen] = useState(false);
+    const [icuBlankMode, setIcuBlankMode] = useState(false);
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -374,6 +383,12 @@ const NursePatientDocuments = () => {
 
         if (templateKey === 'DRUG_CHART') {
             setClinicalChartsModal({ open: true, tab: 'drug_stat_iv', isBlank });
+            return;
+        }
+
+        if (templateKey === 'ICU_CHART') {
+            setIcuBlankMode(isBlank);
+            setIcuChartModalOpen(true);
             return;
         }
 
@@ -941,7 +956,7 @@ const NursePatientDocuments = () => {
                                                     value={selectedDownloadTemplate}
                                                     onChange={e => {
                                                         setSelectedDownloadTemplate(e.target.value);
-                                                        if (!['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART'].includes(e.target.value)) {
+                                                        if (!['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART', 'ICU_CHART'].includes(e.target.value)) {
                                                             setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
                                                         }
                                                     }}
@@ -997,7 +1012,7 @@ const NursePatientDocuments = () => {
                                                         value={consentForm.consentType}
                                                         onChange={e => setConsentForm({ ...consentForm, consentType: e.target.value })}
                                                     >
-                                                        {CONSENT_TEMPLATES.filter(ct => !['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART'].includes(ct.value)).map(ct => (
+                                                        {CONSENT_TEMPLATES.filter(ct => !['TPR_CHART', 'IN_PATIENT_CLINICAL_NOTES', 'PROGRESS_NOTES', 'DRUG_CHART', 'ICU_CHART'].includes(ct.value)).map(ct => (
                                                             <option key={ct.value} value={ct.value}>{ct.label}</option>
                                                         ))}
                                                     </select>
@@ -1215,6 +1230,19 @@ const NursePatientDocuments = () => {
                 admissionId={selectedPatient?.admission?._id}
                 initialTab={clinicalChartsModal.tab}
                 isBlank={clinicalChartsModal.isBlank}
+            />
+
+            {/* ── Official 2-Page ICU Daily Observation Chart Modal ── */}
+            <ICUChartModal
+                isOpen={icuChartModalOpen}
+                onClose={() => {
+                    setIcuChartModalOpen(false);
+                    setIcuBlankMode(false);
+                }}
+                patient={selectedPatient}
+                admission={selectedPatient?.admission}
+                admissionId={selectedPatient?.admission?._id}
+                isBlank={icuBlankMode}
             />
         </div>
     );
