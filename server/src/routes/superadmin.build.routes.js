@@ -1168,20 +1168,27 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
         } else if (status === 'FAILED') {
             // State protection:
             // - BUILDING -> FAILED is allowed
-            // - PROCESSING -> FAILED must be ignored safely (do not overwrite active artifact finalization)
-            // - COMPLETED -> FAILED must be ignored safely
-            if (currentStatus === 'COMPLETED' || currentStatus === 'PROCESSING') {
-                console.warn(`[RN Webhook] Ignoring late/concurrent FAILED webhook for tenant ${tenantId} as build status is '${currentStatus}'.`);
-                return res.json({ 
-                    success: true, 
-                    message: `Ignored FAILED callback; build status is currently '${currentStatus}'.` 
+            // - PROCESSING -> FAILED is allowed for the exact active rnBuildId
+            // - FAILED -> FAILED is idempotent (return success: true without error)
+            // - COMPLETED -> FAILED is strictly rejected (cannot overwrite a completed build)
+            if (currentStatus === 'COMPLETED') {
+                console.warn(`[RN Webhook] Cannot mark COMPLETED build as FAILED for tenant ${tenantId}.`);
+                return res.status(409).json({
+                    success: false,
+                    message: 'Invalid state transition: Cannot mark a COMPLETED build as FAILED'
                 });
             }
-            if (currentStatus !== 'BUILDING') {
+            if (currentStatus === 'FAILED') {
+                return res.json({
+                    success: true,
+                    message: 'RN Build is already marked as FAILED (idempotent callback)'
+                });
+            }
+            if (currentStatus !== 'BUILDING' && currentStatus !== 'PROCESSING') {
                 console.warn(`[RN Webhook] Ignoring FAILED webhook for tenant ${tenantId} as build status is '${currentStatus || 'NOT_BUILT'}'.`);
-                return res.json({ 
-                    success: true, 
-                    message: `Ignored FAILED callback; build status is '${currentStatus || 'NOT_BUILT'}'.` 
+                return res.status(409).json({
+                    success: false,
+                    message: `Invalid build state transition: expected BUILDING or PROCESSING, current is '${currentStatus || 'NOT_BUILT'}'`
                 });
             }
             hospital.appConfig.rnBuildStatus = 'FAILED';
@@ -1247,13 +1254,17 @@ router.post(
         let backupAab = null;
         let hasBackupApk = false;
         let hasBackupAab = false;
+        let tenantId = null;
+        let rnBuildId = null;
+        let releaseId = null;
+        let checksumSha256 = null;
 
         try {
             // Resolve tenantId and rnBuildId from req.query first, then fallback to req.body
-            const tenantId = req.query.tenantId || req.body?.tenantId;
-            const rnBuildId = req.query.rnBuildId || req.body?.rnBuildId;
-            const releaseId = req.query.releaseId || req.body?.releaseId;
-            const checksumSha256 = req.query.checksumSha256 || req.body?.checksumSha256;
+            tenantId = req.query.tenantId || req.body?.tenantId;
+            rnBuildId = req.query.rnBuildId || req.body?.rnBuildId;
+            releaseId = req.query.releaseId || req.body?.releaseId;
+            checksumSha256 = req.query.checksumSha256 || req.body?.checksumSha256;
 
             if (!tenantId || !rnBuildId) {
                 safeDeleteFiles(tempFiles);
@@ -1593,14 +1604,21 @@ router.post(
 
             // Keep DB state consistent
             try {
-                const tenantId = req.query.tenantId || req.body?.tenantId;
-                if (tenantId) {
+                const activeTenantId = tenantId || req.query?.tenantId || req.body?.tenantId;
+                const activeRnBuildId = rnBuildId || req.query?.rnBuildId || req.body?.rnBuildId;
+                if (activeTenantId && activeRnBuildId) {
                     await Hospital.findOneAndUpdate(
-                        { _id: tenantId, 'appConfig.rnBuildStatus': 'PROCESSING', 'appConfig.rnBuildId': rnBuildId },
+                        {
+                            _id: activeTenantId,
+                            'appConfig.rnBuildStatus': { $in: ['BUILDING', 'PROCESSING'] },
+                            'appConfig.rnBuildId': activeRnBuildId
+                        },
                         {
                             $set: {
                                 'appConfig.rnBuildStatus': 'FAILED',
-                                'appConfig.rnBuildError': `Artifact replacement failed: ${err.message}`
+                                'appConfig.rnBuildError': `Artifact replacement failed: ${err.message}`,
+                                'appConfig.pendingVersionCode': null,
+                                'appConfig.pendingVersionName': null
                             }
                         }
                     );

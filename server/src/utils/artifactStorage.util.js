@@ -332,26 +332,42 @@ function resolveStorageAdapter(options = {}) {
     let adapter = activeAdapter;
 
     if (!adapter) {
-        // In test mode or when explicitly requested, use mock adapter.
-        // Tests cannot accidentally use real ImageKit uploads.
-        if (process.env.NODE_ENV === 'test' || process.env.STORAGE_PROVIDER === 'mock') {
-            adapter = mockAdapterInstance;
-        } else {
-            // Check ImageKit configuration (primary configured durable cloud storage)
+        if (requireRealProvider) {
+            // For release uploads requiring a real durable provider,
+            // check ImageKit configuration even if NODE_ENV === 'test'.
             const imagekitAdapter = new ImageKitStorageAdapter();
             if (imagekitAdapter.isConfigured()) {
                 adapter = imagekitAdapter;
-            } else if (process.env.STORAGE_PROVIDER === 'local') {
-                adapter = new LocalDiskStorageAdapter();
-            } else if (process.env.NODE_ENV === 'production') {
+            } else {
                 const err = new Error(
                     '[Artifact Storage Error] No durable cloud storage provider is configured. ' +
                     'Please configure IMAGEKIT credentials in the production environment.'
                 );
                 err.code = 'UNCONFIGURED_STORAGE';
                 throw err;
+            }
+        } else {
+            // In test mode or when explicitly requested, use mock adapter.
+            // Tests cannot accidentally use real ImageKit uploads.
+            if (process.env.NODE_ENV === 'test' || process.env.STORAGE_PROVIDER === 'mock') {
+                adapter = mockAdapterInstance;
             } else {
-                adapter = new LocalDiskStorageAdapter();
+                // Check ImageKit configuration (primary configured durable cloud storage)
+                const imagekitAdapter = new ImageKitStorageAdapter();
+                if (imagekitAdapter.isConfigured()) {
+                    adapter = imagekitAdapter;
+                } else if (process.env.STORAGE_PROVIDER === 'local') {
+                    adapter = new LocalDiskStorageAdapter();
+                } else if (process.env.NODE_ENV === 'production') {
+                    const err = new Error(
+                        '[Artifact Storage Error] No durable cloud storage provider is configured. ' +
+                        'Please configure IMAGEKIT credentials in the production environment.'
+                    );
+                    err.code = 'UNCONFIGURED_STORAGE';
+                    throw err;
+                } else {
+                    adapter = new LocalDiskStorageAdapter();
+                }
             }
         }
     }

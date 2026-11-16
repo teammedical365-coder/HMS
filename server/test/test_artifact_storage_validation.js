@@ -215,21 +215,32 @@ function httpRequest(method, path, body = null, headers = {}) {
             assert.strictEqual(adapter.isMock, true, 'Default adapter must have isMock = true');
         });
 
-        await test('1.2: resolveStorageAdapter({ requireRealProvider: true }) throws MOCK_STORAGE_PROHIBITED', async () => {
+        await test('1.2: resolveStorageAdapter({ requireRealProvider: true }) throws UNCONFIGURED_STORAGE when unconfigured and MOCK_STORAGE_PROHIBITED when mock injected', async () => {
             artifactStorage.resetStorageAdapter();
-            let threw = false;
+            let threwUnconfigured = false;
             try {
                 artifactStorage.resolveStorageAdapter({ requireRealProvider: true });
             } catch (err) {
-                threw = true;
+                threwUnconfigured = true;
+                assert.strictEqual(err.code, 'UNCONFIGURED_STORAGE');
+            }
+            assert.strictEqual(threwUnconfigured, true, 'Must throw UNCONFIGURED_STORAGE when unconfigured');
+
+            artifactStorage.setStorageAdapter(new artifactStorage.MockStorageAdapter());
+            let threwMock = false;
+            try {
+                artifactStorage.resolveStorageAdapter({ requireRealProvider: true });
+            } catch (err) {
+                threwMock = true;
                 assert.strictEqual(err.code, 'MOCK_STORAGE_PROHIBITED');
                 assert(err.message.includes('mock or local storage adapter is prohibited'));
             }
-            assert.strictEqual(threw, true, 'Must throw MOCK_STORAGE_PROHIBITED');
+            assert.strictEqual(threwMock, true, 'Must throw MOCK_STORAGE_PROHIBITED when mock injected');
+            artifactStorage.resetStorageAdapter();
         });
 
         await test('1.3: uploadReleaseArtifact with requireRealProvider fails closed on mock adapter', async () => {
-            artifactStorage.resetStorageAdapter();
+            artifactStorage.setStorageAdapter(new artifactStorage.MockStorageAdapter());
             let threw = false;
             try {
                 await artifactStorage.uploadReleaseArtifact({
@@ -243,6 +254,7 @@ function httpRequest(method, path, body = null, headers = {}) {
                 assert.strictEqual(err.code, 'MOCK_STORAGE_PROHIBITED');
             }
             assert.strictEqual(threw, true, 'Must fail closed with MOCK_STORAGE_PROHIBITED');
+            artifactStorage.resetStorageAdapter();
         });
 
         await test('1.4: Mock upload is flagged isMock and publicUrl is never treated as genuine', async () => {
