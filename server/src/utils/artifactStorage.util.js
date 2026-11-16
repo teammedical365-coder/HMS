@@ -27,6 +27,25 @@ function calculateSha256(buffer) {
 }
 
 /**
+ * Calculates SHA-256 digest of a file on disk via streaming.
+ * Keeps memory usage near 0 by streaming chunks of 64KB.
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+function calculateFileSha256(filePath) {
+    return new Promise((resolve, reject) => {
+        if (!filePath || typeof filePath !== 'string' || !fs.existsSync(filePath)) {
+            return reject(new Error(`Invalid or missing file path for checksum: ${filePath}`));
+        }
+        const hash = crypto.createHash('sha256');
+        const stream = fs.createReadStream(filePath);
+        stream.on('data', chunk => hash.update(chunk));
+        stream.on('end', () => resolve(hash.digest('hex').toLowerCase()));
+        stream.on('error', reject);
+    });
+}
+
+/**
  * Verifies that the actual digest matches the expected digest.
  */
 function verifyDigest(actualSha256, expectedSha256) {
@@ -105,7 +124,7 @@ class MockStorageAdapter {
         this.simulateMissingConfig = false;
     }
 
-    async upload({ buffer, key, contentType, metadata, expectedSha256 }) {
+    async upload({ filePath, buffer, key, contentType, metadata, expectedSha256 }) {
         if (this.simulateMissingConfig) {
             throw new Error('Durable artifact storage is not configured.');
         }
@@ -114,7 +133,21 @@ class MockStorageAdapter {
             throw new Error('Simulated network failure during storage upload');
         }
 
-        const checksum = calculateSha256(buffer);
+        let checksum;
+        let size = 0;
+        if (filePath) {
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found at ${filePath}`);
+            }
+            size = fs.statSync(filePath).size;
+            checksum = await calculateFileSha256(filePath);
+        } else if (buffer && Buffer.isBuffer(buffer)) {
+            size = buffer.length;
+            checksum = calculateSha256(buffer);
+        } else {
+            throw new Error('Either filePath or buffer is required for upload');
+        }
+
         if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
             const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
             err.code = 'INTEGRITY_MISMATCH';
@@ -123,8 +156,9 @@ class MockStorageAdapter {
 
         const record = {
             key,
-            buffer,
-            size: buffer.length,
+            buffer: buffer || null,
+            filePath: filePath || null,
+            size,
             contentType: contentType || 'application/vnd.android.package-archive',
             checksumSha256: checksum,
             metadata: metadata || {},
@@ -190,18 +224,46 @@ class ImageKitStorageAdapter {
         );
     }
 
-    async upload({ buffer, key, contentType, metadata, expectedSha256 }) {
+    async upload({ filePath, buffer, key, contentType, metadata, expectedSha256 }) {
         if (!this.isConfigured()) {
             const err = new Error('ImageKit durable cloud storage is not configured (missing credentials).');
             err.code = 'UNCONFIGURED_STORAGE';
             throw err;
         }
 
-        const checksum = calculateSha256(buffer);
-        if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
-            const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
-            err.code = 'INTEGRITY_MISMATCH';
-            throw err;
+        let checksum = '';
+        let fileSize = 0;
+        let uploadPayload;
+
+        if (filePath) {
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found at ${filePath}`);
+            }
+            const stat = fs.statSync(filePath);
+            fileSize = stat.size;
+            if (fileSize <= 0) {
+                throw new Error(`File is empty (zero bytes): ${filePath}`);
+            }
+            checksum = await calculateFileSha256(filePath);
+            if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
+                const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
+                err.code = 'INTEGRITY_MISMATCH';
+                throw err;
+            }
+            // Stream directly from disk without buffering file into Node.js heap
+            uploadPayload = fs.createReadStream(filePath);
+        } else if (buffer && Buffer.isBuffer(buffer)) {
+            fileSize = buffer.length;
+            checksum = calculateSha256(buffer);
+            if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
+                const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
+                err.code = 'INTEGRITY_MISMATCH';
+                throw err;
+            }
+            // Pass Buffer directly without converting to full base64 string
+            uploadPayload = buffer;
+        } else {
+            throw new Error('Either filePath or buffer is required for ImageKit upload');
         }
 
         const ImageKit = require('imagekit');
@@ -214,13 +276,20 @@ class ImageKitStorageAdapter {
         const fileName = path.basename(key);
         const folder = path.dirname(key);
 
-        const uploadRes = await realImageKit.upload({
-            file: buffer.toString('base64'),
-            fileName,
-            folder: `/${folder}`,
-            useUniqueFileName: false,
-            tags: ['release-artifact', metadata?.artifactType || 'APK'],
-        });
+        let uploadRes;
+        try {
+            uploadRes = await realImageKit.upload({
+                file: uploadPayload,
+                fileName,
+                folder: `/${folder}`,
+                useUniqueFileName: false,
+                tags: ['release-artifact', metadata?.artifactType || 'APK'],
+            });
+        } finally {
+            if (uploadPayload && typeof uploadPayload.destroy === 'function' && !uploadPayload.destroyed) {
+                uploadPayload.destroy();
+            }
+        }
 
         if (!uploadRes?.url || !isVerifiedDirectArtifactUrl(uploadRes.url)) {
             const err = new Error(`ImageKit upload failed: unexpected response URL '${uploadRes?.url || 'empty'}'`);
@@ -231,7 +300,7 @@ class ImageKitStorageAdapter {
         return {
             storageKey: key,
             publicUrl: uploadRes.url,
-            fileSize: buffer.length,
+            fileSize,
             checksumSha256: checksum,
             provider: this.name,
             fileId: uploadRes.fileId,
@@ -266,12 +335,26 @@ class LocalDiskStorageAdapter {
         }
     }
 
-    async upload({ buffer, key, contentType, metadata, expectedSha256 }) {
+    async upload({ filePath, buffer, key, contentType, metadata, expectedSha256 }) {
         if (process.env.NODE_ENV === 'production') {
             throw new Error('Durable cloud storage (S3 / ImageKit) must be configured in production. Local disk storage is prohibited.');
         }
 
-        const checksum = calculateSha256(buffer);
+        let checksum;
+        let size = 0;
+        if (filePath) {
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found at ${filePath}`);
+            }
+            size = fs.statSync(filePath).size;
+            checksum = await calculateFileSha256(filePath);
+        } else if (buffer && Buffer.isBuffer(buffer)) {
+            size = buffer.length;
+            checksum = calculateSha256(buffer);
+        } else {
+            throw new Error('Either filePath or buffer is required for upload');
+        }
+
         if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
             const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
             err.code = 'INTEGRITY_MISMATCH';
@@ -284,12 +367,16 @@ class LocalDiskStorageAdapter {
             fs.mkdirSync(dir, { recursive: true });
         }
 
-        fs.writeFileSync(fullPath, buffer);
+        if (filePath) {
+            fs.copyFileSync(filePath, fullPath);
+        } else {
+            fs.writeFileSync(fullPath, buffer);
+        }
 
         return {
             storageKey: key,
             publicUrl: `/downloads/releases/${key}`,
-            fileSize: buffer.length,
+            fileSize: size,
             checksumSha256: checksum,
             provider: this.name,
         };
@@ -402,6 +489,7 @@ function resetStorageAdapter() {
  * and records the artifact in the database if available.
  */
 async function uploadReleaseArtifact({
+    filePath,
     fileBuffer,
     buffer,
     fileName,
@@ -416,8 +504,11 @@ async function uploadReleaseArtifact({
     requireRealProvider = false,
 }) {
     const rawBuffer = fileBuffer || buffer;
-    if (!rawBuffer || !Buffer.isBuffer(rawBuffer)) {
-        throw new Error('Invalid fileBuffer: Buffer is required for artifact upload');
+    if (!filePath && (!rawBuffer || !Buffer.isBuffer(rawBuffer))) {
+        throw new Error('Either filePath or Buffer is required for artifact upload');
+    }
+    if (filePath && !fs.existsSync(filePath)) {
+        throw new Error(`Artifact file does not exist at filePath: ${filePath}`);
     }
     if (!fileName || !artifactType) {
         throw new Error('fileName and artifactType (APK or AAB) are required');
@@ -433,8 +524,9 @@ async function uploadReleaseArtifact({
         ? 'application/vnd.android.package-archive'
         : 'application/octet-stream';
 
-    // 1. Upload to durable storage with checksum verification
+    // 1. Upload to durable storage with checksum verification (stream-based if filePath provided)
     const uploadResult = await adapter.upload({
+        filePath,
         buffer: rawBuffer,
         key: storageKey,
         contentType,
@@ -448,7 +540,6 @@ async function uploadReleaseArtifact({
             rnBuildId: rnBuildId || '',
             releaseId: releaseId || '',
         },
-        expectedSha256,
     });
 
     // 2. Persist in ReleaseArtifact model if Mongoose model is connected
@@ -495,6 +586,7 @@ async function uploadReleaseArtifact({
         fileSize: uploadResult.fileSize,
         checksumSha256: uploadResult.checksumSha256,
         provider: uploadResult.provider,
+        fileId: uploadResult.fileId,
         isMock,
         artifact: artifactDoc,
     };
@@ -666,6 +758,7 @@ function verifyApkFileAuthenticity(apkPath, expectedPackageId) {
 
 module.exports = {
     calculateSha256,
+    calculateFileSha256,
     verifyDigest,
     resolveStorageAdapter,
     setStorageAdapter,

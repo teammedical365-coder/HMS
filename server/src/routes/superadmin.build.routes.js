@@ -1472,6 +1472,7 @@ router.post(
             // Persist to durable cloud object storage (S3 / ImageKit)
             let durableApkUrl = '';
             let durableAabUrl = '';
+            let uploadedApkFileId = null;
 
             try {
                 const { uploadReleaseArtifact } = require('../utils/artifactStorage.util');
@@ -1480,9 +1481,12 @@ router.post(
                 const vName = docToUse?.appConfig?.pendingVersionName || docToUse?.appConfig?.versionName || '1.0.0';
                 const appId = docToUse?.appConfig?.androidPackageId || 'com.medical365.app';
 
-                // Release uploads must explicitly require a real configured provider
+                const memBefore = process.memoryUsage();
+                console.log(`[RN Upload] Starting sequential stream upload (RSS: ${(memBefore.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memBefore.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
+
+                // 1. Upload APK via streaming from disk (avoids buffering entire release binary in memory)
                 const apkUpload = await uploadReleaseArtifact({
-                    fileBuffer: fs.readFileSync(destApk),
+                    filePath: destApk,
                     fileName: `${safeName}-rn-release.apk`,
                     artifactType: 'APK',
                     versionCode: vCode,
@@ -1500,9 +1504,14 @@ router.post(
                     throw err;
                 }
                 durableApkUrl = apkUpload.publicUrl;
+                uploadedApkFileId = apkUpload.fileId;
 
+                const memMid = process.memoryUsage();
+                console.log(`[RN Upload] APK streamed successfully (RSS: ${(memMid.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memMid.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
+
+                // 2. Upload AAB sequentially (only after APK upload finishes and stream resources are released)
                 const aabUpload = await uploadReleaseArtifact({
-                    fileBuffer: fs.readFileSync(destAab),
+                    filePath: destAab,
                     fileName: `${safeName}-rn-release.aab`,
                     artifactType: 'AAB',
                     versionCode: vCode,
@@ -1519,8 +1528,23 @@ router.post(
                     throw err;
                 }
                 durableAabUrl = aabUpload.publicUrl;
+
+                const memAfter = process.memoryUsage();
+                console.log(`[RN Upload] AAB streamed successfully (RSS: ${(memAfter.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memAfter.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
             } catch (storageErr) {
                 console.error('[DurableStorage] Cloud storage upload failed:', storageErr.message);
+                if (uploadedApkFileId) {
+                    try {
+                        const { resolveStorageAdapter } = require('../utils/artifactStorage.util');
+                        const adapter = resolveStorageAdapter({ requireRealProvider: true });
+                        if (adapter && typeof adapter.delete === 'function') {
+                            await adapter.delete(uploadedApkFileId);
+                            console.log(`[DurableStorage] Cleaned up orphaned APK file (${uploadedApkFileId}) after AAB upload failure`);
+                        }
+                    } catch (cleanupErr) {
+                        console.warn('[DurableStorage] Could not clean up orphaned APK file:', cleanupErr.message);
+                    }
+                }
                 // Fail closed: release uploads require a real configured provider
                 throw storageErr;
             }
