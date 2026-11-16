@@ -16,6 +16,10 @@ const ipdVitalsSchema = new mongoose.Schema({
     respiratoryRate: { type: Number },
     painScore: { type: Number, min: 0, max: 10 },
 
+    // Clinical Deterioration & Early Warning System (NEWS/EWS)
+    isCriticalAlert: { type: Boolean, default: false, index: true },
+    criticalAlertReason: { type: String, default: '', trim: true },
+
     remark: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
     remarkUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

@@ -401,6 +401,7 @@ app.use('/api/packages', require('./routes/package.routes'));
 app.use('/api/migrations', require('./routes/migration.routes'));
 app.use('/api/local-agent', require('./routes/localAgent.routes'));
 app.use('/api/local-sync', require('./routes/localSync.routes'));
+app.use('/api/nabh', require('./routes/nabh.routes'));
 app.use('/api/abdm/abha', require('./modules/abdm/abha.routes'));
 const { bridgeRouter } = require('./modules/abdm/abdm.bridge.routes');
 app.use('/api/abdm/bridge', bridgeRouter);

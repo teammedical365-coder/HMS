@@ -1030,6 +1030,28 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
         const cleanRemark = remark !== undefined ? String(remark).trim() : '';
         const cleanNotes = notes !== undefined ? String(notes).trim() : cleanRemark;
 
+        // Clinical Deterioration Early Warning Score (NEWS / EWS) Calculation
+        const numSBP = systolicBP ? Number(systolicBP) : undefined;
+        const numPulse = pulse ? Number(pulse) : undefined;
+        const numTemp = temperature ? Number(temperature) : undefined;
+        const numSpO2 = spo2 ? Number(spo2) : undefined;
+        const numRR = respiratoryRate ? Number(respiratoryRate) : undefined;
+
+        const isDeteriorating = Boolean(
+            (numSpO2 !== undefined && numSpO2 < 92) ||
+            (numPulse !== undefined && (numPulse < 45 || numPulse > 130)) ||
+            (numSBP !== undefined && (numSBP < 90 || numSBP > 200)) ||
+            (numRR !== undefined && (numRR < 8 || numRR > 26)) ||
+            (numTemp !== undefined && (numTemp < 95 || numTemp > 103))
+        );
+
+        const alertReasons = [];
+        if (numSpO2 !== undefined && numSpO2 < 92) alertReasons.push(`Low SpO2 (${numSpO2}%)`);
+        if (numPulse !== undefined && (numPulse < 45 || numPulse > 130)) alertReasons.push(`Abnormal Pulse (${numPulse} bpm)`);
+        if (numSBP !== undefined && (numSBP < 90 || numSBP > 200)) alertReasons.push(`Critical BP (${numSBP}/${diastolicBP || '-'} mmHg)`);
+        if (numRR !== undefined && (numRR < 8 || numRR > 26)) alertReasons.push(`Abnormal RR (${numRR} /min)`);
+        if (numTemp !== undefined && (numTemp < 95 || numTemp > 103)) alertReasons.push(`Critical Temp (${numTemp}°F)`);
+
         // Create append-only time-series vitals entry
         const vitalEntry = new IPDVitals({
             hospitalId,
@@ -1037,13 +1059,15 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
             patientId: admission.patientId,
             recordedBy: req.user._id || req.user.userId,
             recordedAt: new Date(),
-            systolicBP: systolicBP ? Number(systolicBP) : undefined,
+            systolicBP: numSBP,
             diastolicBP: diastolicBP ? Number(diastolicBP) : undefined,
-            pulse: pulse ? Number(pulse) : undefined,
-            temperature: temperature ? Number(temperature) : undefined,
-            spo2: spo2 ? Number(spo2) : undefined,
-            respiratoryRate: respiratoryRate ? Number(respiratoryRate) : undefined,
+            pulse: numPulse,
+            temperature: numTemp,
+            spo2: numSpO2,
+            respiratoryRate: numRR,
             painScore: painScore !== undefined && painScore !== '' ? Number(painScore) : undefined,
+            isCriticalAlert: isDeteriorating,
+            criticalAlertReason: alertReasons.join(', '),
             remark: cleanRemark,
             notes: cleanNotes
         });
@@ -1058,6 +1082,19 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
                 patientId: admission.patientId,
                 timestamp: new Date()
             });
+
+            if (isDeteriorating) {
+                io.to(`hospital_${hospitalId}`).emit('clinical_deterioration_alert', {
+                    vitalsId: vitalEntry._id,
+                    admissionId: admission._id,
+                    patientId: admission.patientId,
+                    patientName: admission.patientName || 'Inpatient',
+                    ward: admission.ward || '',
+                    bedNumber: admission.bedNumber || '',
+                    alertReason: vitalEntry.criticalAlertReason,
+                    timestamp: new Date()
+                });
+            }
         }
 
         res.status(201).json({ success: true, message: 'Vitals recorded successfully', vitals: vitalEntry });

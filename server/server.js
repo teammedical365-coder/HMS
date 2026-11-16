@@ -106,7 +106,7 @@ io.on('connection', (socket) => {
     });
 
     // Secure hospital room joining: strictly verify hospitalId matches user's authorized hospital
-    socket.on('joinHospitalRoom', (hospitalId) => {
+    const handleJoinHospital = (hospitalId) => {
         if (!hospitalId) return;
         const isAuthorized = socket.user && (
             String(socket.user.hospitalId) === String(hospitalId) ||
@@ -119,7 +119,9 @@ io.on('connection', (socket) => {
         } else {
             console.warn(`[Socket.io Security]: Blocked unauthorized hospital room join '${hospitalId}' by ${socket.id}`);
         }
-    });
+    };
+    socket.on('joinHospitalRoom', handleJoinHospital);
+    socket.on('join_hospital', handleJoinHospital);
 
     socket.on('disconnect', () => {
         // Clean disconnect
