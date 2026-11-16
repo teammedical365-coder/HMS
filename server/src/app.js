@@ -74,7 +74,7 @@ app.use(compression({
 const ALLOWED_EXACT_ORIGINS = new Set([
     'https://medical365.in',
     'https://www.medical365.in',
-    'https://hms-react-native-app.vercel.app'
+    'https://hms-react-native-app-alpha.vercel.app'
 ]);
 
 // Parse any additional allowed origins from environment configuration
