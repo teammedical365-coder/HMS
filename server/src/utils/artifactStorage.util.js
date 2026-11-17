@@ -82,11 +82,22 @@ function isGitHubRunSummaryUrl(url) {
 }
 
 /**
+ * Validates whether a given URL is a presigned URL containing temporary SigV4 credentials.
+ * Presigned URLs must NEVER be stored in the database.
+ */
+function isPresignedUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const lower = url.toLowerCase();
+    return lower.includes('x-amz-signature') || lower.includes('x-amz-credential');
+}
+
+/**
  * Validates whether a given URL is a verified direct artifact URL from a real storage provider.
  * Strictly excludes:
  * 1. Mock internal hosts (mock-storage.medical365.internal, .internal, etc.)
  * 2. GitHub Actions run-summary URLs (github.com/.../actions/runs/...)
  * 3. Relative or non-HTTP(S) paths
+ * 4. Temporary/presigned URLs (must never be stored as durable direct artifact URLs)
  */
 function isVerifiedDirectArtifactUrl(url) {
     if (!url || typeof url !== 'string') return false;
@@ -98,6 +109,9 @@ function isVerifiedDirectArtifactUrl(url) {
         return false;
     }
     if (isGitHubRunSummaryUrl(trimmed)) {
+        return false;
+    }
+    if (isPresignedUrl(trimmed)) {
         return false;
     }
     return true;
@@ -187,6 +201,18 @@ class MockStorageAdapter {
         return item.url;
     }
 
+    getPresignedDownloadUrl(key, expiresIn = 900) {
+        const item = this.store.get(key);
+        if (!item) {
+            const err = new Error(`Object not found in storage: ${key}`);
+            err.code = 'NOT_FOUND';
+            throw err;
+        }
+        const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+        const dateStamp = amzDate.substring(0, 8);
+        return `https://mock-storage.medical365.internal/${key}?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=mock-access-key%2F${dateStamp}%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=${amzDate}&X-Amz-Expires=${expiresIn}&X-Amz-SignedHeaders=host&X-Amz-Signature=mocksignature1234567890`;
+    }
+
     async getObject(key) {
         const item = this.store.get(key);
         if (!item) {
@@ -244,6 +270,17 @@ class ImageKitStorageAdapter {
             if (fileSize <= 0) {
                 throw new Error(`File is empty (zero bytes): ${filePath}`);
             }
+            // ImageKit free/standard plans reject uploads above 104,857,600 bytes (100 MiB).
+            // Fallback to ImageKit for oversized release artifacts is strictly prohibited.
+            if (fileSize >= 104857600) {
+                const err = new Error(
+                    `[Artifact Storage Error] File size (${fileSize} bytes) exceeds ImageKit's 100 MiB limit (104,857,600 bytes). ` +
+                    `Release artifacts above 100 MiB cannot be uploaded to ImageKit and must use S3/R2 durable cloud storage. ` +
+                    `Fallback to ImageKit for oversized release artifacts is prohibited.`
+                );
+                err.code = 'IMAGEKIT_SIZE_EXCEEDED';
+                throw err;
+            }
             checksum = await calculateFileSha256(filePath);
             if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
                 const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
@@ -254,6 +291,15 @@ class ImageKitStorageAdapter {
             uploadPayload = fs.createReadStream(filePath);
         } else if (buffer && Buffer.isBuffer(buffer)) {
             fileSize = buffer.length;
+            if (fileSize >= 104857600) {
+                const err = new Error(
+                    `[Artifact Storage Error] File size (${fileSize} bytes) exceeds ImageKit's 100 MiB limit (104,857,600 bytes). ` +
+                    `Release artifacts above 100 MiB cannot be uploaded to ImageKit and must use S3/R2 durable cloud storage. ` +
+                    `Fallback to ImageKit for oversized release artifacts is prohibited.`
+                );
+                err.code = 'IMAGEKIT_SIZE_EXCEEDED';
+                throw err;
+            }
             checksum = calculateSha256(buffer);
             if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
                 const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
@@ -320,6 +366,524 @@ class ImageKitStorageAdapter {
             urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINTS,
         });
         return await realImageKit.deleteFile(fileId);
+    }
+}
+
+/**
+ * AWS SigV4 Signing Helpers for S3/R2 Compatible Storage
+ */
+function sha256Hex(data) {
+    return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function hmac(key, data, encoding) {
+    const h = crypto.createHmac('sha256', key).update(data);
+    return encoding ? h.digest(encoding) : h.digest();
+}
+
+function getSigV4Key(key, dateStamp, regionName, serviceName) {
+    const kDate = hmac('AWS4' + key, dateStamp);
+    const kRegion = hmac(kDate, regionName);
+    const kService = hmac(kRegion, serviceName);
+    const kSigning = hmac(kService, 'aws4_request');
+    return kSigning;
+}
+
+function buildSigV4Headers({
+    method,
+    canonicalUri,
+    query = {},
+    headers = {},
+    payloadHash = 'UNSIGNED-PAYLOAD',
+    region = 'auto',
+    service = 's3',
+    accessKeyId,
+    secretAccessKey,
+}) {
+    const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const dateStamp = amzDate.substring(0, 8);
+    const effectiveRegion = (region && region !== 'auto') ? region : 'us-east-1';
+
+    const reqHeaders = { ...headers };
+    reqHeaders['x-amz-date'] = amzDate;
+    reqHeaders['x-amz-content-sha256'] = payloadHash;
+
+    const sortedQueryKeys = Object.keys(query).sort();
+    const canonicalQuery = sortedQueryKeys
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(query[k] !== undefined ? query[k] : '')}`)
+        .join('&');
+
+    const headerMap = {};
+    for (const [k, v] of Object.entries(reqHeaders)) {
+        if (v !== undefined && v !== null) {
+            headerMap[k.toLowerCase().trim()] = String(v).trim().replace(/\s+/g, ' ');
+        }
+    }
+    const sortedHeaderKeys = Object.keys(headerMap).sort();
+    const canonicalHeaders = sortedHeaderKeys
+        .map(k => `${k}:${headerMap[k]}\n`)
+        .join('');
+    const signedHeaders = sortedHeaderKeys.join(';');
+
+    const canonicalRequest = [
+        method.toUpperCase(),
+        canonicalUri,
+        canonicalQuery,
+        canonicalHeaders,
+        signedHeaders,
+        payloadHash,
+    ].join('\n');
+
+    const stringToSign = [
+        'AWS4-HMAC-SHA256',
+        amzDate,
+        `${dateStamp}/${effectiveRegion}/${service}/aws4_request`,
+        sha256Hex(canonicalRequest),
+    ].join('\n');
+
+    const signingKey = getSigV4Key(secretAccessKey, dateStamp, effectiveRegion, service);
+    const signature = hmac(signingKey, stringToSign, 'hex');
+
+    reqHeaders['authorization'] = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${dateStamp}/${effectiveRegion}/${service}/aws4_request, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+    return reqHeaders;
+}
+
+/**
+ * Dedicated S3-Compatible Durable Storage Adapter
+ * Compatible with Cloudflare R2, AWS S3, MinIO, Wasabi, etc.
+ * Supports streaming multipart upload for release binaries of any size (up to 5 TB).
+ */
+class S3StorageAdapter {
+    constructor(config = {}) {
+        this.name = 's3';
+        this.bucket = config.bucket || process.env.S3_BUCKET || '';
+        this.endpoint = config.endpoint || process.env.S3_ENDPOINT || '';
+        this.region = config.region || process.env.S3_REGION || 'auto';
+        this.accessKeyId = config.accessKeyId || process.env.S3_ACCESS_KEY_ID || '';
+        this.secretAccessKey = config.secretAccessKey || process.env.S3_SECRET_ACCESS_KEY || '';
+        this.publicBaseUrl = config.publicBaseUrl || process.env.S3_PUBLIC_BASE_URL || '';
+        // 8 MiB per part (bounded chunk size, above S3 minimum 5 MiB)
+        this.partSize = config.partSize || (8 * 1024 * 1024);
+    }
+
+    isConfigured() {
+        return Boolean(
+            this.bucket &&
+            this.accessKeyId &&
+            this.secretAccessKey
+        );
+    }
+
+    getEffectiveEndpoint() {
+        if (this.endpoint) {
+            return this.endpoint.replace(/\/+$/, '');
+        }
+        const reg = (this.region && this.region !== 'auto') ? this.region : 'us-east-1';
+        return `https://s3.${reg}.amazonaws.com`;
+    }
+
+    getPublicUrl(key) {
+        const cleanKey = key.replace(/^\/+/, '');
+        if (this.publicBaseUrl) {
+            return `${this.publicBaseUrl.replace(/\/+$/, '')}/${cleanKey}`;
+        }
+        return '';
+    }
+
+    /**
+     * Generates a short-lived AWS SigV4 Presigned GET URL (15-minute default expiry)
+     * using the R2 S3 API endpoint. Never exposes or requires public bucket access.
+     * @param {string} key - Object storage key (e.g. releases/com.app/1/release.apk)
+     * @param {number} [expiresIn=900] - Expiration duration in seconds (default 900 = 15 minutes)
+     * @returns {string} Presigned URL for private direct GET download
+     */
+    getPresignedDownloadUrl(key, expiresIn = 900) {
+        if (!this.isConfigured()) {
+            const err = new Error(
+                '[Artifact Storage Error] S3/R2 durable cloud storage is not configured (missing S3_BUCKET, S3_ACCESS_KEY_ID, or S3_SECRET_ACCESS_KEY).'
+            );
+            err.code = 'UNCONFIGURED_STORAGE';
+            throw err;
+        }
+
+        const cleanKey = (key || '').replace(/^\/+/, '');
+        if (!cleanKey) {
+            throw new Error('[Artifact Storage Error] Storage key is required for presigned URL generation.');
+        }
+
+        const rawEndpoint = this.getEffectiveEndpoint();
+        const parsedEndpoint = new URL(rawEndpoint);
+        const host = parsedEndpoint.host;
+
+        const cleanPath = parsedEndpoint.pathname.replace(/\/+$/, '');
+        let canonicalUri;
+        if (cleanPath.endsWith(`/${this.bucket}`)) {
+            canonicalUri = `${cleanPath}/${cleanKey}`;
+        } else {
+            canonicalUri = `${cleanPath}/${this.bucket}/${cleanKey}`;
+        }
+        if (!canonicalUri.startsWith('/')) canonicalUri = '/' + canonicalUri;
+        const encodedUri = canonicalUri.split('/').map(encodeURIComponent).join('/');
+
+        const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+        const dateStamp = amzDate.substring(0, 8);
+        const effectiveRegion = (this.region && this.region !== 'auto') ? this.region : 'us-east-1';
+        const service = 's3';
+        const credentialScope = `${dateStamp}/${effectiveRegion}/${service}/aws4_request`;
+
+        const query = {
+            'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+            'X-Amz-Credential': `${this.accessKeyId}/${credentialScope}`,
+            'X-Amz-Date': amzDate,
+            'X-Amz-Expires': String(expiresIn),
+            'X-Amz-SignedHeaders': 'host',
+        };
+
+        const sortedQueryKeys = Object.keys(query).sort();
+        const canonicalQuery = sortedQueryKeys
+            .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(query[k])}`)
+            .join('&');
+
+        const canonicalHeaders = `host:${host}\n`;
+        const signedHeaders = 'host';
+        const payloadHash = 'UNSIGNED-PAYLOAD';
+
+        const canonicalRequest = [
+            'GET',
+            encodedUri,
+            canonicalQuery,
+            canonicalHeaders,
+            signedHeaders,
+            payloadHash,
+        ].join('\n');
+
+        const stringToSign = [
+            'AWS4-HMAC-SHA256',
+            amzDate,
+            credentialScope,
+            sha256Hex(canonicalRequest),
+        ].join('\n');
+
+        const signingKey = getSigV4Key(this.secretAccessKey, dateStamp, effectiveRegion, service);
+        const signature = hmac(signingKey, stringToSign, 'hex');
+
+        return `${parsedEndpoint.origin}${encodedUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+    }
+
+    getDownloadUrl(key, expiresIn = 900) {
+        if (!this.publicBaseUrl) {
+            return this.getPresignedDownloadUrl(key, expiresIn);
+        }
+        return this.getPublicUrl(key);
+    }
+
+    dispatchRequest({ method, key = '', query = {}, headers = {}, body = null, isStream = false, contentLength = 0 }) {
+        return new Promise((resolve, reject) => {
+            const rawEndpoint = this.getEffectiveEndpoint();
+            const parsedEndpoint = new URL(rawEndpoint);
+            const isHttps = parsedEndpoint.protocol === 'https:';
+            const transport = isHttps ? require('https') : require('http');
+
+            const cleanPath = parsedEndpoint.pathname.replace(/\/+$/, '');
+            let canonicalUri;
+            if (cleanPath.endsWith(`/${this.bucket}`)) {
+                canonicalUri = `${cleanPath}/${key ? key.replace(/^\/+/, '') : ''}`;
+            } else {
+                canonicalUri = `${cleanPath}/${this.bucket}${key ? '/' + key.replace(/^\/+/, '') : ''}`;
+            }
+            if (!canonicalUri.startsWith('/')) canonicalUri = '/' + canonicalUri;
+
+            const encodedUri = canonicalUri.split('/').map(encodeURIComponent).join('/');
+
+            const requestHeaders = { ...headers, host: parsedEndpoint.host };
+            if (contentLength > 0) {
+                requestHeaders['content-length'] = contentLength;
+            }
+
+            const signedHeaders = buildSigV4Headers({
+                method,
+                canonicalUri: encodedUri,
+                query,
+                headers: requestHeaders,
+                payloadHash: isStream ? 'UNSIGNED-PAYLOAD' : (body ? sha256Hex(body) : sha256Hex('')),
+                region: this.region,
+                service: 's3',
+                accessKeyId: this.accessKeyId,
+                secretAccessKey: this.secretAccessKey,
+            });
+
+            const queryKeys = Object.keys(query).sort();
+            const queryString = queryKeys
+                .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(query[k] !== undefined ? query[k] : '')}`)
+                .join('&');
+            const requestPath = queryString ? `${encodedUri}?${queryString}` : encodedUri;
+
+            const reqOptions = {
+                protocol: parsedEndpoint.protocol,
+                hostname: parsedEndpoint.hostname,
+                port: parsedEndpoint.port || (isHttps ? 443 : 80),
+                method: method.toUpperCase(),
+                path: requestPath,
+                headers: signedHeaders,
+            };
+
+            const req = transport.request(reqOptions, (res) => {
+                const chunks = [];
+                res.on('data', chunk => chunks.push(chunk));
+                res.on('end', () => {
+                    const responseBuffer = Buffer.concat(chunks);
+                    const responseText = responseBuffer.toString('utf8');
+                    const statusCode = res.statusCode || 200;
+
+                    if (statusCode >= 200 && statusCode < 300) {
+                        return resolve({
+                            statusCode,
+                            headers: res.headers,
+                            body: responseText,
+                            buffer: responseBuffer,
+                        });
+                    }
+
+                    let errorCode = 'S3_ERROR';
+                    let errorMessage = `S3 request failed with HTTP ${statusCode}`;
+                    const codeMatch = responseText.match(/<Code>([\s\S]*?)<\/Code>/i);
+                    const msgMatch = responseText.match(/<Message>([\s\S]*?)<\/Message>/i);
+                    if (codeMatch && codeMatch[1]) errorCode = codeMatch[1].trim();
+                    if (msgMatch && msgMatch[1]) errorMessage = msgMatch[1].trim();
+
+                    const err = new Error(`[S3 Storage Error] ${errorCode}: ${errorMessage}`);
+                    err.code = errorCode;
+                    err.statusCode = statusCode;
+                    err.responseBody = responseText;
+                    return reject(err);
+                });
+            });
+
+            req.on('error', reject);
+
+            if (isStream && body && typeof body.pipe === 'function') {
+                body.pipe(req);
+            } else if (body) {
+                req.write(body);
+                req.end();
+            } else {
+                req.end();
+            }
+        });
+    }
+
+    async initiateMultipartUpload(key, contentType) {
+        const res = await this.dispatchRequest({
+            method: 'POST',
+            key,
+            query: { uploads: '' },
+            headers: {
+                'content-type': contentType || 'application/octet-stream',
+            },
+        });
+        const match = res.body.match(/<UploadId>([\s\S]*?)<\/UploadId>/i);
+        if (!match || !match[1]) {
+            throw new Error(`[S3 Storage Error] Failed to extract UploadId from response: ${res.body}`);
+        }
+        return match[1].trim();
+    }
+
+    async uploadPart({ key, uploadId, partNumber, filePath, start, end, partSize }) {
+        const stream = fs.createReadStream(filePath, { start, end });
+        try {
+            const res = await this.dispatchRequest({
+                method: 'PUT',
+                key,
+                query: {
+                    partNumber: String(partNumber),
+                    uploadId,
+                },
+                headers: {
+                    'content-type': 'application/octet-stream',
+                },
+                body: stream,
+                isStream: true,
+                contentLength: partSize,
+            });
+            const etag = res.headers['etag'];
+            if (!etag) {
+                throw new Error(`[S3 Storage Error] Missing ETag in part ${partNumber} upload response`);
+            }
+            return { PartNumber: partNumber, ETag: etag };
+        } finally {
+            if (stream && typeof stream.destroy === 'function' && !stream.destroyed) {
+                stream.destroy();
+            }
+        }
+    }
+
+    async completeMultipartUpload(key, uploadId, parts) {
+        const sortedParts = [...parts].sort((a, b) => a.PartNumber - b.PartNumber);
+        const partsXml = sortedParts
+            .map(p => `  <Part>\n    <PartNumber>${p.PartNumber}</PartNumber>\n    <ETag>${p.ETag}</ETag>\n  </Part>`)
+            .join('\n');
+        const xmlBody = `<CompleteMultipartUpload>\n${partsXml}\n</CompleteMultipartUpload>`;
+
+        const res = await this.dispatchRequest({
+            method: 'POST',
+            key,
+            query: { uploadId },
+            headers: {
+                'content-type': 'application/xml',
+            },
+            body: Buffer.from(xmlBody, 'utf8'),
+            contentLength: Buffer.byteLength(xmlBody),
+        });
+        return res;
+    }
+
+    async abortMultipartUpload(key, uploadId) {
+        try {
+            await this.dispatchRequest({
+                method: 'DELETE',
+                key,
+                query: { uploadId },
+            });
+        } catch (e) {
+            console.warn(`[S3 Storage] Could not abort multipart upload ${uploadId}:`, e.message);
+        }
+    }
+
+    async delete(key) {
+        if (!this.isConfigured()) return false;
+        try {
+            await this.dispatchRequest({
+                method: 'DELETE',
+                key,
+            });
+            return true;
+        } catch (e) {
+            console.warn(`[S3 Storage] Delete failed for ${key}:`, e.message);
+            return false;
+        }
+    }
+
+    async upload({ filePath, buffer, key, contentType, metadata, expectedSha256 }) {
+        if (!this.isConfigured()) {
+            const err = new Error(
+                '[Artifact Storage Error] S3/R2 durable cloud storage is not configured (missing S3_BUCKET, S3_ACCESS_KEY_ID, or S3_SECRET_ACCESS_KEY).'
+            );
+            err.code = 'UNCONFIGURED_STORAGE';
+            throw err;
+        }
+
+        let checksum = '';
+        let fileSize = 0;
+
+        if (filePath) {
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`File not found at ${filePath}`);
+            }
+            const stat = fs.statSync(filePath);
+            fileSize = stat.size;
+            if (fileSize <= 0) {
+                throw new Error(`File is empty (zero bytes): ${filePath}`);
+            }
+            checksum = await calculateFileSha256(filePath);
+        } else if (buffer && Buffer.isBuffer(buffer)) {
+            fileSize = buffer.length;
+            if (fileSize <= 0) {
+                throw new Error('Buffer is empty (zero bytes)');
+            }
+            checksum = calculateSha256(buffer);
+        } else {
+            throw new Error('Either filePath or buffer is required for S3 upload');
+        }
+
+        if (expectedSha256 && !verifyDigest(checksum, expectedSha256)) {
+            const err = new Error(`Checksum mismatch: expected ${expectedSha256}, got ${checksum}`);
+            err.code = 'INTEGRITY_MISMATCH';
+            throw err;
+        }
+
+        const safeContentType = contentType || 'application/vnd.android.package-archive';
+        const minMultipartSize = 5 * 1024 * 1024;
+
+        if (fileSize < minMultipartSize) {
+            let uploadBody;
+            if (filePath) {
+                uploadBody = fs.createReadStream(filePath);
+            } else {
+                uploadBody = buffer;
+            }
+            try {
+                await this.dispatchRequest({
+                    method: 'PUT',
+                    key,
+                    headers: {
+                        'content-type': safeContentType,
+                    },
+                    body: uploadBody,
+                    isStream: Boolean(filePath),
+                    contentLength: fileSize,
+                });
+            } finally {
+                if (uploadBody && typeof uploadBody.destroy === 'function' && !uploadBody.destroyed) {
+                    uploadBody.destroy();
+                }
+            }
+        } else {
+            let tempCreatedFile = false;
+            let actualFilePath = filePath;
+            if (!actualFilePath && buffer) {
+                const tmpPath = path.join(__dirname, `../../public/downloads/temp/s3_upload_${Date.now()}_${Math.random().toString(36).substring(7)}.tmp`);
+                fs.writeFileSync(tmpPath, buffer);
+                actualFilePath = tmpPath;
+                tempCreatedFile = true;
+            }
+
+            let uploadId = null;
+            try {
+                uploadId = await this.initiateMultipartUpload(key, safeContentType);
+                const parts = [];
+                const partSize = this.partSize;
+                const totalParts = Math.ceil(fileSize / partSize);
+
+                for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
+                    const start = (partNumber - 1) * partSize;
+                    const end = Math.min(fileSize - 1, start + partSize - 1);
+                    const currentPartSize = end - start + 1;
+
+                    const partResult = await this.uploadPart({
+                        key,
+                        uploadId,
+                        partNumber,
+                        filePath: actualFilePath,
+                        start,
+                        end,
+                        partSize: currentPartSize,
+                    });
+                    parts.push(partResult);
+                }
+
+                await this.completeMultipartUpload(key, uploadId, parts);
+            } catch (uploadErr) {
+                if (uploadId) {
+                    await this.abortMultipartUpload(key, uploadId);
+                }
+                throw uploadErr;
+            } finally {
+                if (tempCreatedFile && actualFilePath && fs.existsSync(actualFilePath)) {
+                    try { fs.unlinkSync(actualFilePath); } catch (_) {}
+                }
+            }
+        }
+
+        const publicUrl = this.getPublicUrl(key);
+        return {
+            storageKey: key,
+            publicUrl,
+            fileSize,
+            checksumSha256: checksum,
+            provider: this.name,
+            fileId: key,
+        };
     }
 }
 
@@ -420,35 +984,61 @@ function resolveStorageAdapter(options = {}) {
 
     if (!adapter) {
         if (requireRealProvider) {
-            // For release uploads requiring a real durable provider,
-            // check ImageKit configuration even if NODE_ENV === 'test'.
+            // For release uploads requiring a real durable provider:
+            // Check S3-compatible cloud storage (Cloudflare R2 / AWS S3) first.
+            // S3 has no 100 MiB file-size limit and handles large APK/AAB release binaries.
+            const s3Adapter = new S3StorageAdapter();
             const imagekitAdapter = new ImageKitStorageAdapter();
-            if (imagekitAdapter.isConfigured()) {
+
+            const isS3Requested = (
+                process.env.RELEASE_STORAGE_PROVIDER === 's3' ||
+                process.env.RELEASE_STORAGE_PROVIDER === 'r2' ||
+                process.env.STORAGE_PROVIDER === 's3' ||
+                process.env.STORAGE_PROVIDER === 'r2'
+            );
+
+            if (isS3Requested) {
+                if (s3Adapter.isConfigured()) {
+                    adapter = s3Adapter;
+                } else {
+                    const err = new Error(
+                        '[Artifact Storage Error] S3/R2 release storage is requested but missing configuration credentials. ' +
+                        'Please configure S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY in the environment.'
+                    );
+                    err.code = 'UNCONFIGURED_STORAGE';
+                    throw err;
+                }
+            } else if (s3Adapter.isConfigured()) {
+                adapter = s3Adapter;
+            } else if (imagekitAdapter.isConfigured()) {
                 adapter = imagekitAdapter;
             } else {
                 const err = new Error(
                     '[Artifact Storage Error] No durable cloud storage provider is configured. ' +
-                    'Please configure IMAGEKIT credentials in the production environment.'
+                    'Please configure S3/R2 credentials (S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY) ' +
+                    'or IMAGEKIT credentials in the production environment.'
                 );
                 err.code = 'UNCONFIGURED_STORAGE';
                 throw err;
             }
         } else {
             // In test mode or when explicitly requested, use mock adapter.
-            // Tests cannot accidentally use real ImageKit uploads.
+            // Tests cannot accidentally use real ImageKit or S3 uploads.
             if (process.env.NODE_ENV === 'test' || process.env.STORAGE_PROVIDER === 'mock') {
                 adapter = mockAdapterInstance;
             } else {
-                // Check ImageKit configuration (primary configured durable cloud storage)
+                const s3Adapter = new S3StorageAdapter();
                 const imagekitAdapter = new ImageKitStorageAdapter();
-                if (imagekitAdapter.isConfigured()) {
+                if (s3Adapter.isConfigured()) {
+                    adapter = s3Adapter;
+                } else if (imagekitAdapter.isConfigured()) {
                     adapter = imagekitAdapter;
                 } else if (process.env.STORAGE_PROVIDER === 'local') {
                     adapter = new LocalDiskStorageAdapter();
                 } else if (process.env.NODE_ENV === 'production') {
                     const err = new Error(
                         '[Artifact Storage Error] No durable cloud storage provider is configured. ' +
-                        'Please configure IMAGEKIT credentials in the production environment.'
+                        'Please configure S3/R2 or IMAGEKIT credentials in the production environment.'
                     );
                     err.code = 'UNCONFIGURED_STORAGE';
                     throw err;
@@ -586,7 +1176,7 @@ async function uploadReleaseArtifact({
         fileSize: uploadResult.fileSize,
         checksumSha256: uploadResult.checksumSha256,
         provider: uploadResult.provider,
-        fileId: uploadResult.fileId,
+        fileId: uploadResult.fileId || uploadResult.storageKey,
         isMock,
         artifact: artifactDoc,
     };
@@ -766,8 +1356,11 @@ module.exports = {
     uploadReleaseArtifact,
     MockStorageAdapter,
     mockAdapter: mockAdapterInstance,
+    ImageKitStorageAdapter,
+    S3StorageAdapter,
     isMockStorageUrl,
     isGitHubRunSummaryUrl,
+    isPresignedUrl,
     isVerifiedDirectArtifactUrl,
     isGenuinePublicUrl,
     PRODUCTION_RELEASE_CERT_SHA256,

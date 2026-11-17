@@ -155,6 +155,18 @@ require.cache[releaseArtifactModelPath] = {
 const buildRouter = require('../src/routes/superadmin.build.routes');
 const app = express();
 app.use(express.json());
+// Inject test Central Admin auth context for storage validation test suite
+app.use((req, res, next) => {
+    if (!req.headers.authorization && !req.query.token) {
+        req.user = {
+            id: 'superadmin_test_user',
+            userId: 'superadmin_test_user',
+            role: 'superadmin',
+            _roleData: { name: 'superadmin' }
+        };
+    }
+    next();
+});
 app.use('/api/superadmin/hospitals', buildRouter);
 
 let server;

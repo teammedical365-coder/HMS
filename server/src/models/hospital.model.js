@@ -97,6 +97,11 @@ const hospitalSchema = new mongoose.Schema({
         rnAabUrl: { type: String, default: '' },
         rnReleaseId: { type: String, default: '' },
         rnChecksumSha256: { type: String, default: '' },
+        rnApkStorageKey: { type: String, trim: true, default: '' },
+        rnAabStorageKey: { type: String, trim: true, default: '' },
+        rnStorageProvider: { type: String, trim: true, default: '' },
+        apkStorageKey: { type: String, trim: true, default: '' },
+        aabStorageKey: { type: String, trim: true, default: '' },
 
         // Automated Native Version Management (Phase 3)
         versionCode: { type: Number, default: 1, min: 1 },
