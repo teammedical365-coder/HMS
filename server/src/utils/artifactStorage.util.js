@@ -122,6 +122,22 @@ function isVerifiedDirectArtifactUrl(url) {
  */
 const isGenuinePublicUrl = isVerifiedDirectArtifactUrl;
 
+/**
+ * Sanitizes an application ID segment for durable storage keys (ImageKit, S3/R2).
+ * Replaces any character outside [a-z0-9_-] with an underscore.
+ * Ensures storage path segments contain only alphanumeric characters, underscores, and hyphens.
+ * ImageKit folder naming rules strictly prohibit dots (.); e.g. 'com.medical365.citygeneral' -> 'com_medical365_citygeneral'.
+ *
+ * @param {string} appId - Dotted application ID
+ * @returns {string} Sanitized storage-safe application ID segment
+ */
+function sanitizeStorageAppId(appId) {
+    if (!appId || typeof appId !== 'string') {
+        return 'com_medical365_app';
+    }
+    return appId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STORAGE ADAPTERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,15 +335,24 @@ class ImageKitStorageAdapter {
             urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINTS,
         });
 
-        const fileName = path.basename(key);
-        const folder = path.dirname(key);
+        const normalizedKey = String(key || '').replace(/\\/g, '/');
+        const fileName = (path.posix ? path.posix.basename(normalizedKey) : path.basename(normalizedKey));
+        const rawFolder = (path.posix ? path.posix.dirname(normalizedKey) : path.dirname(normalizedKey));
+
+        // Clean each folder segment: allow only alphanumeric characters, underscores, and hyphens.
+        // ImageKit folder paths strictly prohibit dots (.) and invalid characters.
+        const cleanFolderSegments = rawFolder
+            .split('/')
+            .filter(Boolean)
+            .map(segment => segment.replace(/[^a-zA-Z0-9_-]/g, '_'));
+        const folder = `/${cleanFolderSegments.join('/')}`;
 
         let uploadRes;
         try {
             uploadRes = await realImageKit.upload({
                 file: uploadPayload,
                 fileName,
-                folder: `/${folder}`,
+                folder,
                 useUniqueFileName: false,
                 tags: ['release-artifact', metadata?.artifactType || 'APK'],
             });
@@ -354,7 +379,9 @@ class ImageKitStorageAdapter {
     }
 
     async getDownloadUrl(key) {
-        return `${process.env.IMAGEKIT_URL_ENDPOINTS}/${key}`;
+        const base = String(process.env.IMAGEKIT_URL_ENDPOINTS || '').replace(/\/+$/, '');
+        const cleanKey = String(key || '').replace(/^\/+/, '').replace(/\\/g, '/');
+        return `${base}/${cleanKey}`;
     }
 
     async delete(fileId) {
@@ -1105,10 +1132,11 @@ async function uploadReleaseArtifact({
     }
 
     const adapter = resolveStorageAdapter({ requireRealProvider });
-    const safeAppId = (applicationId || 'com.medical365.app').toLowerCase();
+    const originalAppId = (applicationId || 'com.medical365.app').trim().toLowerCase();
+    const storageSafeAppId = sanitizeStorageAppId(originalAppId);
     const safeVersionCode = Number(versionCode) || 1;
     const safeFileName = path.basename(fileName);
-    const storageKey = `releases/${safeAppId}/${safeVersionCode}/${safeFileName}`;
+    const storageKey = `releases/${storageSafeAppId}/${safeVersionCode}/${safeFileName}`;
 
     const contentType = artifactType === 'APK'
         ? 'application/vnd.android.package-archive'
@@ -1125,7 +1153,7 @@ async function uploadReleaseArtifact({
             artifactType,
             versionCode: safeVersionCode,
             versionName: versionName || '1.0.0',
-            applicationId: safeAppId,
+            applicationId: originalAppId, // Preserve original dotted Android application ID
             tenantId: tenantId ? String(tenantId) : null,
             rnBuildId: rnBuildId || '',
             releaseId: releaseId || '',
@@ -1153,7 +1181,7 @@ async function uploadReleaseArtifact({
                             checksumSha256: uploadResult.checksumSha256,
                             versionCode: safeVersionCode,
                             versionName: versionName || '1.0.0',
-                            applicationId: safeAppId,
+                            applicationId: originalAppId, // Preserve original dotted Android application ID
                             tenantId: tenantId || null,
                             rnBuildId: rnBuildId || '',
                             releaseId: releaseId || '',
@@ -1363,6 +1391,7 @@ module.exports = {
     isPresignedUrl,
     isVerifiedDirectArtifactUrl,
     isGenuinePublicUrl,
+    sanitizeStorageAppId,
     PRODUCTION_RELEASE_CERT_SHA256,
     findAndroidTool,
     verifyApkFileAuthenticity,
