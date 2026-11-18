@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { eraseStrokesAlongPath } from './penGeometry';
 
 const TabletPenCanvas = ({
     pageKey,
@@ -10,26 +11,61 @@ const TabletPenCanvas = ({
 }) => {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
-    const [isDrawing, setIsDrawing] = useState(false);
-    const currentStrokeRef = useRef(null);
 
-    // Redraw all strokes on canvas
-    const renderAllStrokes = useCallback((canvas, strokeList) => {
-        if (!canvas) return;
+    // Synchronous state refs to prevent race conditions & stale React closures
+    const strokesRef = useRef(strokes);
+    const isDrawingRef = useRef(false);
+    const activePointerIdRef = useRef(null);
+    const currentStrokeRef = useRef(null);
+    const lastEraserPointRef = useRef(null);
+    const eraserModifiedRef = useRef(false);
+    const dprRef = useRef(1);
+
+    // Keep strokesRef in sync with incoming strokes prop
+    useEffect(() => {
+        strokesRef.current = strokes;
+    }, [strokes]);
+
+    // Redraw all strokes on canvas with DPR scaling
+    const renderAllStrokes = useCallback((strokeList) => {
+        const canvas = canvasRef.current;
+        const container = containerRef.current;
+        if (!canvas || !container) return;
+
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const dpr = dprRef.current || window.devicePixelRatio || 1;
+        const rect = container.getBoundingClientRect();
 
-        strokeList.forEach((stroke) => {
-            if (!stroke.points || stroke.points.length < 2) return;
+        // Use setTransform to avoid accumulating scale
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        const listToRender = strokeList !== undefined ? strokeList : strokesRef.current;
+        if (!Array.isArray(listToRender)) return;
+
+        listToRender.forEach((stroke) => {
+            if (!stroke.points || stroke.points.length === 0) return;
 
             ctx.save();
             ctx.strokeStyle = stroke.color || '#1d4ed8';
+            ctx.fillStyle = stroke.color || '#1d4ed8';
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
 
+            // Support single-point strokes (e.g. dots, periods, i-dots)
+            if (stroke.points.length === 1) {
+                const pt = stroke.points[0];
+                const radius = Math.max(1, ((stroke.width || 2) / 2) * (0.6 + (pt.pressure || 0.5) * 0.8));
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+
+            // Draw multi-point continuous stroke
             for (let i = 1; i < stroke.points.length; i++) {
                 const prev = stroke.points[i - 1];
                 const curr = stroke.points[i];
@@ -54,15 +90,20 @@ const TabletPenCanvas = ({
 
         const updateCanvasSize = () => {
             const rect = container.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
+            if (rect.width === 0 || rect.height === 0) return;
 
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.scale(dpr, dpr);
-            }
-            renderAllStrokes(canvas, strokes);
+            const dpr = window.devicePixelRatio || 1;
+            dprRef.current = dpr;
+
+            // Physical pixel buffer
+            canvas.width = Math.round(rect.width * dpr);
+            canvas.height = Math.round(rect.height * dpr);
+
+            // CSS display size
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+
+            renderAllStrokes(strokesRef.current);
         };
 
         updateCanvasSize();
@@ -70,113 +111,195 @@ const TabletPenCanvas = ({
         ro.observe(container);
 
         return () => ro.disconnect();
+    }, [renderAllStrokes]);
+
+    // Redraw whenever strokes change externally
+    useEffect(() => {
+        renderAllStrokes(strokes);
     }, [strokes, renderAllStrokes]);
 
+    // Logical CSS pixel coordinates extraction
     const getCanvasCoordinates = (e) => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
         const rect = canvas.getBoundingClientRect();
+        const pressure = typeof e.pressure === 'number' && e.pressure > 0 ? e.pressure : 0.5;
         return {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-            pressure: e.pressure > 0 ? e.pressure : 0.5
+            x: Math.round((e.clientX - rect.left) * 10) / 10,
+            y: Math.round((e.clientY - rect.top) * 10) / 10,
+            pressure
         };
     };
 
+    // POINTER DOWN: Start new independent stroke or eraser session
     const handlePointerDown = (e) => {
         if (activeTool === 'type') return;
-        const coords = getCanvasCoordinates(e);
 
-        if (activeTool === 'eraser') {
-            // Find any stroke near click point (within 12px) and delete it
-            const remaining = strokes.filter((st) => {
-                const isNear = st.points?.some((pt) => {
-                    const dx = pt.x - coords.x;
-                    const dy = pt.y - coords.y;
-                    return Math.sqrt(dx * dx + dy * dy) < 14;
-                });
-                return !isNear;
-            });
-            if (remaining.length !== strokes.length) {
-                onSaveStrokes(remaining);
-            }
-            setIsDrawing(true);
+        // If another pointer is already active, ignore simultaneous second touches (palm rejection)
+        if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) {
             return;
         }
 
-        setIsDrawing(true);
-        currentStrokeRef.current = {
-            id: Date.now() + Math.random(),
+        activePointerIdRef.current = e.pointerId;
+        isDrawingRef.current = true;
+
+        // Capture pointer so pointerup is never lost if cursor leaves canvas bounds
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) {}
+
+        const coords = getCanvasCoordinates(e);
+
+        if (activeTool === 'eraser') {
+            lastEraserPointRef.current = coords;
+            eraserModifiedRef.current = false;
+
+            const eraserRadius = Math.max(14, penWidth * 4);
+            const eraseResult = eraseStrokesAlongPath(strokesRef.current, coords, coords, eraserRadius);
+            if (eraseResult.changed) {
+                strokesRef.current = eraseResult.strokes;
+                eraserModifiedRef.current = true;
+                renderAllStrokes(eraseResult.strokes);
+            }
+            return;
+        }
+
+        // PEN TOOL: Begin brand new stroke with isolated points array
+        const newStroke = {
+            id: `stroke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             color: penColor,
             width: penWidth,
-            tool: activeTool,
+            tool: 'pen',
             points: [coords]
         };
+        currentStrokeRef.current = newStroke;
 
+        // Draw initial point/dot immediately for crisp visual responsiveness
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (ctx) {
+            const dpr = dprRef.current || window.devicePixelRatio || 1;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.save();
             ctx.fillStyle = penColor;
+            const dotRadius = Math.max(1, (penWidth / 2) * (0.6 + coords.pressure * 0.8));
             ctx.beginPath();
-            ctx.arc(coords.x, coords.y, (penWidth / 2) * (0.6 + coords.pressure * 0.8), 0, Math.PI * 2);
+            ctx.arc(coords.x, coords.y, dotRadius, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
         }
     };
 
+    // POINTER MOVE: Append points to active stroke or drag-erase
     const handlePointerMove = (e) => {
-        if (!isDrawing) return;
-        const coords = getCanvasCoordinates(e);
+        if (!isDrawingRef.current || activePointerIdRef.current !== e.pointerId) return;
+
+        // Consume high-frequency coalesced events if available from stylus/Apple Pencil/Wacom
+        const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+        const eventList = coalesced && coalesced.length > 0 ? coalesced : [e];
 
         if (activeTool === 'eraser') {
-            const remaining = strokes.filter((st) => {
-                const isNear = st.points?.some((pt) => {
-                    const dx = pt.x - coords.x;
-                    const dy = pt.y - coords.y;
-                    return Math.sqrt(dx * dx + dy * dy) < 14;
-                });
-                return !isNear;
-            });
-            if (remaining.length !== strokes.length) {
-                onSaveStrokes(remaining);
+            const eraserRadius = Math.max(14, penWidth * 4);
+            let anyChange = false;
+
+            for (let i = 0; i < eventList.length; i++) {
+                const pt = getCanvasCoordinates(eventList[i]);
+                const prev = lastEraserPointRef.current || pt;
+                const res = eraseStrokesAlongPath(strokesRef.current, prev, pt, eraserRadius);
+                if (res.changed) {
+                    strokesRef.current = res.strokes;
+                    anyChange = true;
+                    eraserModifiedRef.current = true;
+                }
+                lastEraserPointRef.current = pt;
+            }
+
+            if (anyChange) {
+                renderAllStrokes(strokesRef.current);
             }
             return;
         }
 
+        // PEN TOOL: Draw incremental line segments
         const curStroke = currentStrokeRef.current;
         if (!curStroke) return;
 
-        const prevPoint = curStroke.points[curStroke.points.length - 1];
-        curStroke.points.push(coords);
-
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
-        if (ctx && prevPoint) {
+        const dpr = dprRef.current || window.devicePixelRatio || 1;
+
+        if (ctx) {
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.save();
             ctx.strokeStyle = curStroke.color;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            const avgPressure = (prevPoint.pressure + coords.pressure) / 2;
-            ctx.lineWidth = curStroke.width * (0.6 + avgPressure * 0.8);
+        }
 
-            ctx.beginPath();
-            ctx.moveTo(prevPoint.x, prevPoint.y);
-            ctx.lineTo(coords.x, coords.y);
-            ctx.stroke();
+        for (let i = 0; i < eventList.length; i++) {
+            const coords = getCanvasCoordinates(eventList[i]);
+            const prevPoint = curStroke.points[curStroke.points.length - 1];
+
+            // Prevent adding identical redundant coordinates
+            if (prevPoint && prevPoint.x === coords.x && prevPoint.y === coords.y) {
+                continue;
+            }
+
+            curStroke.points.push(coords);
+
+            if (ctx && prevPoint) {
+                const avgPressure = (prevPoint.pressure + coords.pressure) / 2;
+                ctx.lineWidth = curStroke.width * (0.6 + avgPressure * 0.8);
+                ctx.beginPath();
+                ctx.moveTo(prevPoint.x, prevPoint.y);
+                ctx.lineTo(coords.x, coords.y);
+                ctx.stroke();
+            }
+        }
+
+        if (ctx) {
             ctx.restore();
         }
     };
 
-    const handlePointerUp = () => {
-        if (!isDrawing) return;
-        setIsDrawing(false);
+    // POINTER UP / CANCEL: Finalize stroke cleanly exactly once
+    const handlePointerEnd = (e) => {
+        if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) {
+            return;
+        }
 
-        if (activeTool === 'pen' && currentStrokeRef.current) {
+        try {
+            if (e?.currentTarget && typeof e.currentTarget.hasPointerCapture === 'function') {
+                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                    e.currentTarget.releasePointerCapture(e.pointerId);
+                }
+            }
+        } catch (_) {}
+
+        const wasDrawing = isDrawingRef.current;
+        isDrawingRef.current = false;
+        activePointerIdRef.current = null;
+
+        if (!wasDrawing) return;
+
+        if (activeTool === 'pen') {
             const finishedStroke = currentStrokeRef.current;
             currentStrokeRef.current = null;
-            if (finishedStroke.points.length >= 1) {
-                onSaveStrokes([...strokes, finishedStroke]);
+
+            if (finishedStroke && finishedStroke.points.length >= 1) {
+                const updatedStrokes = [...strokesRef.current, finishedStroke];
+                strokesRef.current = updatedStrokes;
+                if (typeof onSaveStrokes === 'function') {
+                    onSaveStrokes(updatedStrokes);
+                }
+            }
+        } else if (activeTool === 'eraser') {
+            lastEraserPointRef.current = null;
+            if (eraserModifiedRef.current) {
+                eraserModifiedRef.current = false;
+                if (typeof onSaveStrokes === 'function') {
+                    onSaveStrokes(strokesRef.current);
+                }
             }
         }
     };
@@ -201,12 +324,14 @@ const TabletPenCanvas = ({
                 style={{
                     width: '100%',
                     height: '100%',
-                    display: 'block'
+                    display: 'block',
+                    touchAction: 'none'
                 }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
+                onPointerUp={handlePointerEnd}
+                onPointerCancel={handlePointerEnd}
+                onLostPointerCapture={handlePointerEnd}
             />
         </div>
     );

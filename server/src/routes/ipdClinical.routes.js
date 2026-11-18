@@ -1904,6 +1904,87 @@ router.get('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant
     }
 });
 
+// Validates and sanitizes tablet vector handwriting strokes to prevent oversized/malformed payloads
+function validateAndSanitizeHandwritingStrokes(rawStrokes) {
+    if (!rawStrokes || typeof rawStrokes !== 'object') {
+        return { page1: [], page2: [] };
+    }
+
+    const sanitized = {};
+    const MAX_PAGES = 50;
+    const MAX_STROKES_PER_PAGE = 3000;
+    const MAX_POINTS_PER_STROKE = 5000;
+
+    const pageKeys = Object.keys(rawStrokes).slice(0, MAX_PAGES);
+
+    for (const pageKey of pageKeys) {
+        if (!/^page\d+$/i.test(pageKey)) continue;
+
+        const strokesArray = rawStrokes[pageKey];
+        if (!Array.isArray(strokesArray)) {
+            sanitized[pageKey] = [];
+            continue;
+        }
+
+        const cleanStrokes = [];
+        const strokeLimit = Math.min(strokesArray.length, MAX_STROKES_PER_PAGE);
+
+        for (let sIdx = 0; sIdx < strokeLimit; sIdx++) {
+            const stroke = strokesArray[sIdx];
+            if (!stroke || typeof stroke !== 'object') continue;
+
+            const pts = Array.isArray(stroke.points) ? stroke.points : [];
+            const cleanPts = [];
+            const ptLimit = Math.min(pts.length, MAX_POINTS_PER_STROKE);
+
+            for (let pIdx = 0; pIdx < ptLimit; pIdx++) {
+                const pt = pts[pIdx];
+                if (!pt || typeof pt !== 'object') continue;
+
+                const x = Number(pt.x);
+                const y = Number(pt.y);
+                if (!Number.isFinite(x) || !Number.isFinite(y) || x < -500 || x > 10000 || y < -500 || y > 10000) {
+                    continue;
+                }
+
+                const pressure = Number(pt.pressure);
+                const cleanPressure = Number.isFinite(pressure) && pressure >= 0 && pressure <= 1
+                    ? Math.round(pressure * 100) / 100
+                    : 0.5;
+
+                cleanPts.push({
+                    x: Math.round(x * 10) / 10,
+                    y: Math.round(y * 10) / 10,
+                    pressure: cleanPressure
+                });
+            }
+
+            if (cleanPts.length > 0) {
+                const cleanWidth = Number(stroke.width);
+                const safeWidth = Number.isFinite(cleanWidth) && cleanWidth >= 0.5 && cleanWidth <= 50 ? cleanWidth : 2;
+                const safeColor = (typeof stroke.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(stroke.color))
+                    ? stroke.color
+                    : '#1d4ed8';
+
+                cleanStrokes.push({
+                    id: String(stroke.id || `stroke-${sIdx}-${Date.now()}`).slice(0, 80),
+                    color: safeColor,
+                    width: safeWidth,
+                    tool: stroke.tool === 'eraser' ? 'eraser' : 'pen',
+                    points: cleanPts
+                });
+            }
+        }
+
+        sanitized[pageKey] = cleanStrokes;
+    }
+
+    if (!sanitized.page1) sanitized.page1 = [];
+    if (!sanitized.page2) sanitized.page2 = [];
+
+    return sanitized;
+}
+
 // POST / PUT /api/ipd-clinical/admissions/:admissionId/clinical-notes
 const saveInpatientClinicalNoteHandler = async (req, res) => {
     try {
@@ -1989,7 +2070,7 @@ const saveInpatientClinicalNoteHandler = async (req, res) => {
         }
 
         if (payload.handwritingStrokes !== undefined) {
-            noteDoc.handwritingStrokes = payload.handwritingStrokes;
+            noteDoc.handwritingStrokes = validateAndSanitizeHandwritingStrokes(payload.handwritingStrokes);
             noteDoc.markModified('handwritingStrokes');
         }
 

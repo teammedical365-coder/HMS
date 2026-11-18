@@ -415,7 +415,7 @@ export const downloadInpatientClinicalNotesPdf = async ({
         const screenW = 746;
         const screenH = 1055;
         strokes.forEach((stroke) => {
-            if (!stroke.points || stroke.points.length < 2) return;
+            if (!stroke.points || stroke.points.length === 0) return;
             const colorHex = stroke.color || '#1d4ed8';
             let r = 29, g = 78, b = 216;
             if (colorHex.startsWith('#') && colorHex.length >= 7) {
@@ -424,7 +424,18 @@ export const downloadInpatientClinicalNotesPdf = async ({
                 b = parseInt(colorHex.slice(5, 7), 16) || 216;
             }
             doc.setDrawColor(r, g, b);
+            doc.setFillColor(r, g, b);
             doc.setLineWidth(Math.max(0.2, (stroke.width || 2) * 0.15));
+
+            // Support single-point dots in PDF output
+            if (stroke.points.length === 1) {
+                const pt = stroke.points[0];
+                const x = boxLeft + (pt.x / screenW) * boxWidth;
+                const y = boxTopY + (pt.y / screenH) * boxHeight;
+                const radius = Math.max(0.25, (stroke.width || 2) * 0.12);
+                doc.circle(x, y, radius, 'F');
+                return;
+            }
 
             for (let i = 1; i < stroke.points.length; i++) {
                 const p1 = stroke.points[i - 1];
