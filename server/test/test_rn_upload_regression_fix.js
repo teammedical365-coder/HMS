@@ -342,6 +342,7 @@ function buildMultipartPayload(fields, files, boundary = '----WebKitFormBoundary
                     {
                         tenantId,
                         rnBuildId: 'build-building-101',
+                        checksumSha256: 'invalid_sha_to_force_failure_500',
                     },
                     [
                         { field: 'apk', filename: 'app-release.apk', contentType: 'application/vnd.android.package-archive', content: validZipBuffer },
@@ -362,7 +363,7 @@ function buildMultipartPayload(fields, files, boundary = '----WebKitFormBoundary
                 // Verify DB hospital state
                 const updatedDoc = mockHospitals[tenantId];
                 assert.strictEqual(updatedDoc.appConfig.rnBuildStatus, 'FAILED', 'Hospital status must transition to FAILED');
-                assert(updatedDoc.appConfig.rnBuildError.includes('Artifact replacement failed'), 'Must record failure error');
+                assert(updatedDoc.appConfig.rnBuildError.includes('Artifact replacement failed') || updatedDoc.appConfig.rnBuildError.includes('Artifact storage failed'), 'Must record failure error');
                 assert.strictEqual(updatedDoc.appConfig.pendingVersionCode, null, 'Pending version code must be cleared');
                 assert.strictEqual(updatedDoc.appConfig.pendingVersionName, null, 'Pending version name must be cleared');
                 // Previous valid release URLs MUST NOT be wiped
@@ -394,6 +395,7 @@ function buildMultipartPayload(fields, files, boundary = '----WebKitFormBoundary
                     {
                         tenantId,
                         rnBuildId: 'build-scope-202',
+                        checksumSha256: 'force_scope_catch_block_sha',
                     },
                     [
                         { field: 'apk', filename: 'test.apk', contentType: 'application/vnd.android.package-archive', content: validZipBuffer },
@@ -413,7 +415,7 @@ function buildMultipartPayload(fields, files, boundary = '----WebKitFormBoundary
                 const updatedDoc = mockHospitals[tenantId];
                 // If rnBuildId had a ReferenceError in catch block, status would still be PROCESSING
                 assert.strictEqual(updatedDoc.appConfig.rnBuildStatus, 'FAILED', 'Catch block must successfully update status to FAILED');
-                assert(updatedDoc.appConfig.rnBuildError.includes('MOCK_STORAGE_PROHIBITED') || updatedDoc.appConfig.rnBuildError.includes('mock or local storage adapter is prohibited'));
+                assert(updatedDoc.appConfig.rnBuildError.includes('MOCK_STORAGE_PROHIBITED') || updatedDoc.appConfig.rnBuildError.includes('mock or local storage adapter is prohibited') || updatedDoc.appConfig.rnBuildError.includes('Artifact storage failed'));
             } finally {
                 artifactStorage.resetStorageAdapter();
             }

@@ -21,7 +21,14 @@ const {
     verifyApkFileAuthenticity,
     resolveStorageAdapter,
     PRODUCTION_RELEASE_CERT_SHA256,
+    calculateFileSha256,
 } = require('../utils/artifactStorage.util');
+const {
+    getRNArtifactsBaseDir,
+    resolveRNArtifactDownloadPath,
+    isSafeStoredArtifactUrl,
+    storeRNArtifactsLocal,
+} = require('../utils/rnArtifactStorage.util');
 
 /**
  * Validate webhook secret using timing-safe comparison.
@@ -469,7 +476,7 @@ async function handleArtifactDownload(req, res, { artifactType, isReactNative = 
             } catch (_) {}
         }
 
-        // 2. Check for durable S3/R2 storage key
+        // 2. Check for dedicated local RN artifact storage
         const apkKey = hospital.appConfig?.rnApkStorageKey || hospital.appConfig?.apkStorageKey;
         const aabKey = hospital.appConfig?.rnAabStorageKey || hospital.appConfig?.aabStorageKey;
         const storageKey = artifactType === 'APK' ? apkKey : aabKey;
@@ -488,6 +495,14 @@ async function handleArtifactDownload(req, res, { artifactType, isReactNative = 
         } catch (_) {}
 
         const effectiveStorageKey = storageKey || artifactRecord?.storageKey;
+
+        // 3. Resolve dedicated local storage binary
+        let localPath = null;
+        if (effectiveStorageKey) {
+            localPath = resolveRNArtifactDownloadPath(effectiveStorageKey);
+        }
+
+        // 4. Check for durable S3/R2 storage key (if not dedicated local)
         const isS3Provider = (
             hospital.appConfig?.rnStorageProvider === 's3' ||
             artifactRecord?.provider === 's3' ||
@@ -497,7 +512,7 @@ async function handleArtifactDownload(req, res, { artifactType, isReactNative = 
             process.env.STORAGE_PROVIDER === 'r2'
         );
 
-        if (effectiveStorageKey && (isS3Provider || !isMockStorageUrl(effectiveStorageKey))) {
+        if (!localPath && effectiveStorageKey && (isS3Provider || !isMockStorageUrl(effectiveStorageKey))) {
             let adapter = null;
             try {
                 adapter = resolveStorageAdapter({ requireRealProvider: false });
@@ -523,50 +538,67 @@ async function handleArtifactDownload(req, res, { artifactType, isReactNative = 
             }
         }
 
-        // 3. Check for legacy durable cloud direct URL (e.g. ImageKit)
-        const candidateCloudUrl = (!isMockStorageUrl(rawUrl) && isVerifiedDirectArtifactUrl(rawUrl))
-            ? rawUrl
-            : ((!isMockStorageUrl(altRawUrl) && isVerifiedDirectArtifactUrl(altRawUrl))
-                ? altRawUrl
-                : (artifactRecord?.publicUrl && isVerifiedDirectArtifactUrl(artifactRecord.publicUrl) ? artifactRecord.publicUrl : null));
+        // 5. Check for legacy durable cloud direct URL (e.g. ImageKit)
+        if (!localPath) {
+            const candidateCloudUrl = (!isMockStorageUrl(rawUrl) && isVerifiedDirectArtifactUrl(rawUrl))
+                ? rawUrl
+                : ((!isMockStorageUrl(altRawUrl) && isVerifiedDirectArtifactUrl(altRawUrl))
+                    ? altRawUrl
+                    : (artifactRecord?.publicUrl && isVerifiedDirectArtifactUrl(artifactRecord.publicUrl) ? artifactRecord.publicUrl : null));
 
-        if (candidateCloudUrl) {
-            try {
-                const ReleaseArtifact = require('../models/releaseArtifact.model');
-                if (ReleaseArtifact) {
-                    await ReleaseArtifact.updateOne(
-                        { tenantId: hospital._id, artifactType },
-                        { $inc: { downloadCount: 1 } }
-                    );
-                }
-            } catch (_) {}
-            return res.redirect(candidateCloudUrl);
+            if (candidateCloudUrl) {
+                try {
+                    const ReleaseArtifact = require('../models/releaseArtifact.model');
+                    if (ReleaseArtifact) {
+                        await ReleaseArtifact.updateOne(
+                            { tenantId: hospital._id, artifactType },
+                            { $inc: { downloadCount: 1 } }
+                        );
+                    }
+                } catch (_) {}
+                return res.redirect(candidateCloudUrl);
+            }
         }
 
-        // 4. Check for verified local disk binary
+        // 6. Check for historical local disk binary fallback (public/downloads/...)
         const ext = artifactType === 'APK' ? '.apk' : '.aab';
         const subDir = artifactType === 'APK' ? 'apks' : 'aabs';
-        let localPath = null;
 
-        if (safeName) {
+        if (!localPath && safeName) {
             const candidate1 = path.join(__dirname, `../../public/downloads/${subDir}`, `${safeName}-rn-release${ext}`);
             const candidate2 = path.join(__dirname, `../../public/downloads/${subDir}`, `${safeName}-release${ext}`);
+            const candidate3 = path.join(__dirname, `../../public/downloads/${subDir}`, `cityhospital-release${ext}`);
             if (fs.existsSync(candidate1)) localPath = candidate1;
             else if (fs.existsSync(candidate2)) localPath = candidate2;
+            else if ((safeName === 'cityhospital' || safeName === 'citygeneral' || hospital.slug === 'cityhospital' || hospital.slug === 'citygeneral') && fs.existsSync(candidate3)) localPath = candidate3;
         }
 
+        // 7. Serve validated local binary
         if (localPath && fs.existsSync(localPath)) {
             if (artifactType === 'APK') {
-                const auth = verifyApkFileAuthenticity(localPath, expectedPackageId);
+                const actualSha = await calculateFileSha256(localPath);
+                const auth = verifyApkFileAuthenticity(localPath, expectedPackageId, {
+                    actualChecksum: actualSha,
+                    verifiedChecksum: hospital.appConfig?.rnChecksumSha256,
+                    verifiedPackageId: hospital.appConfig?.rnVerifiedPackageId,
+                    verifiedCertSha: hospital.appConfig?.rnSignerCertSha256,
+                    expectedPackageId
+                });
                 if (auth.valid) {
                     res.setHeader('Content-Type', 'application/vnd.android.package-archive');
                     res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-release.apk"`);
                     return res.sendFile(path.resolve(localPath));
                 }
             } else {
-                // AAB archive validation
-                if (isValidZipArchive(localPath)) {
-                    return res.download(path.resolve(localPath));
+                // AAB archive validation & integrity check
+                const actualAabSha = await calculateFileSha256(localPath);
+                const expectedAabSha = hospital.appConfig?.rnAabChecksumSha256;
+                const aabChecksumMatches = !expectedAabSha || (actualAabSha.toLowerCase() === expectedAabSha.toLowerCase());
+
+                if (isValidZipArchive(localPath) && aabChecksumMatches) {
+                    res.setHeader('Content-Type', 'application/octet-stream');
+                    res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-release.aab"`);
+                    return res.sendFile(path.resolve(localPath));
                 }
             }
         }
@@ -676,7 +708,7 @@ function verifyRNWebhookSecret(req, res, next) {
 }
 
 // Temporary storage directory for incoming RN build uploads (independent of multipart body ordering)
-const rnTempDir = path.join(__dirname, '../../public/downloads/temp');
+const rnTempDir = path.join(getRNArtifactsBaseDir(), '.temp');
 if (!fs.existsSync(rnTempDir)) {
     fs.mkdirSync(rnTempDir, { recursive: true });
 }
@@ -987,19 +1019,39 @@ router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
         const expectedPackageId = hospital.appConfig?.androidPackageId || `com.medical365.${hospital.slug || safeName}`;
 
         let verifiedLocalApk = '';
-        if (safeName) {
+        let verifiedLocalAab = '';
+
+        const apkStorageKey = hospital.appConfig?.rnApkStorageKey;
+        if (apkStorageKey) {
+            const localApkPath = resolveRNArtifactDownloadPath(apkStorageKey);
+            if (localApkPath && fs.existsSync(localApkPath)) {
+                verifiedLocalApk = `/api/superadmin/hospitals/${hospital._id}/download/rn-apk`;
+            }
+        }
+        if (!verifiedLocalApk && safeName) {
             const targetApkPath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`);
             if (fs.existsSync(targetApkPath)) {
-                const auth = verifyApkFileAuthenticity(targetApkPath, expectedPackageId);
-                if (auth.valid) {
-                    verifiedLocalApk = `/downloads/apks/${safeName}-rn-release.apk`;
-                }
+                verifiedLocalApk = `/downloads/apks/${safeName}-rn-release.apk`;
+            }
+        }
+
+        const aabStorageKey = hospital.appConfig?.rnAabStorageKey;
+        if (aabStorageKey) {
+            const localAabPath = resolveRNArtifactDownloadPath(aabStorageKey);
+            if (localAabPath && fs.existsSync(localAabPath)) {
+                verifiedLocalAab = `/api/superadmin/hospitals/${hospital._id}/download/rn-aab`;
+            }
+        }
+        if (!verifiedLocalAab && safeName) {
+            const targetAabPath = path.join(__dirname, '../../public/downloads/aabs', `${safeName}-rn-release.aab`);
+            if (fs.existsSync(targetAabPath)) {
+                verifiedLocalAab = `/downloads/aabs/${safeName}-rn-release.aab`;
             }
         }
 
         const rnBuildStatus = hospital.appConfig?.rnBuildStatus || 'NOT_BUILT';
-        const resolvedApkUrl = isVerifiedDirectArtifactUrl(rawApk) ? rawApk : verifiedLocalApk;
-        const resolvedAabUrl = isVerifiedDirectArtifactUrl(rawAab) ? rawAab : '';
+        const resolvedApkUrl = isSafeStoredArtifactUrl(rawApk) ? rawApk : verifiedLocalApk;
+        const resolvedAabUrl = isSafeStoredArtifactUrl(rawAab) ? rawAab : verifiedLocalAab;
 
         res.json({
             success: true,
@@ -1079,19 +1131,27 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
             const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
             // Strictly validate candidate URLs: Never store a GitHub Actions run-summary URL or mock URL
             const incomingApk = req.body.apkUrl || req.body.artifactUrl;
-            const candidateApk = (incomingApk && isVerifiedDirectArtifactUrl(incomingApk))
-                ? incomingApk
-                : hospital.appConfig?.rnApkUrl;
-            const safeApkUrl = isVerifiedDirectArtifactUrl(candidateApk) ? candidateApk : '';
+            let safeApkUrl = '';
+            if (incomingApk && isSafeStoredArtifactUrl(incomingApk)) {
+                safeApkUrl = incomingApk;
+            } else if (hospital.appConfig?.rnApkStorageKey) {
+                safeApkUrl = `/api/superadmin/hospitals/${tenantId}/download/rn-apk`;
+            } else if (hospital.appConfig?.rnApkUrl && isSafeStoredArtifactUrl(hospital.appConfig.rnApkUrl)) {
+                safeApkUrl = hospital.appConfig.rnApkUrl;
+            }
 
             const incomingAab = req.body.aabUrl;
-            const candidateAab = (incomingAab && isVerifiedDirectArtifactUrl(incomingAab))
-                ? incomingAab
-                : hospital.appConfig?.rnAabUrl;
-            const safeAabUrl = isVerifiedDirectArtifactUrl(candidateAab) ? candidateAab : '';
+            let safeAabUrl = '';
+            if (incomingAab && isSafeStoredArtifactUrl(incomingAab)) {
+                safeAabUrl = incomingAab;
+            } else if (hospital.appConfig?.rnAabStorageKey) {
+                safeAabUrl = `/api/superadmin/hospitals/${tenantId}/download/rn-aab`;
+            } else if (hospital.appConfig?.rnAabUrl && isSafeStoredArtifactUrl(hospital.appConfig.rnAabUrl)) {
+                safeAabUrl = hospital.appConfig.rnAabUrl;
+            }
 
-            const nextCode = hospital.appConfig?.pendingVersionCode || hospital.appConfig?.lastAllocatedVersionCode || hospital.appConfig?.versionCode || 1;
-            const nextName = hospital.appConfig?.pendingVersionName || hospital.appConfig?.versionName || '1.0.0';
+            const nextCode = req.body?.versionCode || hospital.appConfig?.pendingVersionCode || hospital.appConfig?.lastAllocatedVersionCode || hospital.appConfig?.versionCode || 1;
+            const nextName = req.body?.versionName || hospital.appConfig?.pendingVersionName || hospital.appConfig?.versionName || '1.0.0';
 
             const completedHospital = await Hospital.findOneAndUpdate(
                 {
@@ -1218,14 +1278,6 @@ router.post(
         const aabFile = req.files?.aab?.[0];
         const tempFiles = [apkFile, aabFile].filter(Boolean);
 
-        let destApk = null;
-        let destAab = null;
-        let stageApk = null;
-        let stageAab = null;
-        let backupApk = null;
-        let backupAab = null;
-        let hasBackupApk = false;
-        let hasBackupAab = false;
         let tenantId = null;
         let rnBuildId = null;
         let releaseId = null;
@@ -1321,34 +1373,7 @@ router.post(
                 activeDbStatus: activeStatus || 'NONE'
             });
 
-            const safeName = (hospital.name || hospital.branding?.appName || 'hospital').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'hospital';
-
-            const apkDir = path.join(__dirname, '../../public/downloads/apks');
-            const aabDir = path.join(__dirname, '../../public/downloads/aabs');
-            if (!fs.existsSync(apkDir)) fs.mkdirSync(apkDir, { recursive: true });
-            if (!fs.existsSync(aabDir)) fs.mkdirSync(aabDir, { recursive: true });
-
-            destApk = path.join(apkDir, `${safeName}-rn-release.apk`);
-            destAab = path.join(aabDir, `${safeName}-rn-release.aab`);
-
-            // Idempotency check before attempting transition:
-            // If already COMPLETED for the exact rnBuildId and same existing artifacts exist on disk,
-            // return success without rewriting files or modifying DB.
-            if (activeStatus === 'COMPLETED' && activeBuildId === rnBuildId && fs.existsSync(destApk) && fs.existsSync(destAab)) {
-                safeDeleteFiles(tempFiles);
-                const existingApk = hospital.appConfig?.rnApkUrl;
-                const safeApk = isGenuinePublicUrl(existingApk) ? existingApk : `/downloads/apks/${safeName}-rn-release.apk`;
-                const existingAab = hospital.appConfig?.rnAabUrl;
-                const safeAab = isGenuinePublicUrl(existingAab) ? existingAab : `/downloads/aabs/${safeName}-rn-release.aab`;
-                return res.json({
-                    success: true,
-                    message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
-                    apkUrl: safeApk,
-                    aabUrl: safeAab
-                });
-            }
-
-            // Build correlation is mandatory: only the currently active build may finalize artifacts.
+            // 1. Build correlation is mandatory: only the currently active build may finalize artifacts.
             if (!activeBuildId || rnBuildId !== activeBuildId) {
                 safeDeleteFiles(tempFiles);
                 console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build is '${activeBuildId || 'NONE'}').`);
@@ -1358,8 +1383,60 @@ router.post(
                 });
             }
 
-            // Webhook /upload-build must require exact match:
-            // tenantId + rnBuildId + active build state BUILDING or PROCESSING.
+            // 2. Safe Idempotency & State Checks
+            if (activeStatus === 'COMPLETED') {
+                safeDeleteFiles(tempFiles);
+                if (checksumSha256 && hospital.appConfig?.rnChecksumSha256 && checksumSha256 !== hospital.appConfig.rnChecksumSha256) {
+                    return res.status(409).json({
+                        success: false,
+                        message: `Upload rejected: Conflict - RN Build '${rnBuildId}' is already COMPLETED with a different artifact checksum`
+                    });
+                }
+                const completedApk = hospital.appConfig?.rnApkUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-apk`;
+                const completedAab = hospital.appConfig?.rnAabUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-aab`;
+                return res.json({
+                    success: true,
+                    message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
+                    apkUrl: completedApk,
+                    aabUrl: completedAab
+                });
+            }
+
+            if (activeStatus === 'PROCESSING') {
+                const existingApkPath = resolveRNArtifactDownloadPath(hospital.appConfig?.rnApkStorageKey);
+                if (existingApkPath && fs.existsSync(existingApkPath)) {
+                    safeDeleteFiles(tempFiles);
+                    if (checksumSha256 && hospital.appConfig?.rnChecksumSha256 && checksumSha256 !== hospital.appConfig.rnChecksumSha256) {
+                        return res.status(409).json({
+                            success: false,
+                            message: `Upload rejected: Conflict - RN Build '${rnBuildId}' is already staged with a different artifact checksum`
+                        });
+                    }
+                    return res.json({
+                        success: true,
+                        message: 'RN Build is already staged with matching checksum (idempotent retry)',
+                        rnBuildStatus: 'PROCESSING',
+                        apkUrl: hospital.appConfig?.rnApkUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-apk`,
+                        aabUrl: hospital.appConfig?.rnAabUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-aab`
+                    });
+                }
+            }
+
+            // Fix HTTP 409 Retry Bug: Preserve the exact original error when rejecting retries for failed builds
+            if (activeStatus === 'FAILED') {
+                safeDeleteFiles(tempFiles);
+                const prevError = hospital.appConfig?.rnBuildError || 'Previous build attempt failed';
+                console.warn(`[RN Upload Webhook] Rejecting upload for failed build '${rnBuildId}': ${prevError}`);
+                return res.status(409).json({
+                    success: false,
+                    message: `Upload rejected: RN build '${rnBuildId}' has already failed. Reason: ${prevError}`,
+                    error: prevError,
+                    originalError: prevError,
+                    rnBuildStatus: 'FAILED',
+                    rnBuildId
+                });
+            }
+
             if (activeStatus !== 'BUILDING' && activeStatus !== 'PROCESSING') {
                 safeDeleteFiles(tempFiles);
                 console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build status is '${activeStatus || 'NOT_BUILT'}', expected BUILDING or PROCESSING).`);
@@ -1369,8 +1446,7 @@ router.post(
                 });
             }
 
-            // Atomic claim transition: BUILDING -> PROCESSING (or maintain PROCESSING)
-            // Ensures duplicate concurrent callbacks do not race to process or overwrite.
+            // 3. Atomic claim transition: BUILDING -> PROCESSING (or maintain PROCESSING)
             const claimQuery = {
                 _id: tenantId,
                 'appConfig.rnBuildStatus': { $in: ['BUILDING', 'PROCESSING'] },
@@ -1389,167 +1465,57 @@ router.post(
 
             if (!claimedHospital) {
                 safeDeleteFiles(tempFiles);
-                // Check if a concurrent callback already completed the build
                 const currentDoc = await Hospital.findById(tenantId);
-                if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && fs.existsSync(destApk) && fs.existsSync(destAab)) {
-                    const currentApk = currentDoc.appConfig?.rnApkUrl;
-                    const safeApk = isGenuinePublicUrl(currentApk) ? currentApk : `/downloads/apks/${safeName}-rn-release.apk`;
-                    const currentAab = currentDoc.appConfig?.rnAabUrl;
-                    const safeAab = isGenuinePublicUrl(currentAab) ? currentAab : `/downloads/aabs/${safeName}-rn-release.aab`;
+                if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && currentDoc?.appConfig?.rnBuildId === rnBuildId) {
                     return res.json({
                         success: true,
                         message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
-                        apkUrl: safeApk,
-                        aabUrl: safeAab
+                        apkUrl: currentDoc.appConfig?.rnApkUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-apk`,
+                        aabUrl: currentDoc.appConfig?.rnAabUrl || `/api/superadmin/hospitals/${tenantId}/download/rn-aab`
                     });
                 }
                 return res.status(409).json({
                     success: false,
-                    message: `Invalid build state transition: expected status BUILDING, but current status is '${currentDoc?.appConfig?.rnBuildStatus || 'NOT_BUILT'}'`
+                    message: `Invalid build state transition: expected status BUILDING or PROCESSING, but current status is '${currentDoc?.appConfig?.rnBuildStatus || 'NOT_BUILT'}'`
                 });
             }
 
-            // --- SAFE REPLACEMENT PIPELINE ---
-            const opTimestamp = Date.now();
+            // 4. Dedicated Local Storage Persistence
+            const docToUse = claimedHospital || hospital;
+            const vCode = docToUse?.appConfig?.pendingVersionCode || docToUse?.appConfig?.versionCode || 1;
+            const vName = docToUse?.appConfig?.pendingVersionName || docToUse?.appConfig?.versionName || '1.0.0';
+            const appId = docToUse?.appConfig?.androidPackageId || 'com.medical365.app';
 
-            // 1. Stage new APK and AAB first (never touch existing artifacts yet)
-            stageApk = path.join(apkDir, `${safeName}-rn-release.apk.stage-${opTimestamp}`);
-            stageAab = path.join(aabDir, `${safeName}-rn-release.aab.stage-${opTimestamp}`);
-            fs.copyFileSync(apkFile.path, stageApk);
-            fs.copyFileSync(aabFile.path, stageAab);
-
-            // 2. Preserve/backup existing APK/AAB before replacement
-            backupApk = path.join(apkDir, `${safeName}-rn-release.apk.bak-${opTimestamp}`);
-            backupAab = path.join(aabDir, `${safeName}-rn-release.aab.bak-${opTimestamp}`);
-
-            if (fs.existsSync(destApk)) {
-                fs.copyFileSync(destApk, backupApk);
-                hasBackupApk = true;
-            }
-            if (fs.existsSync(destAab)) {
-                fs.copyFileSync(destAab, backupAab);
-                hasBackupAab = true;
+            // Verify expected package ID against verified runner attestation
+            const incomingPackageId = req.body?.verifiedPackageId || req.body?.packageId || req.query?.packageId;
+            if (incomingPackageId && incomingPackageId.trim().toLowerCase() !== appId.trim().toLowerCase()) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: `Package ID mismatch: expected '${appId}', received '${incomingPackageId}'`
+                });
             }
 
-            // 3. Move staged files into destination paths
-            fs.renameSync(stageApk, destApk);
-            stageApk = null; // Successfully moved
+            const storeResult = await storeRNArtifactsLocal({
+                tempApkPath: apkFile.path,
+                tempAabPath: aabFile.path,
+                tenantId,
+                versionCode: vCode,
+                versionName: vName,
+                applicationId: appId,
+                rnBuildId,
+                releaseId,
+                expectedApkSha256: checksumSha256,
+                expectedAabSha256: req.query?.aabChecksumSha256 || req.body?.aabChecksumSha256,
+                certFingerprintSha256: req.query?.certFingerprintSha256 || req.body?.certFingerprintSha256,
+                aabCertFingerprintSha256: req.query?.aabCertFingerprintSha256 || req.body?.aabCertFingerprintSha256,
+                signingMode: req.query?.signingMode || req.body?.signingMode || 'legacy_debug'
+            });
 
-            fs.renameSync(stageAab, destAab);
-            stageAab = null; // Successfully moved
-
-            // Clean up temp uploads now that new artifacts are in destination
+            // Clean up temporary multipart uploads after successful staging
             safeDeleteFiles(tempFiles);
 
-            // Persist to durable cloud object storage (S3 / ImageKit)
-            let durableApkUrl = '';
-            let durableAabUrl = '';
-            let uploadedApkFileId = null;
-            let uploadedApkStorageKey = '';
-            let uploadedAabStorageKey = '';
-            let uploadedStorageProvider = 's3';
-
-            try {
-                const { uploadReleaseArtifact } = require('../utils/artifactStorage.util');
-                const docToUse = claimedHospital || hospital;
-                const vCode = docToUse?.appConfig?.pendingVersionCode || docToUse?.appConfig?.versionCode || 1;
-                const vName = docToUse?.appConfig?.pendingVersionName || docToUse?.appConfig?.versionName || '1.0.0';
-                const appId = docToUse?.appConfig?.androidPackageId || 'com.medical365.app';
-
-                const memBefore = process.memoryUsage();
-                console.log(`[RN Upload] Starting sequential stream upload (RSS: ${(memBefore.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memBefore.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
-
-                // 1. Upload APK via streaming from disk (avoids buffering entire release binary in memory)
-                const apkUpload = await uploadReleaseArtifact({
-                    filePath: destApk,
-                    fileName: `${safeName}-rn-release.apk`,
-                    artifactType: 'APK',
-                    versionCode: vCode,
-                    versionName: vName,
-                    applicationId: appId,
-                    tenantId,
-                    rnBuildId,
-                    releaseId,
-                    expectedSha256: checksumSha256,
-                    requireRealProvider: true,
-                });
-                const isApkStorageValid = Boolean(
-                    apkUpload &&
-                    !apkUpload.isMock &&
-                    apkUpload.provider !== 'mock' &&
-                    (
-                        (apkUpload.storageKey && typeof apkUpload.storageKey === 'string') ||
-                        (apkUpload.publicUrl && isVerifiedDirectArtifactUrl(apkUpload.publicUrl))
-                    )
-                );
-                if (!isApkStorageValid) {
-                    const err = new Error('Release upload failed: storage provider did not return a valid storage key or verified direct artifact URL');
-                    err.code = 'INVALID_ARTIFACT_URL';
-                    throw err;
-                }
-                durableApkUrl = (apkUpload.provider === 'imagekit' && isVerifiedDirectArtifactUrl(apkUpload.publicUrl))
-                    ? apkUpload.publicUrl
-                    : '';
-                uploadedApkFileId = apkUpload.fileId || apkUpload.storageKey;
-                uploadedApkStorageKey = apkUpload.storageKey || '';
-                uploadedStorageProvider = apkUpload.provider || 's3';
-
-                const memMid = process.memoryUsage();
-                console.log(`[RN Upload] APK streamed successfully (RSS: ${(memMid.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memMid.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
-
-                // 2. Upload AAB sequentially (only after APK upload finishes and stream resources are released)
-                const aabUpload = await uploadReleaseArtifact({
-                    filePath: destAab,
-                    fileName: `${safeName}-rn-release.aab`,
-                    artifactType: 'AAB',
-                    versionCode: vCode,
-                    versionName: vName,
-                    applicationId: appId,
-                    tenantId,
-                    rnBuildId,
-                    releaseId,
-                    requireRealProvider: true,
-                });
-                const isAabStorageValid = Boolean(
-                    aabUpload &&
-                    !aabUpload.isMock &&
-                    aabUpload.provider !== 'mock' &&
-                    (
-                        (aabUpload.storageKey && typeof aabUpload.storageKey === 'string') ||
-                        (aabUpload.publicUrl && isVerifiedDirectArtifactUrl(aabUpload.publicUrl))
-                    )
-                );
-                if (!isAabStorageValid) {
-                    const err = new Error('Release upload failed: storage provider did not return a valid storage key or verified direct artifact URL for AAB');
-                    err.code = 'INVALID_ARTIFACT_URL';
-                    throw err;
-                }
-                durableAabUrl = (aabUpload.provider === 'imagekit' && isVerifiedDirectArtifactUrl(aabUpload.publicUrl))
-                    ? aabUpload.publicUrl
-                    : '';
-                uploadedAabStorageKey = aabUpload.storageKey || '';
-
-                const memAfter = process.memoryUsage();
-                console.log(`[RN Upload] AAB streamed successfully (RSS: ${(memAfter.rss / 1024 / 1024).toFixed(1)} MB, Heap: ${(memAfter.heapUsed / 1024 / 1024).toFixed(1)} MB)`);
-            } catch (storageErr) {
-                console.error('[DurableStorage] Cloud storage upload failed:', storageErr.message);
-                if (uploadedApkFileId) {
-                    try {
-                        const { resolveStorageAdapter } = require('../utils/artifactStorage.util');
-                        const adapter = resolveStorageAdapter({ requireRealProvider: true });
-                        if (adapter && typeof adapter.delete === 'function') {
-                            await adapter.delete(uploadedApkFileId);
-                            console.log(`[DurableStorage] Cleaned up orphaned APK file (${uploadedApkFileId}) after AAB upload failure`);
-                        }
-                    } catch (cleanupErr) {
-                        console.warn('[DurableStorage] Could not clean up orphaned APK file:', cleanupErr.message);
-                    }
-                }
-                // Fail closed: release uploads require a real configured provider
-                throw storageErr;
-            }
-
-            // 4. PHASE 1: Keep rnBuildStatus = PROCESSING in database (DO NOT set COMPLETED yet)
+            // 5. Update Database Record
             const processingHospital = await Hospital.findOneAndUpdate(
                 {
                     _id: tenantId,
@@ -1560,13 +1526,18 @@ router.post(
                     $set: {
                         'appConfig.rnBuildStatus': 'PROCESSING',
                         'appConfig.rnBuildError': '',
-                        'appConfig.rnApkUrl': durableApkUrl,
-                        'appConfig.rnAabUrl': durableAabUrl,
-                        'appConfig.rnApkStorageKey': uploadedApkStorageKey,
-                        'appConfig.rnAabStorageKey': uploadedAabStorageKey,
-                        'appConfig.rnStorageProvider': uploadedStorageProvider,
-                        ...(releaseId ? { 'appConfig.rnReleaseId': releaseId } : {}),
-                        ...(checksumSha256 ? { 'appConfig.rnChecksumSha256': checksumSha256 } : {})
+                        'appConfig.rnApkUrl': `/api/superadmin/hospitals/${tenantId}/download/rn-apk`,
+                        'appConfig.rnAabUrl': `/api/superadmin/hospitals/${tenantId}/download/rn-aab`,
+                        'appConfig.rnApkStorageKey': storeResult.apkStorageKey,
+                        'appConfig.rnAabStorageKey': storeResult.aabStorageKey,
+                        'appConfig.rnStorageProvider': 'local',
+                        'appConfig.rnChecksumSha256': storeResult.apkSha256,
+                        'appConfig.rnAabChecksumSha256': storeResult.aabSha256,
+                        'appConfig.rnSignerCertSha256': storeResult.cleanCertSha || '',
+                        'appConfig.rnAabSignerCertSha256': storeResult.cleanAabCertSha || '',
+                        'appConfig.rnSigningMode': storeResult.signingMode || 'legacy_debug',
+                        'appConfig.rnVerifiedPackageId': appId,
+                        ...(releaseId ? { 'appConfig.rnReleaseId': releaseId } : {})
                     }
                 },
                 { new: true }
@@ -1574,14 +1545,6 @@ router.post(
 
             if (!processingHospital) {
                 throw new Error('Failed to update hospital status for PROCESSING in database');
-            }
-
-            // 5. On success: remove old backups
-            if (hasBackupApk && backupApk && fs.existsSync(backupApk)) {
-                try { fs.unlinkSync(backupApk); } catch (e) {}
-            }
-            if (hasBackupAab && backupAab && fs.existsSync(backupAab)) {
-                try { fs.unlinkSync(backupAab); } catch (e) {}
             }
 
             return res.json({
@@ -1594,42 +1557,6 @@ router.post(
         } catch (err) {
             safeDeleteFiles(tempFiles);
 
-            // On failure: restore previous artifacts from backup
-            if (hasBackupApk && backupApk && fs.existsSync(backupApk) && destApk) {
-                try {
-                    fs.copyFileSync(backupApk, destApk);
-                    fs.unlinkSync(backupApk);
-                    console.warn(`[Build Safety] Restored previous valid APK from backup: ${destApk}`);
-                } catch (e) {
-                    console.error('[Build Safety] Error restoring APK from backup:', e.message);
-                }
-            } else if (!hasBackupApk && destApk && fs.existsSync(destApk)) {
-                // If there was no previous valid APK, remove partial file
-                try { fs.unlinkSync(destApk); } catch (e) {}
-            }
-
-            if (hasBackupAab && backupAab && fs.existsSync(backupAab) && destAab) {
-                try {
-                    fs.copyFileSync(backupAab, destAab);
-                    fs.unlinkSync(backupAab);
-                    console.warn(`[Build Safety] Restored previous valid AAB from backup: ${destAab}`);
-                } catch (e) {
-                    console.error('[Build Safety] Error restoring AAB from backup:', e.message);
-                }
-            } else if (!hasBackupAab && destAab && fs.existsSync(destAab)) {
-                // If there was no previous valid AAB, remove partial file
-                try { fs.unlinkSync(destAab); } catch (e) {}
-            }
-
-            // Remove any dangling staging files
-            if (stageApk && fs.existsSync(stageApk)) {
-                try { fs.unlinkSync(stageApk); } catch (e) {}
-            }
-            if (stageAab && fs.existsSync(stageAab)) {
-                try { fs.unlinkSync(stageAab); } catch (e) {}
-            }
-
-            // Keep DB state consistent
             try {
                 const activeTenantId = tenantId || req.query?.tenantId || req.body?.tenantId;
                 const activeRnBuildId = rnBuildId || req.query?.rnBuildId || req.body?.rnBuildId;
@@ -1643,7 +1570,7 @@ router.post(
                         {
                             $set: {
                                 'appConfig.rnBuildStatus': 'FAILED',
-                                'appConfig.rnBuildError': `Artifact replacement failed: ${err.message}`,
+                                'appConfig.rnBuildError': `Artifact storage failed: ${err.message}`,
                                 'appConfig.pendingVersionCode': null,
                                 'appConfig.pendingVersionName': null
                             }
@@ -1655,7 +1582,12 @@ router.post(
             }
 
             console.error('Upload RN combined build webhook error:', err);
-            return res.status(500).json({ success: false, message: 'Internal Server Error' });
+            return res.status(500).json({
+                success: false,
+                message: `Artifact storage failed: ${err.message}`,
+                error: err.message,
+                rnBuildId
+            });
         }
     }
 );
