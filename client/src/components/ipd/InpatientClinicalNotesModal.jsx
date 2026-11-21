@@ -31,6 +31,10 @@ const InpatientClinicalNotesModal = ({
     const { user } = useAuth();
     const { branding, hospitalName: brandingHospitalName } = useBranding();
 
+    const userRole = (user?.role || '').toLowerCase();
+    const isNurse = userRole === 'nurse';
+    const canUsePenTool = !isNurse;
+
     const [activeSectionTab, setActiveSectionTab] = useState(initialTab);
     const [loading, setLoading] = useState(false);
     const [savingNotes, setSavingNotes] = useState(false);
@@ -508,54 +512,58 @@ const InpatientClinicalNotesModal = ({
                             <FiEdit2 size={12} />
                             <span>Type Mode</span>
                         </button>
-                        <button
-                            type="button"
-                            className={`ipn-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
-                            onClick={() => setActiveTool('pen')}
-                            title="Tablet pen / Stylus ink handwriting"
-                        >
-                            <span>✍️ Pen</span>
-                        </button>
-                        <button
-                            type="button"
-                            className={`ipn-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-                            onClick={() => setActiveTool('eraser')}
-                            title="Erase handwriting ink strokes"
-                        >
-                            <span>🧹 Eraser</span>
-                        </button>
-
-                        {activeTool === 'pen' && (
-                            <div className="ipn-pen-palette">
-                                <span style={{ fontSize: '11px', color: '#64748b' }}>Ink:</span>
-                                <div
-                                    className={`ipn-color-dot ${penColor === '#1d4ed8' ? 'active' : ''}`}
-                                    style={{ background: '#1d4ed8' }}
-                                    onClick={() => setPenColor('#1d4ed8')}
-                                    title="Medical Blue"
-                                />
-                                <div
-                                    className={`ipn-color-dot ${penColor === '#0f172a' ? 'active' : ''}`}
-                                    style={{ background: '#0f172a' }}
-                                    onClick={() => setPenColor('#0f172a')}
-                                    title="Black"
-                                />
-                                <div
-                                    className={`ipn-color-dot ${penColor === '#dc2626' ? 'active' : ''}`}
-                                    style={{ background: '#dc2626' }}
-                                    onClick={() => setPenColor('#dc2626')}
-                                    title="Red / Alert"
-                                />
-                                <select
-                                    className="ipn-stroke-width-select"
-                                    value={penWidth}
-                                    onChange={(e) => setPenWidth(Number(e.target.value))}
+                        {canUsePenTool && (
+                            <>
+                                <button
+                                    type="button"
+                                    className={`ipn-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                                    onClick={() => setActiveTool('pen')}
+                                    title="Tablet pen / Stylus ink handwriting"
                                 >
-                                    <option value={1.5}>Fine (1.5px)</option>
-                                    <option value={2.5}>Medium (2.5px)</option>
-                                    <option value={4}>Bold (4px)</option>
-                                </select>
-                            </div>
+                                    <span>✍️ Pen</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`ipn-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                                    onClick={() => setActiveTool('eraser')}
+                                    title="Erase handwriting ink strokes"
+                                >
+                                    <span>🧹 Eraser</span>
+                                </button>
+
+                                {activeTool === 'pen' && (
+                                    <div className="ipn-pen-palette">
+                                        <span style={{ fontSize: '11px', color: '#64748b' }}>Ink:</span>
+                                        <div
+                                            className={`ipn-color-dot ${penColor === '#1d4ed8' ? 'active' : ''}`}
+                                            style={{ background: '#1d4ed8' }}
+                                            onClick={() => setPenColor('#1d4ed8')}
+                                            title="Medical Blue"
+                                        />
+                                        <div
+                                            className={`ipn-color-dot ${penColor === '#0f172a' ? 'active' : ''}`}
+                                            style={{ background: '#0f172a' }}
+                                            onClick={() => setPenColor('#0f172a')}
+                                            title="Black"
+                                        />
+                                        <div
+                                            className={`ipn-color-dot ${penColor === '#dc2626' ? 'active' : ''}`}
+                                            style={{ background: '#dc2626' }}
+                                            onClick={() => setPenColor('#dc2626')}
+                                            title="Red / Alert"
+                                        />
+                                        <select
+                                            className="ipn-stroke-width-select"
+                                            value={penWidth}
+                                            onChange={(e) => setPenWidth(Number(e.target.value))}
+                                        >
+                                            <option value={1.5}>Fine (1.5px)</option>
+                                            <option value={2.5}>Medium (2.5px)</option>
+                                            <option value={4}>Bold (4px)</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -613,13 +621,12 @@ const InpatientClinicalNotesModal = ({
                             {/* ==================== PAGE 1 ==================== */}
                             <div className="ipn-sheet-paper">
                                 <span className="ipn-sheet-badge">PAGE 1 — CLINICAL ASSESSMENT</span>
-                                {renderBanner()}
 
                                 {/* Tablet Pen Overlay for Page 1 */}
                                 <TabletPenCanvas
                                     pageKey="page1"
                                     strokes={formState.handwritingStrokes?.page1 || []}
-                                    activeTool={activeTool}
+                                    activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
                                     onSaveStrokes={(newStrokes) => handleSavePageStrokes('page1', newStrokes)}
@@ -849,7 +856,7 @@ const InpatientClinicalNotesModal = ({
                                 <TabletPenCanvas
                                     pageKey="page2"
                                     strokes={formState.handwritingStrokes?.page2 || []}
-                                    activeTool={activeTool}
+                                    activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
                                     onSaveStrokes={(newStrokes) => handleSavePageStrokes('page2', newStrokes)}
@@ -1023,7 +1030,7 @@ const InpatientClinicalNotesModal = ({
                                         <TabletPenCanvas
                                             pageKey={pageKey}
                                             strokes={formState.handwritingStrokes?.[pageKey] || []}
-                                            activeTool={activeTool}
+                                            activeTool={canUsePenTool ? activeTool : 'type'}
                                             penColor={penColor}
                                             penWidth={penWidth}
                                             onSaveStrokes={(newStrokes) => handleSavePageStrokes(pageKey, newStrokes)}

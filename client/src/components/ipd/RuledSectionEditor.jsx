@@ -241,9 +241,9 @@ const RuledSectionEditor = ({
                                     e.stopPropagation();
                                     handleStartLineDictation(idx);
                                 }}
-                                title={isDictating ? 'Stop line dictation' : `Dictate into line ${idx + 1}`}
+                                title={isDictating ? 'Stop line dictation' : 'Dictate here'}
                             >
-                                <FiMic size={11} />
+                                <FiMic size={14} />
                             </button>
                         )}
                     </div>

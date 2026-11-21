@@ -434,9 +434,26 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
             } catch (err) {}
             try {
                 if (adm.doctorId) {
-                    adm.doctorId = await User.findById(adm.doctorId).select('name phone email specialization department').lean() || adm.doctorId;
+                    adm.doctorId = await User.findById(adm.doctorId).select('name phone email specialization department role').lean() || adm.doctorId;
                 }
             } catch (err) {}
+            try {
+                if (adm.admittedBy) {
+                    adm.admittedBy = await User.findById(adm.admittedBy).select('name role specialization department').lean() || adm.admittedBy;
+                }
+            } catch (err) {}
+
+            // Robust IPD Number & Consultant Fallbacks
+            adm.ipdNumber = adm.ipdNumber || adm.admissionNumber || (adm._id ? String(adm._id).slice(-6).toUpperCase() : '');
+            if (!adm.consultant) {
+                const docName = (adm.doctorId && typeof adm.doctorId === 'object' && adm.doctorId.name)
+                    ? adm.doctorId.name
+                    : (adm.doctorName || adm.appointmentId?.doctorName || (adm.admittedBy && typeof adm.admittedBy === 'object' && /doctor/i.test(adm.admittedBy.role) ? adm.admittedBy.name : ''));
+                if (docName && !/nurse/i.test(docName)) {
+                    adm.consultant = /^dr\.?\s*/i.test(docName) ? docName : `Dr. ${docName}`;
+                }
+            }
+
             if (!adm.wardRatePerDay || adm.wardRatePerDay === 0) {
                 adm.wardRatePerDay = await getWardRate(adm.hospitalId, adm.ward);
                 adm.wardHourlyRate = Math.round((adm.wardRatePerDay / 24) * 100) / 100;
@@ -550,7 +567,12 @@ router.get('/:id', verifyAdmissionAccess, async (req, res) => {
         } catch (err) {}
         try {
             if (admission.doctorId) {
-                admission.doctorId = await User.findById(admission.doctorId).select('name phone email specialization department').lean() || admission.doctorId;
+                admission.doctorId = await User.findById(admission.doctorId).select('name phone email specialization department role').lean() || admission.doctorId;
+            }
+        } catch (err) {}
+        try {
+            if (admission.admittedBy) {
+                admission.admittedBy = await User.findById(admission.admittedBy).select('name role specialization department').lean() || admission.admittedBy;
             }
         } catch (err) {}
         try {
@@ -558,6 +580,17 @@ router.get('/:id', verifyAdmissionAccess, async (req, res) => {
                 admission.bedId = await Bed.findById(admission.bedId).select('bedNumber ward bedType status').lean() || admission.bedId;
             }
         } catch (err) {}
+
+        // Robust IPD Number & Consultant Fallbacks
+        admission.ipdNumber = admission.ipdNumber || admission.admissionNumber || (admission._id ? String(admission._id).slice(-6).toUpperCase() : '');
+        if (!admission.consultant) {
+            const docName = (admission.doctorId && typeof admission.doctorId === 'object' && admission.doctorId.name)
+                ? admission.doctorId.name
+                : (admission.doctorName || admission.appointmentId?.doctorName || (admission.admittedBy && typeof admission.admittedBy === 'object' && /doctor/i.test(admission.admittedBy.role) ? admission.admittedBy.name : ''));
+            if (docName && !/nurse/i.test(docName)) {
+                admission.consultant = /^dr\.?\s*/i.test(docName) ? docName : `Dr. ${docName}`;
+            }
+        }
 
         if (!admission.wardRatePerDay || admission.wardRatePerDay === 0) {
             admission.wardRatePerDay = await getWardRate(admission.hospitalId, admission.ward);

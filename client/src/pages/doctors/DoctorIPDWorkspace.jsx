@@ -113,10 +113,23 @@ const DoctorIPDWorkspace = () => {
 
     const patientName = patient.name || 'Inpatient';
     const ageText = patient.age ? `${patient.age} Y` : '';
-    const genderText = patient.gender || '';
-    const mrn = patient.patientId || patient.mrn || '—';
-    const ipdNo = admission?.ipdNumber || patient.ipdNumber || '—';
-    const attendingDoc = doctor.name ? `Dr. ${doctor.name.replace(/^Dr\.?\s*/i, '')}` : (admission?.consultant || 'Attending Physician');
+    const genderText = patient.gender || patient.sex || '';
+    const mrn = patient.patientId || patient.mrn || patient.uhid || '—';
+    const ipdNo = admission?.ipdNumber || admission?.admissionNumber || (admission?._id ? String(admission._id).slice(-6).toUpperCase() : (patient.ipdNumber || '—'));
+    
+    const resolveAttendingDoc = () => {
+        const candidate = (doctor && typeof doctor === 'object' && doctor.name)
+            || admission?.consultant
+            || admission?.attendingDoctor
+            || admission?.doctorName
+            || admission?.appointmentId?.doctorName
+            || (admission?.admittedBy && typeof admission.admittedBy === 'object' && /doctor/i.test(admission.admittedBy.role) ? admission.admittedBy.name : '');
+        if (candidate && !/nurse/i.test(candidate)) {
+            return /^dr\.?\s*/i.test(candidate) ? candidate : `Dr. ${candidate}`;
+        }
+        return 'Attending Physician';
+    };
+    const attendingDoc = resolveAttendingDoc();
 
     return (
         <div className="doc-ipd-workspace-page">

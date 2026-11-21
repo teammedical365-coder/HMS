@@ -92,6 +92,10 @@ const IPDClinicalChartsModal = ({
     const { user } = useAuth();
     const { branding, hospitalName: brandingHospitalName } = useBranding();
 
+    const userRole = (user?.role || '').toLowerCase();
+    const isNurse = userRole === 'nurse';
+    const canUsePenTool = !isNurse;
+
     const normalizeTab = (tab) => {
         if (tab === 'drug_stat_iv' || tab === 'drug_mar' || tab === 'drug_chart') return 'drug_chart';
         return 'progress_notes';
@@ -880,6 +884,22 @@ const IPDClinicalChartsModal = ({
     };
 
     const handleProgressRowKeyDown = (e, pageIdx, rowIdx, r) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const targetRowIdx = e.shiftKey ? rowIdx - 1 : rowIdx + 1;
+            const targetKey = `${pageIdx}_${targetRowIdx}`;
+            if (inputsRef.current[targetKey]) {
+                inputsRef.current[targetKey].focus();
+            } else if (e.shiftKey && pageIdx > 0) {
+                const prevPageKey = `${pageIdx - 1}_${PROGRESS_ROWS_PER_PAGE - 1}`;
+                inputsRef.current[prevPageKey]?.focus();
+            } else if (!e.shiftKey && pageIdx + 1 < progressPages.length) {
+                const nextPageKey = `${pageIdx + 1}_0`;
+                inputsRef.current[nextPageKey]?.focus();
+            }
+            return;
+        }
+
         if (e.key === 'Enter') {
             e.preventDefault();
             setDirtyNotes(true);
@@ -1526,16 +1546,6 @@ const IPDClinicalChartsModal = ({
                     </div>
 
                     <div className="ipdc-header-actions">
-                        {!isBlank && (
-                            <button
-                                type="button"
-                                className="ipdc-btn-scribe"
-                                onClick={() => setIsScribeModalOpen(true)}
-                                title="AI Voice Scribe & Dictation (Gemini 3.6 Flash)"
-                            >
-                                <FiZap size={14} /> <span>AI Voice Scribe</span>
-                            </button>
-                        )}
                         <button type="button" className="ipdc-btn-outline" onClick={handlePrint}>
                             <FiPrinter size={14} /> <span>Print</span>
                         </button>
@@ -1583,53 +1593,57 @@ const IPDClinicalChartsModal = ({
                                 <FiEdit2 size={13} />
                                 <span>Type Mode</span>
                             </button>
-                            <button
-                                type="button"
-                                className={`ipdc-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
-                                onClick={() => setActiveTool('pen')}
-                                title="Tablet pen / Stylus ink handwriting"
-                            >
-                                <span>✍️ Pen</span>
-                            </button>
-                            <button
-                                type="button"
-                                className={`ipdc-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-                                onClick={() => setActiveTool('eraser')}
-                                title="Erase handwriting ink strokes"
-                            >
-                                <span>🧹 Eraser</span>
-                            </button>
-
-                            {activeTool === 'pen' && (
-                                <div className="ipdc-toolbar-group" style={{ marginLeft: '4px', gap: '6px' }}>
-                                    <div
-                                        className={`ipdc-color-dot ${penColor === '#1d4ed8' ? 'selected' : ''}`}
-                                        style={{ background: '#1d4ed8' }}
-                                        onClick={() => setPenColor('#1d4ed8')}
-                                        title="Medical Blue"
-                                    />
-                                    <div
-                                        className={`ipdc-color-dot ${penColor === '#0f172a' ? 'selected' : ''}`}
-                                        style={{ background: '#0f172a' }}
-                                        onClick={() => setPenColor('#0f172a')}
-                                        title="Black"
-                                    />
-                                    <div
-                                        className={`ipdc-color-dot ${penColor === '#dc2626' ? 'selected' : ''}`}
-                                        style={{ background: '#dc2626' }}
-                                        onClick={() => setPenColor('#dc2626')}
-                                        title="Red Alert"
-                                    />
-                                    <select
-                                        value={penWidth}
-                                        onChange={(e) => setPenWidth(Number(e.target.value))}
-                                        style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                            {canUsePenTool && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className={`ipdc-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                                        onClick={() => setActiveTool('pen')}
+                                        title="Tablet pen / Stylus ink handwriting"
                                     >
-                                        <option value={1.5}>Fine (1.5px)</option>
-                                        <option value={2.5}>Medium (2.5px)</option>
-                                        <option value={4}>Bold (4px)</option>
-                                    </select>
-                                </div>
+                                        <span>✍️ Pen</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`ipdc-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                                        onClick={() => setActiveTool('eraser')}
+                                        title="Erase handwriting ink strokes"
+                                    >
+                                        <span>🧹 Eraser</span>
+                                    </button>
+
+                                    {activeTool === 'pen' && (
+                                        <div className="ipdc-toolbar-group" style={{ marginLeft: '4px', gap: '6px' }}>
+                                            <div
+                                                className={`ipdc-color-dot ${penColor === '#1d4ed8' ? 'selected' : ''}`}
+                                                style={{ background: '#1d4ed8' }}
+                                                onClick={() => setPenColor('#1d4ed8')}
+                                                title="Medical Blue"
+                                            />
+                                            <div
+                                                className={`ipdc-color-dot ${penColor === '#0f172a' ? 'selected' : ''}`}
+                                                style={{ background: '#0f172a' }}
+                                                onClick={() => setPenColor('#0f172a')}
+                                                title="Black"
+                                            />
+                                            <div
+                                                className={`ipdc-color-dot ${penColor === '#dc2626' ? 'selected' : ''}`}
+                                                style={{ background: '#dc2626' }}
+                                                onClick={() => setPenColor('#dc2626')}
+                                                title="Red Alert"
+                                            />
+                                            <select
+                                                value={penWidth}
+                                                onChange={(e) => setPenWidth(Number(e.target.value))}
+                                                style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                            >
+                                                <option value={1.5}>Fine (1.5px)</option>
+                                                <option value={2.5}>Medium (2.5px)</option>
+                                                <option value={4}>Bold (4px)</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -1676,7 +1690,7 @@ const IPDClinicalChartsModal = ({
                                     title="Add Continuation Sheet"
                                 >
                                     <FiPlus size={12} />
-                                    <span>+ Add Sheet</span>
+                                    <span>Add Sheet</span>
                                 </button>
                             )}
 
@@ -1691,7 +1705,7 @@ const IPDClinicalChartsModal = ({
                                     title="Add Continuation Sheet (MAR Page 2) to Drug Chart"
                                 >
                                     <FiPlus size={12} />
-                                    <span>+ Add Sheet</span>
+                                    <span>Add Sheet</span>
                                 </button>
                             )}
 
@@ -1753,7 +1767,7 @@ const IPDClinicalChartsModal = ({
                                     <TabletPenCanvas
                                         pageKey={`pn_page_${idx}`}
                                         strokes={penStrokes[`pn_page_${idx}`] || []}
-                                        activeTool={activeTool}
+                                        activeTool={canUsePenTool ? activeTool : 'type'}
                                         penColor={penColor}
                                         penWidth={penWidth}
                                         onSaveStrokes={(newStrokes) => handleSaveStrokes(`pn_page_${idx}`, newStrokes)}
@@ -1783,13 +1797,16 @@ const IPDClinicalChartsModal = ({
                                                             {isBlank ? '' : (r.dateTimeText || '')}
                                                         </td>
                                                         {isBlank ? (
-                                                            <td className="pn-dt-blank">&nbsp;</td>
+                                                             <td className="pn-dt-blank">&nbsp;</td>
                                                         ) : r.isMeta ? (
                                                             <td className="pn-meta-cell">
                                                                 <span className="pn-meta-text">{r.noteText}</span>
                                                             </td>
                                                         ) : (
-                                                            <td className="pn-input-cell">
+                                                            <td
+                                                                className="pn-input-cell"
+                                                                onClick={() => inputsRef.current[lineKey]?.focus()}
+                                                            >
                                                                 <input
                                                                     ref={(el) => { if (el) inputsRef.current[lineKey] = el; }}
                                                                     className="pn-line-input"
@@ -1811,9 +1828,9 @@ const IPDClinicalChartsModal = ({
                                                                                 (v) => handleProgressRowTextChange(idx, rIdx, v, r)
                                                                             );
                                                                         }}
-                                                                        title="Dictate directly into this line"
+                                                                        title="Dictate here"
                                                                     >
-                                                                        <FiMic size={10} />
+                                                                        <FiMic size={14} />
                                                                     </button>
                                                                 )}
                                                             </td>
@@ -1839,7 +1856,7 @@ const IPDClinicalChartsModal = ({
                                 <TabletPenCanvas
                                     pageKey="dc_page_1"
                                     strokes={penStrokes['dc_page_1'] || []}
-                                    activeTool={activeTool}
+                                    activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
                                     onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_1', newStrokes)}
@@ -1876,7 +1893,7 @@ const IPDClinicalChartsModal = ({
                                                     })}
                                                     title="Dictate Allergy 1"
                                                 >
-                                                    <FiMic size={10} />
+                                                    <FiMic size={14} />
                                                 </button>
                                             )}
                                         </div>
@@ -1908,7 +1925,7 @@ const IPDClinicalChartsModal = ({
                                                     })}
                                                     title="Dictate Allergy 2"
                                                 >
-                                                    <FiMic size={10} />
+                                                    <FiMic size={14} />
                                                 </button>
                                             )}
                                         </div>
@@ -1968,7 +1985,7 @@ const IPDClinicalChartsModal = ({
                                             }}
                                             title="Add a new blank STAT row"
                                         >
-                                            <FiPlus size={12} /> <span>+ Add STAT Row</span>
+                                            <FiPlus size={12} /> <span>Add STAT Row</span>
                                         </button>
                                     )}
                                 </div>
@@ -2032,7 +2049,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`stat_${rIdx}_drugName`, s.drugName, (v) => handleStatCellChange(rIdx, 'drugName', v))}
                                                                     title="Dictate Drug Name"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2055,7 +2072,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`stat_${rIdx}_dose`, s.dose, (v) => handleStatCellChange(rIdx, 'dose', v), true)}
                                                                     title="Dictate Dose (numeric)"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2168,7 +2185,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`stat_${rIdx}_remarks`, s.remarks, (v) => handleStatCellChange(rIdx, 'remarks', v))}
                                                                     title="Dictate Remarks"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                             {isDoctorOrAdmin && !isBlank && (s.drugName || s._id) && (
@@ -2217,7 +2234,7 @@ const IPDClinicalChartsModal = ({
                                             }}
                                             title="Add a new blank IV Fluid row"
                                         >
-                                            <FiPlus size={12} /> <span>+ Add IV Row</span>
+                                            <FiPlus size={12} /> <span>Add IV Row</span>
                                         </button>
                                     )}
                                 </div>
@@ -2281,7 +2298,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`iv_${rIdx}_fluidName`, iv.fluidName, (v) => handleIvCellChange(rIdx, 'fluidName', v))}
                                                                     title="Dictate Fluid Name"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2304,7 +2321,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`iv_${rIdx}_volume`, iv.volume, (v) => handleIvCellChange(rIdx, 'volume', v), true)}
                                                                     title="Dictate Volume (numeric)"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2404,7 +2421,7 @@ const IPDClinicalChartsModal = ({
                                                                     onClick={() => handleToggleLineDictation(`iv_${rIdx}_remarks`, iv.remarks, (v) => handleIvCellChange(rIdx, 'remarks', v))}
                                                                     title="Dictate Remarks"
                                                                 >
-                                                                    <FiMic size={10} />
+                                                                    <FiMic size={14} />
                                                                 </button>
                                                             )}
                                                             {!isBlank && (iv.fluidName || iv._id) && (
@@ -2431,7 +2448,7 @@ const IPDClinicalChartsModal = ({
                                 <TabletPenCanvas
                                     pageKey="dc_page_2"
                                     strokes={penStrokes['dc_page_2'] || []}
-                                    activeTool={activeTool}
+                                    activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
                                     onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_2', newStrokes)}
@@ -2535,7 +2552,7 @@ const IPDClinicalChartsModal = ({
                                                                             onClick={() => handleToggleLineDictation(`med_${bIdx}_name`, blk.medicineName, (v) => handleMedBlockChange(bIdx, 'medicineName', v))}
                                                                             title="Dictate Drug Name"
                                                                         >
-                                                                            <FiMic size={10} />
+                                                                            <FiMic size={14} />
                                                                         </button>
                                                                     )}
                                                                     {isDoctorOrAdmin && !isBlank && (blk.medicineName || blk.orderId) && (
@@ -2638,7 +2655,7 @@ const IPDClinicalChartsModal = ({
                                                                             onClick={() => handleToggleLineDictation(`med_${bIdx}_dose`, blk.dose, (v) => handleMedBlockChange(bIdx, 'dose', v), true)}
                                                                             title="Dictate Dose (numeric)"
                                                                         >
-                                                                            <FiMic size={10} />
+                                                                            <FiMic size={14} />
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -2671,7 +2688,7 @@ const IPDClinicalChartsModal = ({
                                         <TabletPenCanvas
                                             pageKey={`dc_page_2_cont_${extraPgIdx + 1}`}
                                             strokes={penStrokes[`dc_page_2_cont_${extraPgIdx + 1}`] || []}
-                                            activeTool={activeTool}
+                                            activeTool={canUsePenTool ? activeTool : 'type'}
                                             penColor={penColor}
                                             penWidth={penWidth}
                                             onSaveStrokes={(newStrokes) => handleSaveStrokes(`dc_page_2_cont_${extraPgIdx + 1}`, newStrokes)}

@@ -223,9 +223,10 @@
     font-family: inherit;
     font-size: 11px;
     color: #0f172a;
-    padding: 2px 4px;
+    padding: 2px 34px 2px 6px;
     margin: 0;
     line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .pn-line-input:focus {
@@ -293,13 +294,13 @@
 
 .line-mic-pill {
     position: absolute;
-    right: 2px;
+    right: 4px;
     top: 50%;
     transform: translateY(-50%);
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    border: 1px solid #cbd5e1;
+    border: 1.5px solid #0d9488;
     background: #ffffff;
     color: #0d9488;
     display: inline-flex;
@@ -307,26 +308,28 @@
     justify-content: center;
     cursor: pointer;
     padding: 0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 4px rgba(13, 148, 136, 0.2);
     z-index: 10;
     transition: all 0.15s ease;
 }
 
 .line-mic-pill:hover {
     background: #f0fdfa;
-    border-color: #0d9488;
+    border-color: #0f766e;
+    color: #0f766e;
+    transform: translateY(-50%) scale(1.08);
 }
 
 .line-mic-pill.listening {
     background: #ef4444;
     color: #ffffff;
-    border-color: #ef4444;
+    border-color: #dc2626;
     animation: micPulse 1s infinite alternate;
 }
 
 @keyframes micPulse {
     from { transform: translateY(-50%) scale(1); }
-    to { transform: translateY(-50%) scale(1.18); box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
+    to { transform: translateY(-50%) scale(1.15); box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
 }
 
 .dc-section-hdr-row {

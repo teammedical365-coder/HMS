@@ -134,6 +134,15 @@ const TabletPenCanvas = ({
     // POINTER DOWN: Start new independent stroke or eraser session
     const handlePointerDown = (e) => {
         if (activeTool === 'type') return;
+        if (e.cancelable) e.preventDefault();
+
+        // Clear any native browser selection to prevent drag artifacts during stylus drawing
+        try {
+            if (window.getSelection) {
+                const sel = window.getSelection();
+                if (sel && sel.removeAllRanges) sel.removeAllRanges();
+            }
+        } catch (_) {}
 
         // If an abandoned previous pointer was active, finalize it safely
         if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) {
@@ -195,6 +204,7 @@ const TabletPenCanvas = ({
     // POINTER MOVE: Append points to active stroke or drag-erase
     const handlePointerMove = (e) => {
         if (!isDrawingRef.current || activePointerIdRef.current !== e.pointerId) return;
+        if (e.cancelable) e.preventDefault();
 
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -324,6 +334,8 @@ const TabletPenCanvas = ({
                 inset: 0,
                 pointerEvents: isInteractive ? 'auto' : 'none',
                 touchAction: isInteractive ? 'none' : 'auto',
+                userSelect: isInteractive ? 'none' : 'auto',
+                WebkitUserSelect: isInteractive ? 'none' : 'auto',
                 cursor: activeTool === 'pen' ? 'crosshair' : activeTool === 'eraser' ? 'cell' : 'default',
                 zIndex: 20
             }}
@@ -334,7 +346,9 @@ const TabletPenCanvas = ({
                     width: '100%',
                     height: '100%',
                     display: 'block',
-                    touchAction: 'none'
+                    touchAction: 'none',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none'
                 }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}

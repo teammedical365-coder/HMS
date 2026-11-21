@@ -48,13 +48,20 @@ export const buildProgressNotesHeaderData = ({
     const ptDetails = resolvePatientChartDetails({ patient, admission });
     const docObj = (admission && typeof admission.doctorId === 'object' ? admission.doctorId : null) || {};
     const apptObj = (admission && typeof admission.appointmentId === 'object' ? admission.appointmentId : null) || {};
-    const consultantRaw =
+    const admittedByObj = (admission && typeof admission.admittedBy === 'object' ? admission.admittedBy : null) || {};
+    let candidate =
         docObj.name ||
+        admission?.consultant ||
+        admission?.attendingDoctor ||
         apptObj.doctorName ||
         (typeof admission?.doctorName === 'string' ? admission.doctorName : '') ||
+        (admittedByObj.name && /doctor/i.test(admittedByObj.role) ? admittedByObj.name : '') ||
         '';
-    const consultant = consultantRaw
-        ? (/^dr\.?\s/i.test(consultantRaw) ? consultantRaw : `Dr. ${consultantRaw}`)
+    if (/nurse/i.test(candidate)) {
+        candidate = '';
+    }
+    const consultant = candidate
+        ? (/^dr\.?\s*/i.test(candidate) ? candidate : `Dr. ${candidate}`)
         : '';
 
     const ward = admission?.ward || '';
@@ -222,9 +229,9 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
         pushCurrentPage();
     }
 
-    // Manual extra sheets created via "+ Add Sheet"
-    const targetPages = Math.max(pages.length, 1 + (Number(manualExtraSheets) || 0));
-    while (pages.length < targetPages) {
+    // Manual extra sheets created via "Add Sheet"
+    const extraSheetsToAdd = Math.max(0, Number(manualExtraSheets) || 0);
+    for (let s = 0; s < extraSheetsToAdd; s++) {
         pages.push({
             sheetNo: String(pages.length + 1),
             rows: Array.from({ length: rowsPerPage }, () => ({

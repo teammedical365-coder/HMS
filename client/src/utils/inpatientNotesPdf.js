@@ -64,12 +64,22 @@ export const buildDefaultClinicalNoteState = ({
     const pt = patient || (typeof admission?.patientId === 'object' ? admission.patientId : {}) || {};
     const docObj = (admission && typeof admission.doctorId === 'object' ? admission.doctorId : null) || {};
     const apptObj = (admission && typeof admission.appointmentId === 'object' ? admission.appointmentId : null) || {};
+    const admittedByObj = (admission && typeof admission.admittedBy === 'object' ? admission.admittedBy : null) || {};
 
-    const resolvedConsultant =
+    let candidate =
         docObj.name ||
+        admission?.consultant ||
+        admission?.attendingDoctor ||
         apptObj.doctorName ||
         (typeof admission?.doctorName === 'string' ? admission.doctorName : '') ||
+        (admittedByObj.name && /doctor/i.test(admittedByObj.role) ? admittedByObj.name : '') ||
         '';
+    if (/nurse/i.test(candidate)) {
+        candidate = '';
+    }
+    const resolvedConsultant = candidate
+        ? (/^dr\.?\s*/i.test(candidate) ? candidate : `Dr. ${candidate}`)
+        : '';
 
     const vit = latestVitals || {};
     const bpDefault = vit.systolicBP ? `${vit.systolicBP}/${vit.diastolicBP || ''}` : '';
