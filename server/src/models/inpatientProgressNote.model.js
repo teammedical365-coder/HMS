@@ -18,6 +18,7 @@ const inpatientProgressNoteSchema = new mongoose.Schema({
     recordedAt: { type: Date, required: true, default: Date.now, index: true },
     note: { type: String, required: true, trim: true },
     sheetNo: { type: String, default: '1', trim: true },
+    rowIndex: { type: Number, default: null },
 
     // Immutable original authorship (never overwritten on edit)
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

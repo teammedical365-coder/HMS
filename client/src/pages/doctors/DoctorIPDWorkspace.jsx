@@ -258,6 +258,7 @@ const DoctorIPDWorkspace = () => {
                             admission={admission}
                             patientId={patient._id || admission.patientId}
                             patient={patient}
+                            hideHeaderBanner={true}
                         />
                     </div>
 

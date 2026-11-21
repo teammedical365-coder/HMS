@@ -808,6 +808,33 @@ const IPDClinicalChartsModal = ({
         }));
     };
 
+    const getAuthorInfo = useCallback(() => {
+        const rawRole = user?._roleData?.name || user?.role || '';
+        const cleanR = String(rawRole).toLowerCase().replace(/\s+/g, '');
+        let roleLabel = 'Clinician';
+        let isDoc = false;
+
+        if (['doctor', 'clinicdoctor', 'surgeon', 'consultant', 'physician', 'resident', 'residentdoctor'].includes(cleanR)) {
+            roleLabel = 'Doctor';
+            isDoc = true;
+        } else if (['doctorassistant', 'assistant', 'clinicalassistant'].includes(cleanR)) {
+            roleLabel = 'Doctor Assistant';
+        } else if (['nurse', 'staffnurse', 'headnurse'].includes(cleanR)) {
+            roleLabel = 'Staff Nurse';
+        } else if (rawRole) {
+            roleLabel = rawRole;
+        }
+
+        let name = user?.name || 'Clinical Staff';
+        if (isDoc) {
+            name = /^dr\.?\s*/i.test(name) ? name : `Dr. ${name}`;
+        } else if (/nurse/i.test(roleLabel)) {
+            name = name.replace(/^dr\.?\s*/i, '');
+        }
+
+        return { authorName: name, authorRole: roleLabel };
+    }, [user]);
+
     const handleProgressRowTextChange = (pageIdx, rowIdx, newText, r) => {
         setDirtyNotes(true);
         setUndoStack(u => [...u.slice(-20), progressNotes]);
@@ -817,36 +844,37 @@ const IPDClinicalChartsModal = ({
             setProgressNotes(prev => prev.map(n => {
                 if (String(n._id) === String(r.noteId)) {
                     const lines = String(n.note || '').split('\n');
-                    while (lines.length <= (r.lineIdx || 0)) lines.push('');
-                    lines[r.lineIdx || 0] = newText;
+                    const targetLine = r.lineIdx !== undefined ? r.lineIdx : 0;
+                    while (lines.length <= targetLine) lines.push('');
+                    lines[targetLine] = newText;
                     return { ...n, note: lines.join('\n') };
                 }
                 return n;
             }));
         } else {
-            // Writing into a blank line (starts or continues the active draft note)
+            // Writing into a blank line (starts or continues note at this exact row position)
             const sheetNum = String(pageIdx + 1);
+            const authorInfo = getAuthorInfo();
             setProgressNotes(prev => {
-                const activeDraftIdx = prev.findIndex(n => n.isNew);
-                if (activeDraftIdx >= 0) {
+                // If a draft exists on this exact sheet and row, update it directly
+                const existingDraftIdx = prev.findIndex(n => n.isNew && String(n.sheetNo) === sheetNum && n.rowIndex === rowIdx);
+                if (existingDraftIdx >= 0) {
                     const copy = [...prev];
-                    const draft = copy[activeDraftIdx];
-                    const lines = String(draft.note || '').split('\n');
-                    lines[lines.length - 1] = newText;
-                    copy[activeDraftIdx] = { ...draft, note: lines.join('\n') };
+                    copy[existingDraftIdx] = { ...copy[existingDraftIdx], note: newText };
                     return copy;
-                } else {
-                    const newEntry = {
-                        _id: `draft_${Date.now()}`,
-                        recordedAt: new Date().toISOString(),
-                        sheetNo: sheetNum,
-                        note: newText,
-                        authorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name.replace(/^dr\.?\s*/i, '')) : 'Clinical Staff',
-                        authorRole: user?._roleData?.name || user?.role || 'Clinician',
-                        isNew: true
-                    };
-                    return [...prev, newEntry];
                 }
+                // Otherwise create new draft pinned to this exact row
+                const newEntry = {
+                    _id: `draft_${Date.now()}_${pageIdx}_${rowIdx}`,
+                    recordedAt: new Date().toISOString(),
+                    sheetNo: sheetNum,
+                    rowIndex: rowIdx,
+                    note: newText,
+                    authorName: authorInfo.authorName,
+                    authorRole: authorInfo.authorRole,
+                    isNew: true
+                };
+                return [...prev, newEntry];
             });
         }
     };
@@ -930,6 +958,7 @@ const IPDClinicalChartsModal = ({
                 const res = await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
                     recordedAt: n.recordedAt || new Date().toISOString(),
                     sheetNo: n.sheetNo || '1',
+                    rowIndex: typeof n.rowIndex === 'number' ? n.rowIndex : null,
                     note: n.note.trim()
                 });
                 if (!res || !res.success) {
@@ -944,6 +973,7 @@ const IPDClinicalChartsModal = ({
                     note: n.note.trim(),
                     recordedAt: n.recordedAt,
                     sheetNo: n.sheetNo || '1',
+                    rowIndex: typeof n.rowIndex === 'number' ? n.rowIndex : null,
                     editReason: 'Inline clinical documentation update'
                 });
                 if (!res || !res.success) {
@@ -1729,7 +1759,6 @@ const IPDClinicalChartsModal = ({
                                         onSaveStrokes={(newStrokes) => handleSaveStrokes(`pn_page_${idx}`, newStrokes)}
                                     />
 
-                                    {renderPatientStrip()}
                                     {renderExactLetterhead()}
                                     <table className="pn-exact-table">
                                         <thead>
@@ -1751,7 +1780,7 @@ const IPDClinicalChartsModal = ({
                                                 return (
                                                     <tr key={rIdx} className="pn-ruled-tr">
                                                         <td className="pn-col-dt">
-                                                            {isBlank ? '' : (r.dateTimeText || (rIdx === 0 && !r.isMeta ? todayDateDisplay() : ''))}
+                                                            {isBlank ? '' : (r.dateTimeText || '')}
                                                         </td>
                                                         {isBlank ? (
                                                             <td className="pn-dt-blank">&nbsp;</td>
@@ -1815,7 +1844,6 @@ const IPDClinicalChartsModal = ({
                                     penWidth={penWidth}
                                     onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_1', newStrokes)}
                                 />
-                                {renderPatientStrip()}
                                 {renderExactLetterhead()}
 
                                 {/* Drug Allergy Line */}

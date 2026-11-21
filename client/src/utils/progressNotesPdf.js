@@ -103,28 +103,30 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
 
     const wrapParagraph = (text, maxChars = 94) => {
         const result = [];
-        String(text || '')
-            .split(/\r?\n/)
-            .forEach((para) => {
-                let rest = para.trimEnd();
-                if (!rest) {
-                    result.push('');
-                    return;
+        const paras = String(text ?? '').split(/\r?\n/);
+        for (let pIdx = 0; pIdx < paras.length; pIdx++) {
+            let rest = paras[pIdx];
+            if (!rest) {
+                result.push('');
+                continue;
+            }
+            while (rest.length > maxChars) {
+                let cut = rest.lastIndexOf(' ', maxChars);
+                if (cut < Math.floor(maxChars * 0.45)) cut = maxChars;
+                result.push(rest.slice(0, cut));
+                rest = rest.slice(cut);
+                if (rest.startsWith(' ')) {
+                    rest = rest.slice(1);
                 }
-                while (rest.length > maxChars) {
-                    let cut = rest.lastIndexOf(' ', maxChars);
-                    if (cut < Math.floor(maxChars * 0.45)) cut = maxChars;
-                    result.push(rest.slice(0, cut));
-                    rest = rest.slice(cut).trimStart();
-                }
-                result.push(rest);
-            });
+            }
+            result.push(rest);
+        }
         return result.length > 0 ? result : [''];
     };
 
     sortedNotes.forEach((entry) => {
-        // Skip empty placeholder notes that have no actual content
-        if (!entry.note || !String(entry.note).trim()) {
+        // Skip empty placeholder notes that have no actual content and are not active drafts
+        if ((!entry.note || !String(entry.note).trim()) && !entry.isNew) {
             return;
         }
 
@@ -135,12 +137,25 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
         const wrappedLines = wrapParagraph(entry.note || '');
         const hasEdits = Array.isArray(entry.editHistory) && entry.editHistory.length > 0;
         const isNurseAuthor = /nurse/i.test(entry.authorRole || '');
-        const cleanAuthorName = entry.authorName
-            ? (isNurseAuthor ? entry.authorName.replace(/^dr\.?\s*/i, '') : entry.authorName)
-            : 'Clinical Staff';
-        const cleanUpdatedByName = entry.updatedByName
-            ? (/nurse/i.test(entry.updatedByRole || '') ? entry.updatedByName.replace(/^dr\.?\s*/i, '') : entry.updatedByName)
-            : 'Staff';
+        const isAssistantAuthor = /assistant/i.test(entry.authorRole || '');
+        const isDoctorAuthor = !isAssistantAuthor && /doctor|physician|surgeon|consultant|resident/i.test(entry.authorRole || '');
+
+        let cleanAuthorName = entry.authorName || 'Clinical Staff';
+        if (isDoctorAuthor) {
+            cleanAuthorName = /^dr\.?\s*/i.test(cleanAuthorName) ? cleanAuthorName : `Dr. ${cleanAuthorName}`;
+        } else if (isNurseAuthor || isAssistantAuthor) {
+            cleanAuthorName = cleanAuthorName.replace(/^dr\.?\s*/i, '');
+        }
+
+        const isUpdatedByAssistant = /assistant/i.test(entry.updatedByRole || '');
+        const isUpdatedByDoctor = !isUpdatedByAssistant && /doctor|physician|surgeon|consultant|resident/i.test(entry.updatedByRole || '');
+        let cleanUpdatedByName = entry.updatedByName || 'Staff';
+        if (isUpdatedByDoctor) {
+            cleanUpdatedByName = /^dr\.?\s*/i.test(cleanUpdatedByName) ? cleanUpdatedByName : `Dr. ${cleanUpdatedByName}`;
+        } else if (/nurse/i.test(entry.updatedByRole || '') || isUpdatedByAssistant) {
+            cleanUpdatedByName = cleanUpdatedByName.replace(/^dr\.?\s*/i, '');
+        }
+
         const metaLine = hasEdits
             ? `— Logged by ${cleanAuthorName} (${entry.authorRole || 'Clinician'}) • Edited ${entry.editHistory.length}x, last by ${cleanUpdatedByName}`
             : `— ${cleanAuthorName}${entry.authorRole ? ` (${entry.authorRole})` : ''}`;
@@ -174,9 +189,20 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
             isSigRow: true
         });
 
-        // If the start of a new entry only has 1 row left on the page, start cleanly on next continuation sheet
-        if (currentRows.length > 0 && currentRows.length + 2 > rowsPerPage && entryRows.length >= 2) {
-            pushCurrentPage();
+        // Position rows: if note has explicit target rowIndex on page, pad blank rows up to it
+        if (typeof entry.rowIndex === 'number' && entry.rowIndex >= 0) {
+            const targetSheetNo = parseInt(entry.sheetNo, 10) || 1;
+            while (pages.length < targetSheetNo - 1) {
+                pushCurrentPage();
+            }
+            while (currentRows.length < entry.rowIndex && currentRows.length < rowsPerPage) {
+                currentRows.push({ dateTimeText: '', noteText: '', isMeta: false, noteId: null });
+            }
+        } else {
+            // Sequential placement: if the start of a new entry only has 1 row left on page, start on next sheet
+            if (currentRows.length > 0 && currentRows.length + 2 > rowsPerPage && entryRows.length >= 2) {
+                pushCurrentPage();
+            }
         }
 
         entryRows.forEach((r) => {
@@ -186,8 +212,8 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
             currentRows.push(r);
         });
 
-        // Blank spacer row between distinct chronological entries if space permits
-        if (currentRows.length < rowsPerPage) {
+        // Blank spacer row between distinct chronological entries if space permits and no explicit next rowIndex
+        if (currentRows.length < rowsPerPage && (entry.rowIndex === null || entry.rowIndex === undefined)) {
             currentRows.push({ dateTimeText: '', noteText: '', isMeta: false, noteId: null });
         }
     });

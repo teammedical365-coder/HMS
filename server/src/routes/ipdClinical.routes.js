@@ -2390,7 +2390,7 @@ router.post('/admissions/:admissionId/progress-notes', verifyToken, resolveTenan
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
-        const { recordedAt, note, sheetNo } = req.body || {};
+        const { recordedAt, note, sheetNo, rowIndex } = req.body || {};
 
         if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
         if (!mongoose.Types.ObjectId.isValid(admissionId)) {
@@ -2422,6 +2422,7 @@ router.post('/admissions/:admissionId/progress-notes', verifyToken, resolveTenan
             recordedAt: parsedRecordedAt,
             note: String(note).trim(),
             sheetNo: sheetNo ? String(sheetNo).trim() : '1',
+            rowIndex: typeof rowIndex === 'number' ? rowIndex : (rowIndex !== undefined && rowIndex !== null ? parseInt(rowIndex, 10) : null),
             authorId: actorId,
             authorName: actorName,
             authorRole: actorRole,
@@ -2465,7 +2466,7 @@ const handleUpdateProgressNote = async (req, res) => {
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId, noteId } = req.params;
-        const { recordedAt, note, sheetNo, editReason } = req.body || {};
+        const { recordedAt, note, sheetNo, rowIndex, editReason } = req.body || {};
 
         if (!hospitalId) return res.status(403).json({ success: false, message: 'Hospital context required' });
         if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(noteId)) {
@@ -2526,6 +2527,7 @@ const handleUpdateProgressNote = async (req, res) => {
             noteDoc.note = nextNote;
             noteDoc.recordedAt = nextRecordedAt;
             noteDoc.sheetNo = nextSheetNo;
+            if (rowIndex !== undefined) noteDoc.rowIndex = typeof rowIndex === 'number' ? rowIndex : (rowIndex !== null ? parseInt(rowIndex, 10) : null);
             noteDoc.updatedBy = actorId;
             noteDoc.updatedByName = actorName;
             noteDoc.updatedByRole = actorRole;

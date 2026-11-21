@@ -108,8 +108,8 @@ const RoleDashboard = () => {
             navigate('/nurse/dashboard', { replace: true });
         } else if (cleanRole.includes('assistant')) {
             navigate('/assistant/dashboard', { replace: true });
-        } else if (cleanRole === 'doctor' || cleanRole === 'clinicdoctor') {
-            navigate('/doctor/patients', { replace: true });
+        } else if (cleanRole === 'doctor' || cleanRole === 'clinicdoctor' || cleanRole === 'resident' || cleanRole === 'residentdoctor') {
+            navigate('/doctor/dashboard', { replace: true });
         } else if (cleanRole.includes('pharmac')) {
             navigate('/pharmacy/inventory', { replace: true });
         } else if (cleanRole === 'lab') {

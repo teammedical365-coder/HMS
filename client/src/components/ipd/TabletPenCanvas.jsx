@@ -119,10 +119,10 @@ const TabletPenCanvas = ({
     }, [strokes, renderAllStrokes]);
 
     // Logical CSS pixel coordinates extraction
-    const getCanvasCoordinates = (e) => {
+    const getCanvasCoordinates = (e, customRect = null) => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
-        const rect = canvas.getBoundingClientRect();
+        const rect = customRect || canvas.getBoundingClientRect();
         const pressure = typeof e.pressure === 'number' && e.pressure > 0 ? e.pressure : 0.5;
         return {
             x: Math.round((e.clientX - rect.left) * 10) / 10,
@@ -135,20 +135,23 @@ const TabletPenCanvas = ({
     const handlePointerDown = (e) => {
         if (activeTool === 'type') return;
 
-        // If another pointer is already active, ignore simultaneous second touches (palm rejection)
+        // If an abandoned previous pointer was active, finalize it safely
         if (activePointerIdRef.current !== null && activePointerIdRef.current !== e.pointerId) {
-            return;
+            handlePointerEnd({ pointerId: activePointerIdRef.current });
         }
 
         activePointerIdRef.current = e.pointerId;
         isDrawingRef.current = true;
 
-        // Capture pointer so pointerup is never lost if cursor leaves canvas bounds
-        try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-        } catch (_) {}
+        const canvas = canvasRef.current;
+        if (canvas && typeof canvas.setPointerCapture === 'function') {
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch (_) {}
+        }
 
-        const coords = getCanvasCoordinates(e);
+        const rect = canvas ? canvas.getBoundingClientRect() : null;
+        const coords = getCanvasCoordinates(e, rect);
 
         if (activeTool === 'eraser') {
             lastEraserPointRef.current = coords;
@@ -175,7 +178,6 @@ const TabletPenCanvas = ({
         currentStrokeRef.current = newStroke;
 
         // Draw initial point/dot immediately for crisp visual responsiveness
-        const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (ctx) {
             const dpr = dprRef.current || window.devicePixelRatio || 1;
@@ -194,6 +196,12 @@ const TabletPenCanvas = ({
     const handlePointerMove = (e) => {
         if (!isDrawingRef.current || activePointerIdRef.current !== e.pointerId) return;
 
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Cache rect once per pointermove event to eliminate layout thrashing
+        const rect = canvas.getBoundingClientRect();
+
         // Consume high-frequency coalesced events if available from stylus/Apple Pencil/Wacom
         const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
         const eventList = coalesced && coalesced.length > 0 ? coalesced : [e];
@@ -203,7 +211,7 @@ const TabletPenCanvas = ({
             let anyChange = false;
 
             for (let i = 0; i < eventList.length; i++) {
-                const pt = getCanvasCoordinates(eventList[i]);
+                const pt = getCanvasCoordinates(eventList[i], rect);
                 const prev = lastEraserPointRef.current || pt;
                 const res = eraseStrokesAlongPath(strokesRef.current, prev, pt, eraserRadius);
                 if (res.changed) {
@@ -224,8 +232,7 @@ const TabletPenCanvas = ({
         const curStroke = currentStrokeRef.current;
         if (!curStroke) return;
 
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d');
+        const ctx = canvas.getContext('2d');
         const dpr = dprRef.current || window.devicePixelRatio || 1;
 
         if (ctx) {
@@ -237,7 +244,7 @@ const TabletPenCanvas = ({
         }
 
         for (let i = 0; i < eventList.length; i++) {
-            const coords = getCanvasCoordinates(eventList[i]);
+            const coords = getCanvasCoordinates(eventList[i], rect);
             const prevPoint = curStroke.points[curStroke.points.length - 1];
 
             // Prevent adding identical redundant coordinates
@@ -264,17 +271,19 @@ const TabletPenCanvas = ({
 
     // POINTER UP / CANCEL: Finalize stroke cleanly exactly once
     const handlePointerEnd = (e) => {
-        if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) {
+        const ptrId = e?.pointerId !== undefined ? e.pointerId : activePointerIdRef.current;
+        if (activePointerIdRef.current !== null && ptrId !== activePointerIdRef.current) {
             return;
         }
 
-        try {
-            if (e?.currentTarget && typeof e.currentTarget.hasPointerCapture === 'function') {
-                if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                    e.currentTarget.releasePointerCapture(e.pointerId);
+        const canvas = canvasRef.current;
+        if (canvas && typeof canvas.hasPointerCapture === 'function' && ptrId !== null) {
+            try {
+                if (canvas.hasPointerCapture(ptrId)) {
+                    canvas.releasePointerCapture(ptrId);
                 }
-            }
-        } catch (_) {}
+            } catch (_) {}
+        }
 
         const wasDrawing = isDrawingRef.current;
         isDrawingRef.current = false;

@@ -166,7 +166,8 @@ const DoctorIPDOrdersPanel = ({
     appointment = null,
     currentUser = null,
     onOrderCreated = null,
-    defaultTab = 'overview'
+    defaultTab = 'overview',
+    hideHeaderBanner = false
 }) => {
     const { user: authUser } = useAuth();
     const activeDoctor = currentUser || authUser;
@@ -1061,6 +1062,7 @@ const DoctorIPDOrdersPanel = ({
     return (
         <div className="ipd-orders-panel">
             {/* ====== EXECUTIVE IPD HEADER BANNER ====== */}
+            {!hideHeaderBanner && (
             <div className="ipd-header-banner">
                 <div className="ipd-banner-left">
                     <div className="ipd-banner-icon-badge">
@@ -1218,6 +1220,7 @@ const DoctorIPDOrdersPanel = ({
                     )}
                 </div>
             </div>
+            )}
 
             {/* Sub-Navigation Tabs (All 11+ Clinical Sections) */}
             <div className="ipd-sub-tabs">

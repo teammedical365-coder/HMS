@@ -94,7 +94,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         }
         if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || role === 'resident' || role === 'residentdoctor' || role === 'resident doctor' || role.includes('resident') || (role.includes('doctor') && !role.includes('assistant'))) {
             return [
-                { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
+                { label: 'Dashboard', path: '/doctor/dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
                 { label: 'IPD Clinical Records', path: '/doctor/ipd-patients', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/doctors/DoctorIPDPatients') },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
