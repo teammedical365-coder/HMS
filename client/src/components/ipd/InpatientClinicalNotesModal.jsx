@@ -10,7 +10,6 @@ import {
 } from '../../utils/inpatientNotesPdf';
 import RuledSectionEditor from './RuledSectionEditor';
 import TabletPenCanvas from './TabletPenCanvas';
-import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import {
     FiX, FiPrinter, FiDownload, FiFileText, FiSave,
     FiMessageSquare, FiEdit2, FiClock, FiRotateCcw, FiRotateCw,
@@ -18,85 +17,6 @@ import {
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import './InpatientClinicalNotesModal.css';
-
-function TabletSheetZoom({ children }) {
-    const [zoom, setZoom] = useState(1);
-    const touchRef = useRef({ distance: 0, startZoom: 1 });
-
-    const clampZoom = (value) => Math.min(2, Math.max(0.6, Number(value.toFixed(2))));
-    const zoomIn = () => setZoom((current) => clampZoom(current + 0.1));
-    const zoomOut = () => setZoom((current) => clampZoom(current - 0.1));
-    const fit = () => setZoom(1);
-
-    const getTouchDistance = (touches) => {
-        const dx = touches[0].clientX - touches[1].clientX;
-        const dy = touches[0].clientY - touches[1].clientY;
-        return Math.hypot(dx, dy);
-    };
-
-    const handleTouchStart = (event) => {
-        if (event.touches.length === 2) {
-            touchRef.current = {
-                distance: getTouchDistance(event.touches),
-                startZoom: zoom
-            };
-        }
-    };
-
-    const handleTouchMove = (event) => {
-        if (event.touches.length !== 2 || !touchRef.current.distance) return;
-
-        // Keep the browser from interpreting the same gesture as page zoom.
-        if (event.cancelable) event.preventDefault();
-
-        const currentDistance = getTouchDistance(event.touches);
-        const scale = currentDistance / touchRef.current.distance;
-        setZoom(clampZoom(touchRef.current.startZoom * scale));
-    };
-
-    const handleTouchEnd = (event) => {
-        if (event.touches.length < 2) {
-            touchRef.current.distance = 0;
-        }
-        if (event.touches.length === 2) {
-            touchRef.current = {
-                distance: getTouchDistance(event.touches),
-                startZoom: zoom
-            };
-        }
-    };
-
-    return (
-        <div
-            className="tablet-sheet-zoom-area"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={() => { touchRef.current.distance = 0; }}
-        >
-            <div className="tablet-sheet-zoom-controls" aria-label="Sheet zoom controls">
-                <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={zoom <= 0.6}>−</button>
-                <button type="button" onClick={fit} className="zoom-value" aria-label="Reset zoom">
-                    {Math.round(zoom * 100)}%
-                </button>
-                <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={zoom >= 2}>+</button>
-                <button type="button" onClick={fit}>Fit</button>
-            </div>
-            <div
-                className="tablet-sheet-zoom-content"
-                style={{
-                    zoom,
-                    width: "fit-content",
-                    minWidth: "100%",
-                    margin: "0 auto",
-                    transformOrigin: "top center"
-                }}
-            >
-                {children}
-            </div>
-        </div>
-    );
-}
 
 const InpatientClinicalNotesModal = ({
     isOpen,
@@ -124,9 +44,6 @@ const InpatientClinicalNotesModal = ({
     const [activeTool, setActiveTool] = useState('type');
     const [penColor, setPenColor] = useState('#1d4ed8'); // Medical blue
     const [penWidth, setPenWidth] = useState(2);
-
-    // AI Voice Scribe Modal State
-    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     const [admission, setAdmission] = useState(initialAdmission || null);
     const [latestVitals, setLatestVitals] = useState(null);
@@ -394,40 +311,6 @@ const InpatientClinicalNotesModal = ({
         });
     };
 
-    // AI Voice Scribe Insertion
-    const handleApproveVoiceScribe = ({ sections, session }) => {
-        commitStateUpdate((prev) => {
-            const updated = { ...prev };
-            Object.keys(sections).forEach((key) => {
-                if (key === 'generalExamination') {
-                    updated.generalExamination = {
-                        ...(prev.generalExamination || {}),
-                        ...sections.generalExamination
-                    };
-                } else if (typeof sections[key] === 'string') {
-                    // Append cleanly if line already has content
-                    const existing = prev[key] || '';
-                    updated[key] = existing ? `${existing}\n${sections[key]}` : sections[key];
-                }
-            });
-
-            // Log session in audit array
-            if (session) {
-                const sessions = Array.isArray(prev.aiScribeSessions) ? prev.aiScribeSessions : [];
-                updated.aiScribeSessions = [
-                    ...sessions,
-                    {
-                        ...session,
-                        recordedBy: user?.name || 'Authorized Staff',
-                        recordedByRole: user?._roleData?.name || user?.role || 'Staff'
-                    }
-                ];
-            }
-
-            return updated;
-        });
-    };
-
     // Save Clinical Notes
     const handleSaveNotes = async (e) => {
         if (e) e.preventDefault();
@@ -649,18 +532,6 @@ const InpatientClinicalNotesModal = ({
                     <div className="ipn-toolbar-group">
                         <button
                             type="button"
-                            className="ipn-tool-btn ipn-tool-btn-ai"
-                            onClick={() => setIsScribeModalOpen(true)}
-                            title="Open AI Voice Scribe & Dictation"
-                        >
-                            <FiZap size={13} />
-                            <span>AI Voice Scribe</span>
-                        </button>
-
-                        <div className="ipn-tool-divider" />
-
-                        <button
-                            type="button"
                             className="ipn-tool-btn"
                             onClick={handleUndo}
                             disabled={historyIndex <= 0}
@@ -696,8 +567,7 @@ const InpatientClinicalNotesModal = ({
 
                 {/* Modal Main Body */}
                 <div className="ipn-modal-body">
-                    <TabletSheetZoom>
-<div className="ipn-sheets-stack">
+                    <div className="ipn-sheets-stack">
                             {/* ==================== PAGE 1 ==================== */}
                             <div className="ipn-sheet-paper">
                                 <span className="ipn-sheet-badge">PAGE 1 — CLINICAL ASSESSMENT</span>
@@ -1178,19 +1048,8 @@ const InpatientClinicalNotesModal = ({
                                 );
                             })}
                         </div>
-</TabletSheetZoom>
                 </div>
             </div>
-
-            {/* AI Voice Scribe Modal */}
-            <ClinicalVoiceScribeModal
-                isOpen={isScribeModalOpen}
-                onClose={() => setIsScribeModalOpen(false)}
-                onApproveAndInsert={handleApproveVoiceScribe}
-                patientName={ptBannerDetails.name}
-                uhid={ptBannerDetails.uhid}
-                ipdNumber={ptBannerDetails.ipdNumber}
-            />
         </div>
     );
 };

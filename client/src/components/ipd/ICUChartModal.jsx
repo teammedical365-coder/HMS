@@ -10,8 +10,7 @@ import {
     ICU_CHART_TEMPLATE_PAGE2_URL,
     COMMON_NABH_LOGO_URL
 } from '../../utils/icuChartPdf';
-import { FiX, FiPrinter, FiDownload, FiActivity, FiCalendar, FiLayers, FiFileText, FiMic } from 'react-icons/fi';
-import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
+import { FiX, FiPrinter, FiDownload, FiActivity, FiCalendar, FiLayers, FiFileText } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import './ICUChartModal.css';
 
@@ -41,7 +40,6 @@ const ICUChartModal = ({
     const [tenantHospital, setTenantHospital] = useState(null);
     const [icuData, setIcuData] = useState(null);
     const [activeTab, setActiveTab] = useState('page1'); // 'page1' | 'page2' | 'both'
-    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     const initialDateVal = useMemo(() => {
         return toDateInputValue(initialAdmission?.admissionDate || new Date());
@@ -162,11 +160,6 @@ const ICUChartModal = ({
         }
     };
 
-    const handleApproveVoiceScribe = ({ sections, session }) => {
-        const text = session?.rawTranscript || Object.values(sections || {}).filter(Boolean).join('. ');
-        toast.success(`Voice note transcribed: "${(text || '').substring(0, 40)}..."`);
-    };
-
     useEffect(() => {
         const bodyEl = document.querySelector('.icu-modal-body');
         if (bodyEl) bodyEl.scrollTop = 0;
@@ -204,15 +197,6 @@ const ICUChartModal = ({
                                 onChange={(e) => setChartDate(e.target.value)}
                             />
                         </div>
-
-                        <button
-                            type="button"
-                            className="icu-btn icu-btn-scribe"
-                            onClick={() => setIsScribeModalOpen(true)}
-                            title="AI Voice Scribe & Dictation"
-                        >
-                            <FiMic /> AI Voice Scribe
-                        </button>
 
                         <button
                             type="button"
@@ -623,16 +607,6 @@ const ICUChartModal = ({
                         </>
                     )}
                 </div>
-
-                {/* AI Voice Scribe Modal */}
-                <ClinicalVoiceScribeModal
-                    isOpen={isScribeModalOpen}
-                    onClose={() => setIsScribeModalOpen(false)}
-                    onApproveAndInsert={handleApproveVoiceScribe}
-                    patientName={pb.name}
-                    uhid={pb.uhid}
-                    ipdNumber={pb.ipd}
-                />
             </div>
         </div>
     );

@@ -67,11 +67,15 @@ import './IPDClinicalChartsModal.css';
 
 
 
-function TabletSheetZoom({ children, zoom, setZoom }) {
+function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom }) {
+    const [internalZoom, setInternalZoom] = useState(1);
+    const zoom = propZoom !== undefined ? propZoom : internalZoom;
+    const setZoom = propSetZoom || setInternalZoom;
     const touchRef = useRef({ distance: 0, startZoom: 1 });
 
-    const zoomIn = () => setZoom(v => Math.min(2, +(v + 0.1).toFixed(2)));
-    const zoomOut = () => setZoom(v => Math.max(0.6, +(v - 0.1).toFixed(2)));
+    const clampZoom = (v) => Math.min(2, Math.max(0.6, Number(v.toFixed(2))));
+    const zoomIn = () => setZoom(v => clampZoom(v + 0.1));
+    const zoomOut = () => setZoom(v => clampZoom(v - 0.1));
     const fit = () => setZoom(1);
 
     const handleTouchStart = (e) => {
@@ -93,9 +97,7 @@ function TabletSheetZoom({ children, zoom, setZoom }) {
         const distance = Math.hypot(dx, dy);
         const scale = distance / touchRef.current.distance;
 
-        setZoom(Math.min(2, Math.max(0.6,
-            +(touchRef.current.startZoom * scale).toFixed(2)
-        )));
+        setZoom(clampZoom(touchRef.current.startZoom * scale));
     };
 
     const handleTouchEnd = (e) => {
@@ -109,6 +111,14 @@ function TabletSheetZoom({ children, zoom, setZoom }) {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
+            <div className="tablet-sheet-zoom-controls" aria-label="Progress notes zoom controls">
+                <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={zoom <= 0.6}>−</button>
+                <button type="button" onClick={fit} className="zoom-value" aria-label="Reset zoom">
+                    {Math.round(zoom * 100)}%
+                </button>
+                <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={zoom >= 2}>+</button>
+                <button type="button" onClick={fit}>Fit</button>
+            </div>
             <div
                 className="tablet-sheet-zoom-content"
                 style={{
@@ -1174,23 +1184,6 @@ const IPDClinicalChartsModal = ({
                 setProgressNotes(prev => [...prev, newEntry]);
                 setDirtyNotes(true);
                 toast.success('Gemini AI consultation structured into Progress Notes!');
-            } else if (activeTab === 'drug_chart') {
-                setDirtyDrugChart(true);
-                setEditableStatRows(prev => {
-                    const copy = [...prev];
-                    const firstEmpty = copy.findIndex(r => !r.remarks || !r.remarks.trim());
-                    const targetIdx = firstEmpty >= 0 ? firstEmpty : 0;
-                    if (copy[targetIdx]) {
-                        copy[targetIdx] = {
-                            ...copy[targetIdx],
-                            remarks: copy[targetIdx].remarks ? `${copy[targetIdx].remarks}; ${textToInsert}` : textToInsert
-                        };
-                    }
-                    return copy;
-                });
-                toast.success('Gemini AI consultation inserted into Drug Chart!');
-            } else {
-                toast.success('Gemini AI transcription captured');
             }
         }
     };
@@ -1786,15 +1779,17 @@ const IPDClinicalChartsModal = ({
                         </div>
 
                         <div className="ipdc-toolbar-group">
-                            <button
-                                type="button"
-                                className="ipdc-tool-btn ipdc-tool-btn-ai"
-                                onClick={() => setIsScribeModalOpen(true)}
-                                title="AI Voice Scribe (Gemini 3.6 Flash)"
-                            >
-                                <FiZap size={13} />
-                                <span>AI Voice Scribe</span>
-                            </button>
+                            {activeTab === 'progress_notes' && (
+                                <button
+                                    type="button"
+                                    className="ipdc-tool-btn ipdc-tool-btn-ai"
+                                    onClick={() => setIsScribeModalOpen(true)}
+                                    title="AI Voice Scribe (Gemini 3.6 Flash)"
+                                >
+                                    <FiZap size={13} />
+                                    <span>AI Voice Scribe</span>
+                                </button>
+                            )}
 
                             <button
                                 type="button"
@@ -1854,6 +1849,7 @@ const IPDClinicalChartsModal = ({
                                             Saved {lastSavedProgressTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     )}
+                                   
                                     <button
                                         type="button"
                                         className="ipdc-btn-save-inline"
@@ -1998,15 +1994,14 @@ const IPDClinicalChartsModal = ({
                                 </div>
                             ))}
                         </div>
-</TabletSheetZoom>
+                    </TabletSheetZoom>
                     )}
 
                     {/* =========================================================
                         TAB 2: DRUG CHART (CONTINUOUS 2-PAGE DOCUMENT)
                        ========================================================= */}
                     {!loading && activeTab === 'drug_chart' && (
-                        <TabletSheetZoom>
-<div className="ipdc-sheets-stack">
+                        <div className="ipdc-sheets-stack">
                             {/* ── SHEET 1: PAGE 1 (ALLERGIES, STAT-DOSES & I.V. FLUIDS) ── */}
                             <div className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
                                 <TabletPenCanvas
@@ -3001,7 +2996,6 @@ const IPDClinicalChartsModal = ({
                                 );
                             })}
                         </div>
-</TabletSheetZoom>
                     )}
                 </div>
 

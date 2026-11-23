@@ -178,6 +178,8 @@ const ClinicalVoiceScribeModal = ({
     const [interimTranscript, setInterimTranscript] = useState('');
     const [hasRecorded, setHasRecorded] = useState(false);
     const [isStructuring, setIsStructuring] = useState(false);
+    const [inputLanguage, setInputLanguage] = useState('auto');
+    const [outputLanguage, setOutputLanguage] = useState('English');
 
     // Structured proposed sections
     const [proposedSections, setProposedSections] = useState({});
@@ -219,7 +221,7 @@ const ClinicalVoiceScribeModal = ({
             const recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.lang = 'en-IN';
+            recognition.lang = inputLanguage === 'hi-IN' ? 'hi-IN' : 'en-IN';
 
             recognition.onresult = (event) => {
                 let finalStr = '';
@@ -378,7 +380,8 @@ const ClinicalVoiceScribeModal = ({
                 formData.append('mimeType', blob.type || 'audio/webm');
             }
             formData.append('liveTranscript', liveText);
-            formData.append('outputLanguage', 'English');
+            formData.append('outputLanguage', outputLanguage || 'English');
+            formData.append('inputLanguage', inputLanguage || 'auto');
             formData.append('patientName', patientName || '');
             formData.append('uhid', uhid || '');
             formData.append('ipdNumber', ipdNumber || '');
@@ -538,6 +541,61 @@ const ClinicalVoiceScribeModal = ({
 
                 {/* Body */}
                 <div className="cvs-body">
+                    {/* Language Selector Bar */}
+                    <div className="cvs-lang-bar" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 14px',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        fontSize: '12.5px',
+                        color: '#334155'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600, color: '#475569' }}>Spoken Dialogue:</span>
+                            <select
+                                value={inputLanguage}
+                                onChange={(e) => setInputLanguage(e.target.value)}
+                                disabled={isRecording}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #cbd5e1',
+                                    fontSize: '12px',
+                                    background: '#f8fafc',
+                                    fontWeight: 500,
+                                    cursor: isRecording ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                <option value="auto">Auto Detect (Hindi / English / Mixed)</option>
+                                <option value="hi-IN">Hindi (हिन्दी)</option>
+                                <option value="en-IN">Indian English</option>
+                            </select>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600, color: '#475569' }}>Document Output:</span>
+                            <select
+                                value={outputLanguage}
+                                onChange={(e) => setOutputLanguage(e.target.value)}
+                                disabled={isRecording}
+                                style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #cbd5e1',
+                                    fontSize: '12px',
+                                    background: '#f8fafc',
+                                    fontWeight: 500,
+                                    cursor: isRecording ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                <option value="English">English</option>
+                                <option value="Hindi">Hindi (हिन्दी)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     {/* Live Recording Control Console */}
                     <div className="cvs-recording-panel">
                         <div className="cvs-record-status-row">
@@ -695,7 +753,7 @@ const ClinicalVoiceScribeModal = ({
                             onClick={handleApprove}
                             disabled={Object.keys(proposedSections).length === 0}
                         >
-                            <FiCheck /> Approve &amp; Insert into Document
+                            <FiCheck /> Approve &amp; Insert into Progress Notes
                         </button>
                     </div>
                 </div>
