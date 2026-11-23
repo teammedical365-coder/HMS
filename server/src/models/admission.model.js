@@ -113,6 +113,10 @@ const admissionSchema = new mongoose.Schema({
         method: { type: String },
         amount: { type: Number, default: 0 }
     }],
+    handwritingStrokes: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({})
+    },
     notes: String,
 }, { timestamps: true });
 

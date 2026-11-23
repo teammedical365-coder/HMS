@@ -371,6 +371,74 @@ export const drawClinicalSheetLetterhead = ({
 };
 
 /**
+ * Helper to draw vector pen strokes from tablet canvas onto jsPDF
+ */
+export const drawVectorStrokes = (doc, strokes, { boxLeft = 0, boxTopY = 0, boxWidth = 210, boxHeight = 297 } = {}) => {
+    if (!Array.isArray(strokes) || strokes.length === 0) return;
+
+    strokes.forEach((stroke) => {
+        if (!stroke.points || stroke.points.length === 0) return;
+        const colorHex = stroke.color || '#1d4ed8';
+        let r = 29, g = 78, b = 216;
+        if (colorHex.startsWith('#') && colorHex.length >= 7) {
+            r = parseInt(colorHex.slice(1, 3), 16) || 29;
+            g = parseInt(colorHex.slice(3, 5), 16) || 78;
+            b = parseInt(colorHex.slice(5, 7), 16) || 216;
+        }
+        doc.setDrawColor(r, g, b);
+        doc.setFillColor(r, g, b);
+
+        const screenW = Number(stroke.canvasWidth) || 790;
+        const screenH = Number(stroke.canvasHeight) || 1117;
+        const pdfLineWidth = Math.max(0.2, (Number(stroke.width) || 2) * 0.18);
+        doc.setLineWidth(pdfLineWidth);
+
+        if (stroke.points.length === 1) {
+            const pt = stroke.points[0];
+            const x = boxLeft + (pt.x / screenW) * boxWidth;
+            const y = boxTopY + (pt.y / screenH) * boxHeight;
+            const radius = Math.max(0.25, (Number(stroke.width) || 2) * 0.14);
+            doc.circle(x, y, radius, 'F');
+            return;
+        }
+
+        for (let i = 1; i < stroke.points.length; i++) {
+            const p1 = stroke.points[i - 1];
+            const p2 = stroke.points[i];
+            const x1 = boxLeft + (p1.x / screenW) * boxWidth;
+            const y1 = boxTopY + (p1.y / screenH) * boxHeight;
+            const x2 = boxLeft + (p2.x / screenW) * boxWidth;
+            const y2 = boxTopY + (p2.y / screenH) * boxHeight;
+            doc.line(x1, y1, x2, y2);
+        }
+    });
+};
+
+/**
+ * Generate vector SVG overlay string for browser print
+ */
+export const generateStrokesSvg = (strokes, screenW = 790, screenH = 1117) => {
+    if (!Array.isArray(strokes) || strokes.length === 0) return '';
+    const paths = strokes.map(stroke => {
+        if (!stroke.points || stroke.points.length === 0) return '';
+        const color = stroke.color || '#1d4ed8';
+        const width = stroke.width || 2;
+        if (stroke.points.length === 1) {
+            const pt = stroke.points[0];
+            return `<circle cx="${pt.x}" cy="${pt.y}" r="${Math.max(1, width / 2)}" fill="${color}" />`;
+        }
+        const d = stroke.points.map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
+        return `<path d="${d}" stroke="${color}" stroke-width="${width}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
+    }).join('');
+
+    return `
+        <svg class="pn-print-strokes-svg" viewBox="0 0 ${screenW} ${screenH}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20;">
+            ${paths}
+        </svg>
+    `;
+};
+
+/**
  * Generate and download exact A4 1-Page (+ Continuation Sheets) PROGRESS NOTES PDF
  */
 export const downloadProgressNotesPdf = async ({
@@ -378,6 +446,7 @@ export const downloadProgressNotesPdf = async ({
     patient = {},
     admission = {},
     progressNotes = [],
+    handwritingStrokes = {},
     isBlank = false,
     fileName = '',
     manualExtraSheets = 0
@@ -509,6 +578,13 @@ export const downloadProgressNotesPdf = async ({
         doc.setFontSize(9.5);
         doc.setTextColor(15, 23, 42);
         doc.text('Progress Sheet Cond ......', rightX - 58, rowsBottomY + 6.5);
+
+        // Render vector pen strokes overlay on this page
+        const pageKey = `pn_page_${pageIndex}`;
+        const pageStrokes = handwritingStrokes?.[pageKey];
+        if (Array.isArray(pageStrokes) && pageStrokes.length > 0) {
+            drawVectorStrokes(doc, pageStrokes, { boxLeft: 0, boxTopY: 0, boxWidth: 210, boxHeight: 297 });
+        }
     });
 
     const safeName = (ptDetails.name || 'Patient').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -524,6 +600,7 @@ export const printProgressNotes = ({
     patient = {},
     admission = {},
     progressNotes = [],
+    handwritingStrokes = {},
     isBlank = false,
     manualExtraSheets = 0
 }) => {
@@ -553,8 +630,13 @@ export const printProgressNotes = ({
         </div>
     `;
 
-    const pagesHtml = pages.map((pg, idx) => `
-        <div class="pn-page ${idx < pages.length - 1 ? 'page-break' : ''}">
+    const pagesHtml = pages.map((pg, idx) => {
+        const pageKey = `pn_page_${idx}`;
+        const pageStrokes = handwritingStrokes?.[pageKey] || [];
+        const strokesSvg = generateStrokesSvg(pageStrokes);
+        return `
+        <div class="pn-page ${idx < pages.length - 1 ? 'page-break' : ''}" style="position:relative;">
+            ${strokesSvg}
             ${bannerHtml}
             <div class="pn-letterhead">
                 <div class="pn-logos">
@@ -607,7 +689,8 @@ export const printProgressNotes = ({
             </table>
             <div class="pn-footer">Progress Sheet Cond ......</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     const win = window.open('', '_blank', 'width=940,height=1050');
     if (!win) return;

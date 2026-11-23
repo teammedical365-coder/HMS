@@ -118,6 +118,10 @@ const IPDClinicalChartsModal = ({
     const [penColor, setPenColor] = useState('#1d4ed8');
     const [penWidth, setPenWidth] = useState(2);
     const [penStrokes, setPenStrokes] = useState({});
+    const penStrokesRef = useRef({});
+    useEffect(() => {
+        penStrokesRef.current = penStrokes;
+    }, [penStrokes]);
     const [undoStack, setUndoStack] = useState([]);
     const [redoStack, setRedoStack] = useState([]);
     const [activeLineKey, setActiveLineKey] = useState(null);
@@ -320,6 +324,15 @@ const IPDClinicalChartsModal = ({
 
             if (pnRes?.progressNotes) {
                 setProgressNotes(pnRes.progressNotes);
+            }
+
+            const incomingStrokes = pnRes?.handwritingStrokes || dcRes?.handwritingStrokes || resolvedAdm?.handwritingStrokes || null;
+            if (incomingStrokes && typeof incomingStrokes === 'object') {
+                setPenStrokes(prev => {
+                    const merged = { ...incomingStrokes, ...prev };
+                    penStrokesRef.current = merged;
+                    return merged;
+                });
             }
 
             if (dcRes?.drugChart) {
@@ -785,6 +798,13 @@ const IPDClinicalChartsModal = ({
             };
             const res = await ipdClinicalAPI.updateDrugChart(effectiveAdmissionId, payload);
             if (res?.drugChart || res?.success) {
+                // Also persist latest vector handwriting strokes
+                const currentStrokes = penStrokesRef.current || penStrokes;
+                if (currentStrokes && Object.keys(currentStrokes).length > 0) {
+                    await ipdClinicalAPI.saveHandwriting(effectiveAdmissionId, { strokes: currentStrokes }).catch(err => {
+                        console.warn('Handwriting save warning in drug chart:', err);
+                    });
+                }
                 if (res.drugChart) setDrugChart(res.drugChart);
                 setDirtyDrugChart(false);
                 setDeletedStatIds([]);
@@ -806,10 +826,48 @@ const IPDClinicalChartsModal = ({
 
     // ==================== AI VOICE SCRIBE & INLINE EDITING HANDLERS ====================
     const handleSaveStrokes = (pageKey, newStrokes) => {
-        setPenStrokes(prev => ({
-            ...prev,
-            [pageKey]: newStrokes
-        }));
+        setPenStrokes(prev => {
+            const next = {
+                ...prev,
+                [pageKey]: newStrokes
+            };
+            penStrokesRef.current = next;
+            return next;
+        });
+        if (activeTab === 'progress_notes') {
+            setDirtyNotes(true);
+        } else {
+            setDirtyDrugChart(true);
+        }
+    };
+
+    const handleClearProgressRow = (pageIdx, rowIdx, r) => {
+        setDirtyNotes(true);
+        setUndoStack(u => [...u.slice(-20), progressNotes]);
+        if (r && r.noteId && !r.isSigRow) {
+            setProgressNotes(prev => prev.map(n => {
+                if (String(n._id) === String(r.noteId)) {
+                    const lines = String(n.note || '').split('\n');
+                    const targetLine = r.lineIdx !== undefined ? r.lineIdx : 0;
+                    if (targetLine < lines.length) {
+                        lines[targetLine] = '';
+                        return { ...n, note: lines.join('\n') };
+                    }
+                }
+                return n;
+            }));
+        } else {
+            const sheetNum = String(pageIdx + 1);
+            setProgressNotes(prev => {
+                const existingDraftIdx = prev.findIndex(n => n.isNew && String(n.sheetNo) === sheetNum && n.rowIndex === rowIdx);
+                if (existingDraftIdx >= 0) {
+                    const copy = [...prev];
+                    copy[existingDraftIdx] = { ...copy[existingDraftIdx], note: '' };
+                    return copy;
+                }
+                return prev;
+            });
+        }
     };
 
     const getAuthorInfo = useCallback(() => {
@@ -998,6 +1056,19 @@ const IPDClinicalChartsModal = ({
                 });
                 if (!res || !res.success) {
                     throw new Error(res?.message || `Failed to update progress note ${n._id}`);
+                }
+            }
+
+            // 3. Persist latest vector handwriting strokes
+            const currentStrokes = penStrokesRef.current || penStrokes;
+            if (currentStrokes && Object.keys(currentStrokes).length > 0) {
+                const strokeRes = await ipdClinicalAPI.saveHandwriting(effectiveAdmissionId, { strokes: currentStrokes }).catch(err => {
+                    console.warn('Handwriting save warning in progress notes:', err);
+                    return null;
+                });
+                if (strokeRes?.handwritingStrokes) {
+                    setPenStrokes(strokeRes.handwritingStrokes);
+                    penStrokesRef.current = strokeRes.handwritingStrokes;
                 }
             }
 
@@ -1342,12 +1413,14 @@ const IPDClinicalChartsModal = ({
     const handleDownloadPdf = async () => {
         setDownloading(true);
         try {
+            const currentStrokes = penStrokesRef.current || penStrokes;
             if (activeTab === 'progress_notes') {
                 await downloadProgressNotesPdf({
                     hospital: hospitalObj,
                     patient: initialPatient || admission?.patientId,
                     admission,
                     progressNotes,
+                    handwritingStrokes: currentStrokes,
                     manualExtraSheets: manualExtraPages,
                     isBlank
                 });
@@ -1361,6 +1434,7 @@ const IPDClinicalChartsModal = ({
                     existingAllergies,
                     orders,
                     marRecords,
+                    handwritingStrokes: currentStrokes,
                     isBlank
                 });
                 toast.success('2-Page Drug Chart PDF downloaded');
@@ -1373,12 +1447,14 @@ const IPDClinicalChartsModal = ({
     };
 
     const handlePrint = () => {
+        const currentStrokes = penStrokesRef.current || penStrokes;
         if (activeTab === 'progress_notes') {
             printProgressNotes({
                 hospital: hospitalObj,
                 patient: initialPatient || admission?.patientId,
                 admission,
                 progressNotes,
+                handwritingStrokes: currentStrokes,
                 manualExtraSheets: manualExtraPages,
                 isBlank
             });
@@ -1391,6 +1467,7 @@ const IPDClinicalChartsModal = ({
                 existingAllergies,
                 orders,
                 marRecords,
+                handwritingStrokes: currentStrokes,
                 isBlank
             });
         }
@@ -1817,21 +1894,36 @@ const IPDClinicalChartsModal = ({
                                                                     onFocus={() => handleProgressRowFocus(idx, rIdx)}
                                                                 />
                                                                 {activeFocusedKey === `pn_${idx}_${rIdx}` && (
-                                                                    <button
-                                                                        type="button"
-                                                                        className={`line-mic-pill ${dictatingKey === `pn_${idx}_${rIdx}` ? 'listening' : ''}`}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleToggleLineDictation(
-                                                                                `pn_${idx}_${rIdx}`,
-                                                                                r.noteText || '',
-                                                                                (v) => handleProgressRowTextChange(idx, rIdx, v, r)
-                                                                            );
-                                                                        }}
-                                                                        title="Dictate here"
-                                                                    >
-                                                                        <FiMic size={14} />
-                                                                    </button>
+                                                                    <div className="pn-line-actions">
+                                                                        {Boolean(r.noteText && r.noteText.trim()) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                className="line-del-pill"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleClearProgressRow(idx, rIdx, r);
+                                                                                }}
+                                                                                title="Clear this line"
+                                                                            >
+                                                                                <FiTrash2 size={12} />
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            className={`line-mic-pill ${dictatingKey === `pn_${idx}_${rIdx}` ? 'listening' : ''}`}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleToggleLineDictation(
+                                                                                    `pn_${idx}_${rIdx}`,
+                                                                                    r.noteText || '',
+                                                                                    (v) => handleProgressRowTextChange(idx, rIdx, v, r)
+                                                                                );
+                                                                            }}
+                                                                            title="Dictate here"
+                                                                        >
+                                                                            <FiMic size={14} />
+                                                                        </button>
+                                                                    </div>
                                                                 )}
                                                             </td>
                                                         )}

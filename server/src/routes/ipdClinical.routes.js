@@ -1907,7 +1907,7 @@ router.get('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant
 // Validates and sanitizes tablet vector handwriting strokes to prevent oversized/malformed payloads
 function validateAndSanitizeHandwritingStrokes(rawStrokes) {
     if (!rawStrokes || typeof rawStrokes !== 'object') {
-        return { page1: [], page2: [] };
+        return {};
     }
 
     const sanitized = {};
@@ -1918,7 +1918,7 @@ function validateAndSanitizeHandwritingStrokes(rawStrokes) {
     const pageKeys = Object.keys(rawStrokes).slice(0, MAX_PAGES);
 
     for (const pageKey of pageKeys) {
-        if (!/^page\d+$/i.test(pageKey)) continue;
+        if (!/^[a-zA-Z0-9_\-]+$/.test(pageKey) || pageKey.length > 64) continue;
 
         const strokesArray = rawStrokes[pageKey];
         if (!Array.isArray(strokesArray)) {
@@ -1971,6 +1971,8 @@ function validateAndSanitizeHandwritingStrokes(rawStrokes) {
                     color: safeColor,
                     width: safeWidth,
                     tool: stroke.tool === 'eraser' ? 'eraser' : 'pen',
+                    canvasWidth: Number(stroke.canvasWidth) || 790,
+                    canvasHeight: Number(stroke.canvasHeight) || 1117,
                     points: cleanPts
                 });
             }
@@ -1978,9 +1980,6 @@ function validateAndSanitizeHandwritingStrokes(rawStrokes) {
 
         sanitized[pageKey] = cleanStrokes;
     }
-
-    if (!sanitized.page1) sanitized.page1 = [];
-    if (!sanitized.page2) sanitized.page2 = [];
 
     return sanitized;
 }
@@ -2130,6 +2129,67 @@ const saveInpatientClinicalNoteHandler = async (req, res) => {
 
 router.post('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant, requireNurseOrDoctorAccess, saveInpatientClinicalNoteHandler);
 router.put('/admissions/:admissionId/clinical-notes', verifyToken, resolveTenant, requireNurseOrDoctorAccess, saveInpatientClinicalNoteHandler);
+
+// GET /api/ipd-clinical/admissions/:admissionId/handwriting
+router.get('/admissions/:admissionId/handwriting', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+        const { Admission } = getModels(req);
+        const adm = await Admission.findOne({ _id: admissionId, hospitalId }).select('handwritingStrokes').lean();
+        if (!adm) return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        res.json({ success: true, handwritingStrokes: adm.handwritingStrokes || {} });
+    } catch (e) {
+        console.error('Fetch handwriting error:', e);
+        res.status(500).json({ success: false, message: 'Failed to fetch handwriting strokes' });
+    }
+});
+
+// PUT /api/ipd-clinical/admissions/:admissionId/handwriting
+router.put('/admissions/:admissionId/handwriting', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+        const { strokes, pageKey } = req.body || {};
+        const { Admission, InpatientClinicalNote } = getModels(req);
+        
+        const adm = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!adm) return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        
+        const existing = adm.handwritingStrokes || {};
+        let updated = { ...existing };
+        
+        if (pageKey && Array.isArray(strokes)) {
+            const sanitizedSingle = validateAndSanitizeHandwritingStrokes({ [pageKey]: strokes });
+            updated[pageKey] = sanitizedSingle[pageKey] || [];
+        } else if (strokes && typeof strokes === 'object') {
+            const sanitizedMap = validateAndSanitizeHandwritingStrokes(strokes);
+            Object.assign(updated, sanitizedMap);
+        }
+        
+        adm.handwritingStrokes = updated;
+        adm.markModified('handwritingStrokes');
+        await adm.save();
+
+        if (InpatientClinicalNote && (updated.page1 || updated.page2)) {
+            await InpatientClinicalNote.updateOne(
+                { hospitalId, admissionId: adm._id },
+                { $set: { 'handwritingStrokes.page1': updated.page1 || [], 'handwritingStrokes.page2': updated.page2 || [] } }
+            ).catch(() => {});
+        }
+        
+        res.json({ success: true, handwritingStrokes: adm.handwritingStrokes });
+    } catch (e) {
+        console.error('Save handwriting error:', e);
+        res.status(500).json({ success: false, message: 'Failed to save handwriting strokes' });
+    }
+});
 
 // GET /api/ipd-clinical/admissions/:admissionId/communication — Patient & Nurse interaction notes timeline
 router.get('/admissions/:admissionId/communication', verifyToken, resolveTenant, requirePatientOrClinicalAccess, async (req, res) => {
@@ -2378,7 +2438,12 @@ router.get('/admissions/:admissionId/progress-notes', verifyToken, resolveTenant
             .sort({ recordedAt: 1, createdAt: 1 })
             .lean();
 
-        res.json({ success: true, progressNotes, admission });
+        res.json({
+            success: true,
+            progressNotes,
+            handwritingStrokes: admission.handwritingStrokes || {},
+            admission
+        });
     } catch (err) {
         console.error('Fetch progress notes error:', err);
         res.status(500).json({ success: false, message: 'Error fetching clinical progress notes' });
@@ -2704,6 +2769,7 @@ const fetchDrugChartBundle = async (req, hospitalId, admission) => {
         },
         orders,
         marRecords,
+        handwritingStrokes: admission.handwritingStrokes || {},
         admission
     };
 };

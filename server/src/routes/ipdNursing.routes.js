@@ -233,14 +233,34 @@ router.get('/dashboard-summary', verifyToken, resolveTenant, requireClinicalRead
         for (let adm of activeAdmissions) {
             if (adm.patientId && (!adm.patientId.name || typeof adm.patientId !== 'object')) {
                 try {
-                    adm.patientId = await MasterUser.findById(adm.patientId).select('name age gender patientId mrn phone dob').lean() || { _id: adm.patientId, name: 'Inpatient' };
+                    const userModel = (req.db && req.db.models && req.db.models.User) || MasterUser;
+                    let pt = await userModel.findById(adm.patientId).select('name firstName lastName age gender patientId mrn uhid phone dob').lean();
+                    if (!pt) {
+                        pt = await MasterUser.findById(adm.patientId).select('name firstName lastName age gender patientId mrn uhid phone dob').lean();
+                    }
+                    if (pt) {
+                        const resolvedName = (pt.name || `${pt.firstName || ''} ${pt.lastName || ''}`).trim() || 'Inpatient';
+                        adm.patientId = { ...pt, name: resolvedName };
+                    } else {
+                        adm.patientId = { _id: adm.patientId, name: 'Inpatient' };
+                    }
                 } catch (e) {
                     adm.patientId = { _id: adm.patientId, name: 'Inpatient' };
                 }
             }
             if (adm.doctorId && (!adm.doctorId.name || typeof adm.doctorId !== 'object')) {
                 try {
-                    adm.doctorId = await MasterUser.findById(adm.doctorId).select('name specialization phone email').lean() || { _id: adm.doctorId, name: 'Attending Doctor' };
+                    const userModel = (req.db && req.db.models && req.db.models.User) || MasterUser;
+                    let doc = await userModel.findById(adm.doctorId).select('name firstName lastName specialization phone email').lean();
+                    if (!doc) {
+                        doc = await MasterUser.findById(adm.doctorId).select('name firstName lastName specialization phone email').lean();
+                    }
+                    if (doc) {
+                        const resolvedDocName = (doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`).trim() || 'Attending Doctor';
+                        adm.doctorId = { ...doc, name: resolvedDocName };
+                    } else {
+                        adm.doctorId = { _id: adm.doctorId, name: 'Attending Doctor' };
+                    }
                 } catch (e) {
                     adm.doctorId = { _id: adm.doctorId, name: 'Attending Doctor' };
                 }
@@ -472,11 +492,20 @@ router.get('/dashboard-summary', verifyToken, resolveTenant, requireClinicalRead
                 (t.patientId && String(t.patientId) === patientIdStr)
             );
 
+            const pResolvedName = patient.name || (patient.firstName ? `${patient.firstName} ${patient.lastName || ''}`.trim() : '') || 'Admitted Patient';
+            const pMrn = patient.patientId || patient.mrn || patient.uhid || adm.patientMRN || '—';
+            const pIpd = adm.ipdNumber || adm.admissionNumber || (adm._id ? String(adm._id).slice(-6).toUpperCase() : '—');
+
             return {
                 admissionId: adm._id,
+                admission: adm,
                 patientId: patient._id || patient,
-                patientName: patient.name || 'Unknown Patient',
-                patientUid: patient.patientId || patient.mrn || '',
+                name: pResolvedName,
+                patientName: pResolvedName,
+                patientUid: pMrn,
+                patientMRN: pMrn,
+                ipdNumber: pIpd,
+                diagnosis: adm.diagnosis || adm.reasonForAdmission || 'Clinical Inpatient Care',
                 age: patient.age || (patient.dob ? Math.floor((Date.now() - new Date(patient.dob)) / (365.25 * 24 * 60 * 60 * 1000)) : ''),
                 gender: patient.gender || '',
                 ward: adm.ward || 'General',

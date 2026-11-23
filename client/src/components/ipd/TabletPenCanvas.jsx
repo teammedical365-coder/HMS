@@ -182,6 +182,8 @@ const TabletPenCanvas = ({
             color: penColor,
             width: penWidth,
             tool: 'pen',
+            canvasWidth: Math.round(rect.width) || 790,
+            canvasHeight: Math.round(rect.height) || 1117,
             points: [coords]
         };
         currentStrokeRef.current = newStroke;

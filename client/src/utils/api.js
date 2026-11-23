@@ -1701,6 +1701,10 @@ export const ipdClinicalAPI = {
 
     // Exact 2-Page ICU Daily Observation Chart (Auto-Populated from Existing Clinical Streams)
     getICUChart: async (admissionId, params = {}) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/icu-chart`, { params })).data,
+
+    // Tablet Vector Handwriting Strokes (Progress Notes & Drug Chart Pages)
+    getHandwriting: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/handwriting`)).data,
+    saveHandwriting: async (admissionId, data) => (await apiClient.put(`/api/ipd-clinical/admissions/${admissionId}/handwriting`, data)).data,
 };
 
 // ── IPD Nursing Workflow APIs ──

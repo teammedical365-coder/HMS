@@ -223,7 +223,7 @@
     font-family: inherit;
     font-size: 11px;
     color: #0f172a;
-    padding: 2px 34px 2px 6px;
+    padding: 2px 58px 2px 6px;
     margin: 0;
     line-height: 1.4;
     box-sizing: border-box;
@@ -255,6 +255,40 @@
     position: relative;
     padding: 0 24px 0 4px !important;
     vertical-align: middle;
+}
+
+.pn-line-actions {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 10;
+}
+
+.line-del-pill {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid #fca5a5;
+    background: #ffffff;
+    color: #ef4444;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 1px 3px rgba(239, 68, 68, 0.2);
+    transition: all 0.15s ease;
+}
+
+.line-del-pill:hover {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #b91c1c;
+    transform: scale(1.1);
 }
 
 .dc-cell-wrapper {
@@ -293,10 +327,6 @@
 }
 
 .line-mic-pill {
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -309,7 +339,6 @@
     cursor: pointer;
     padding: 0;
     box-shadow: 0 1px 4px rgba(13, 148, 136, 0.2);
-    z-index: 10;
     transition: all 0.15s ease;
 }
 
@@ -317,7 +346,7 @@
     background: #f0fdfa;
     border-color: #0f766e;
     color: #0f766e;
-    transform: translateY(-50%) scale(1.08);
+    transform: scale(1.08);
 }
 
 .line-mic-pill.listening {

@@ -51,7 +51,20 @@ const DoctorIPDPatients = () => {
             try {
                 const res = await ipdNursingAPI.getDashboardSummary();
                 if (res && res.success && Array.isArray(res.patients)) {
-                    setPatients(res.patients);
+                    const formatted = res.patients.map(p => {
+                        const resolvedName = p.name || p.patientName || (p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : '') || 'Admitted Patient';
+                        const resolvedMrn = p.patientMRN || p.patientUid || p.mrn || p.uhid || '—';
+                        const resolvedIpd = p.ipdNumber || p.admissionNumber || p.admission?.ipdNumber || (p.admissionId ? String(p.admissionId).slice(-6).toUpperCase() : '—');
+                        return {
+                            ...p,
+                            name: resolvedName,
+                            patientName: resolvedName,
+                            patientMRN: resolvedMrn,
+                            ipdNumber: resolvedIpd,
+                            diagnosis: p.diagnosis || 'Clinical Inpatient Care'
+                        };
+                    });
+                    setPatients(formatted);
                     loaded = true;
                 }
             } catch (err) {
@@ -299,16 +312,17 @@ const DoctorIPDPatients = () => {
                 <div className="doc-ipd-patient-grid">
                     {filteredPatients.map(pt => {
                         const isICU = pt.isICU || /icu|ccu|nicu|picu/i.test(pt.ward || '') || /icu|ccu|nicu|picu/i.test(pt.bedNumber || '');
+                        const displayName = pt.name || pt.patientName || 'Admitted Patient';
                         return (
                             <div key={pt.admissionId || pt.patientId} className={`doc-ipd-card ${isICU ? 'is-icu-card' : ''}`}>
                                 {/* Card Header */}
                                 <div className="doc-ipd-card-header">
                                     <div className="doc-ipd-pt-meta">
                                         <div className="doc-ipd-avatar">
-                                            {pt.name ? pt.name.slice(0, 2).toUpperCase() : 'PT'}
+                                            {displayName.slice(0, 2).toUpperCase()}
                                         </div>
                                         <div>
-                                            <h3 className="doc-ipd-pt-name">{pt.name}</h3>
+                                            <h3 className="doc-ipd-pt-name">{displayName}</h3>
                                             <div className="doc-ipd-demographics-row">
                                                 <span>{pt.age ? `${pt.age} Y` : ''} {pt.gender || ''}</span>
                                                 {pt.patientMRN && pt.patientMRN !== '—' && (

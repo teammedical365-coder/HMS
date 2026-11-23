@@ -7,7 +7,7 @@ import {
     loadImageForPdf,
     drawPatientBannerPdf
 } from './tprChartPdf.js';
-import { buildProgressNotesHeaderData, drawClinicalSheetLetterhead } from './progressNotesPdf.js';
+import { buildProgressNotesHeaderData, drawClinicalSheetLetterhead, drawVectorStrokes, generateStrokesSvg } from './progressNotesPdf.js';
 
 export const DRUG_CHART_TIME_SLOTS = ['06 AM', '10 AM', '02 PM', '10 PM'];
 export const DRUG_CHART_STAT_ROWS_PER_PAGE = 10;
@@ -402,6 +402,7 @@ export const downloadDrugChartPdf = async ({
     existingAllergies = {},
     orders = [],
     marRecords = [],
+    handwritingStrokes = {},
     isBlank = false,
     fileName = ''
 }) => {
@@ -556,6 +557,12 @@ export const downloadDrugChartPdf = async ({
             rowsData: ivSlice,
             isBlank
         });
+
+        const page1Key = p1 === 0 ? 'dc_page_1' : `dc_page_1_cont_${p1}`;
+        const p1Strokes = handwritingStrokes?.[page1Key] || (p1 === 0 ? handwritingStrokes?.dc_page_1 : null);
+        if (Array.isArray(p1Strokes) && p1Strokes.length > 0) {
+            drawVectorStrokes(doc, p1Strokes, { boxLeft: 0, boxTopY: 0, boxWidth: 210, boxHeight: 297 });
+        }
     }
 
     // ==================== PAGE 2 (+ Continuation Pages): MEDICATION ADMINISTRATION GRID ====================
@@ -781,6 +788,13 @@ export const downloadDrugChartPdf = async ({
                     }
                 }
             }
+
+            const page2Index = dcIdx * orderChunksCount + ocIdx;
+            const page2Key = page2Index === 0 ? 'dc_page_2' : `dc_page_2_cont_${page2Index}`;
+            const p2Strokes = handwritingStrokes?.[page2Key] || (page2Index === 0 ? handwritingStrokes?.dc_page_2 : null);
+            if (Array.isArray(p2Strokes) && p2Strokes.length > 0) {
+                drawVectorStrokes(doc, p2Strokes, { boxLeft: 0, boxTopY: 0, boxWidth: 210, boxHeight: 297 });
+            }
         }
     }
 
@@ -800,6 +814,7 @@ export const printDrugChart = ({
     existingAllergies = {},
     orders = [],
     marRecords = [],
+    handwritingStrokes = {},
     isBlank = false
 }) => {
     const ptDetails = resolvePatientChartDetails({ patient, admission, isBlank });
@@ -843,9 +858,12 @@ export const printDrugChart = ({
     const page1Html = Array.from({ length: p1Count }, (_, p1) => {
         const statSlice = allStats.slice(p1 * DRUG_CHART_STAT_ROWS_PER_PAGE, (p1 + 1) * DRUG_CHART_STAT_ROWS_PER_PAGE);
         const ivSlice = allIVs.slice(p1 * DRUG_CHART_IV_ROWS_PER_PAGE, (p1 + 1) * DRUG_CHART_IV_ROWS_PER_PAGE);
+        const p1Key = p1 === 0 ? 'dc_page_1' : `dc_page_1_cont_${p1}`;
+        const p1Svg = generateStrokesSvg(handwritingStrokes?.[p1Key] || (p1 === 0 ? handwritingStrokes?.dc_page_1 : null));
 
         return `
-            <div class="dc-page page-break">
+            <div class="dc-page page-break" style="position:relative;">
+                ${p1Svg}
                 ${bannerHtml}
                 <div class="dc-letterhead">
                     <div class="dc-logos">
@@ -1000,8 +1018,13 @@ export const printDrugChart = ({
         </colgroup>
     `;
 
-    const page2Html = p2Pages.map((pg, idx) => `
-        <div class="dc-page ${idx < p2Pages.length - 1 ? 'page-break' : ''}">
+    const page2Html = p2Pages.map((pg, idx) => {
+        const p2Key = idx === 0 ? 'dc_page_2' : `dc_page_2_cont_${idx}`;
+        const p2Svg = generateStrokesSvg(handwritingStrokes?.[p2Key] || (idx === 0 ? handwritingStrokes?.dc_page_2 : null));
+
+        return `
+        <div class="dc-page ${idx < p2Pages.length - 1 ? 'page-break' : ''}" style="position:relative;">
+            ${p2Svg}
             ${page2BannerHtml}
             <table class="dc-mar-header-table">
                 ${marColGroupHtml}
@@ -1052,7 +1075,8 @@ export const printDrugChart = ({
                 `;
             }).join('')}
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     const win = window.open('', '_blank', 'width=940,height=1050');
     if (!win) return;
