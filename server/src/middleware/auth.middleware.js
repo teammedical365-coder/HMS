@@ -341,6 +341,54 @@ exports.requirePermission = (...requiredPermissions) => {
 };
 
 /**
+ * Require user to possess ALL of the specified permissions.
+ * Usage: requireAllPermissions('orders:view', 'orders:create')
+ */
+exports.requireAllPermissions = (...requiredPermissions) => {
+    return async (req, res, next) => {
+        try {
+            if (!req.user) {
+                return res.status(401).json({ success: false, message: 'Authentication required' });
+            }
+
+            const roleData = req.user._roleData;
+            if (!roleData) {
+                return res.status(403).json({ success: false, message: 'No role assigned. Contact admin.' });
+            }
+
+            if (roleData.permissions && roleData.permissions.includes('*')) {
+                return next();
+            }
+
+            const userPerms = roleData.permissions || [];
+            const missing = requiredPermissions.filter(perm => !userPerms.includes(perm));
+
+            if (missing.length > 0) {
+                return res.status(403).json({
+                    success: false,
+                    message: `Access denied. Missing required permissions: ${missing.join(', ')}`
+                });
+            }
+
+            next();
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    };
+};
+
+/**
+ * Helper to check if a user object has a specific permission.
+ */
+exports.hasPermission = (user, permission) => {
+    if (!user) return false;
+    const roleData = user._roleData;
+    if (!roleData) return false;
+    if (roleData.permissions && roleData.permissions.includes('*')) return true;
+    return (roleData.permissions || []).includes(permission);
+};
+
+/**
  * Verify user is an superadmin (bootstrap super-admin) or centraladmin.
  * Use this only for system-level operations like first-time setup or release management.
  */

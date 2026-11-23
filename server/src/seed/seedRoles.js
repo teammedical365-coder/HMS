@@ -1,24 +1,16 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const mongoose = require('mongoose');
 const Role = require('../models/role.model');
+const { LMS_ROLE_TEMPLATES } = require('../constants/lmsPermissions');
 
 async function seedRoles() {
     try {
         await mongoose.connect(process.env.MONGODB_URL);
         console.log('Connected to MongoDB');
 
-        const roles = [
-            {
-                name: 'Lab Technician',
-                description: 'Manages lab tests and reports',
-                permissions: ['lab_view', 'lab_manage'],
-                dashboardPath: '/lab/dashboard',
-                navLinks: [
-                    { label: 'Dashboard', path: '/lab/dashboard' },
-                    { label: 'Assigned Tests', path: '/lab/tests' }
-                ],
-                isSystemRole: true
-            },
+        // Existing Core System Roles
+        const coreRoles = [
             {
                 name: 'Pharmacist',
                 description: 'Manages pharmacy inventory and orders',
@@ -28,7 +20,8 @@ async function seedRoles() {
                     { label: 'Orders', path: '/pharmacy/orders' },
                     { label: 'Inventory', path: '/pharmacy/inventory' }
                 ],
-                isSystemRole: true
+                isSystemRole: true,
+                hospitalId: null
             },
             {
                 name: 'Doctor Assistant',
@@ -40,12 +33,13 @@ async function seedRoles() {
                     { label: 'Patient Queue', path: '/assistant/queue' },
                     { label: 'Question Library', path: '/assistant/question-library' }
                 ],
-                isSystemRole: true
+                isSystemRole: true,
+                hospitalId: null
             },
             {
                 name: 'Accountant',
                 description: 'Hospital finance, financial records, refund management, and accounting',
-                permissions: ['finance_view'],
+                permissions: ['finance_view', 'billing_view', 'billing_manage'],
                 dashboardPath: '/accountant/dashboard',
                 navLinks: [
                     { label: 'Dashboard', path: '/accountant/dashboard' },
@@ -53,26 +47,41 @@ async function seedRoles() {
                     { label: 'Refunds', path: '/accountant/refunds' },
                     { label: 'History', path: '/accountant/history' }
                 ],
-                isSystemRole: true
+                isSystemRole: true,
+                hospitalId: null
             }
         ];
 
-        for (const roleDef of roles) {
-            const existing = await Role.findOne({ name: roleDef.name });
+        // Combine Core Roles + Official 7 LMS Roles
+        const allRolesToSeed = [...coreRoles, ...LMS_ROLE_TEMPLATES];
+
+        for (const roleDef of allRolesToSeed) {
+            // Find existing role scoped to global/system level (hospitalId: null)
+            const existing = await Role.findOne({
+                name: roleDef.name,
+                hospitalId: null
+            });
+
             if (!existing) {
-                await Role.create(roleDef);
-                console.log(`✅ Created role: ${roleDef.name}`);
+                await Role.create({
+                    ...roleDef,
+                    hospitalId: null,
+                    isSystemRole: true
+                });
+                console.log(`✅ Created system role: ${roleDef.name}`);
             } else {
-                // Update permissions and navLinks if they changed
+                // Update permissions, navLinks, description, and dashboardPath idempotently
                 existing.permissions = roleDef.permissions;
                 existing.navLinks = roleDef.navLinks;
                 existing.dashboardPath = roleDef.dashboardPath;
+                existing.description = roleDef.description;
+                existing.isSystemRole = true;
                 await existing.save();
-                console.log(`🔄 Updated role: ${roleDef.name}`);
+                console.log(`🔄 Updated system role: ${roleDef.name}`);
             }
         }
 
-        console.log('Seeding completed.');
+        console.log('System roles seeding completed successfully.');
         process.exit(0);
 
     } catch (error) {
@@ -81,4 +90,9 @@ async function seedRoles() {
     }
 }
 
-seedRoles();
+// Allow direct execution or module invocation
+if (require.main === module) {
+    seedRoles();
+}
+
+module.exports = seedRoles;

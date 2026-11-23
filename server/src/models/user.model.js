@@ -20,6 +20,9 @@ const userSchema = new mongoose.Schema({
     // staff: points to the hospital they belong to
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null },
 
+    // Laboratory Location reference for staff workstation scoping
+    locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'LabLocation', default: null, index: true },
+
     // Patient ID for clinical tracking
     patientId: { type: String, sparse: true },
     uhid: { type: String, sparse: true },

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
 import { useAppDispatch } from '../../store/hooks';
 import { updateUser as updateUserAction } from '../../store/slices/authSlice';
-import { adminAPI, uploadAPI, hospitalAPI, aiWalletAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, aiWalletAPI, labAPI } from '../../utils/api';
 import BedManagement from './BedManagement';
 import OTDashboard from './OTDashboard';
 import '../administration/SuperAdmin.css';
@@ -80,6 +80,61 @@ const getRoleBadgeMeta = (roleName) => {
             type: 'nurse'
         };
     }
+    if (raw.includes('pathologist')) {
+        return {
+            label: roleName || 'Pathologist',
+            icon: '🔬',
+            bg: 'rgba(139, 92, 246, 0.12)',
+            color: '#6d28d9',
+            border: '#c4b5fd',
+            grad: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+            type: 'pathologist'
+        };
+    }
+    if (raw.includes('phlebotomist') || raw.includes('sample collector')) {
+        return {
+            label: roleName || 'Phlebotomist',
+            icon: '🩸',
+            bg: 'rgba(239, 68, 68, 0.12)',
+            color: '#dc2626',
+            border: '#fca5a5',
+            grad: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+            type: 'phlebotomist'
+        };
+    }
+    if (raw.includes('lab manager') || raw.includes('lab admin')) {
+        return {
+            label: roleName || 'Lab Director',
+            icon: '🧪',
+            bg: 'rgba(13, 148, 136, 0.12)',
+            color: '#0f766e',
+            border: '#5eead4',
+            grad: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
+            type: 'lab-admin'
+        };
+    }
+    if (raw.includes('lab reception')) {
+        return {
+            label: roleName || 'Lab Receptionist',
+            icon: '💁',
+            bg: 'rgba(14, 165, 233, 0.12)',
+            color: '#0284c7',
+            border: '#7dd3fc',
+            grad: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+            type: 'lab-receptionist'
+        };
+    }
+    if (raw.includes('lab account')) {
+        return {
+            label: roleName || 'Lab Accountant',
+            icon: '💳',
+            bg: 'rgba(16, 185, 129, 0.12)',
+            color: '#059669',
+            border: '#6ee7b7',
+            grad: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            type: 'lab-accountant'
+        };
+    }
     if (raw.includes('lab') || raw.includes('tech')) {
         return {
             label: roleName || 'Lab Tech',
@@ -113,6 +168,19 @@ const getRoleBadgeMeta = (roleName) => {
     };
 };
 
+const LMS_STANDARD_DEPARTMENTS = [
+    'Pathology',
+    'Biochemistry',
+    'Hematology',
+    'Microbiology',
+    'Clinical Pathology',
+    'Histopathology',
+    'Phlebotomy / Sample Collection',
+    'Blood Bank',
+    'Serology',
+    'Molecular Diagnostics'
+];
+
 const HospitalAdminDashboard = () => {
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
@@ -125,18 +193,26 @@ const HospitalAdminDashboard = () => {
     // Hospital info
     const [hospitalInfo, setHospitalInfo] = useState(null);
 
+    const allAvailableDepartments = useMemo(() => {
+        return Array.from(new Set([
+            ...(hospitalInfo?.departments || []),
+            ...LMS_STANDARD_DEPARTMENTS
+        ])).filter(Boolean);
+    }, [hospitalInfo]);
+
     // Users state
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [roles, setRoles] = useState([]);
+    const [labLocations, setLabLocations] = useState([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '', locationId: ''
     });
     const [creating, setCreating] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
+        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: '', locationId: ''
     });
     const [initialEditForm, setInitialEditForm] = useState(null);
 
@@ -146,7 +222,9 @@ const HospitalAdminDashboard = () => {
             (editForm.name || '').trim() !== (initialEditForm.name || '').trim() ||
             (editForm.email || '').trim().toLowerCase() !== (initialEditForm.email || '').trim().toLowerCase() ||
             (editForm.phone || '').trim() !== (initialEditForm.phone || '').trim() ||
+            String(editForm.roleId || '') !== String(initialEditForm.roleId || '') ||
             (editForm.department || '') !== (initialEditForm.department || '') ||
+            String(editForm.locationId || '') !== String(initialEditForm.locationId || '') ||
             (editForm.specialty || '') !== (initialEditForm.specialty || '') ||
             Boolean(editForm.newAvatarFile)
         );
@@ -269,6 +347,7 @@ const HospitalAdminDashboard = () => {
                     fetchMyHospital(),
                     fetchUsers(),
                     fetchRoles(),
+                    fetchLabLocations(),
                     fetchAIDoctorTracking()
                 ]);
             } catch (err) {
@@ -482,6 +561,17 @@ const HospitalAdminDashboard = () => {
         }
     };
 
+    const fetchLabLocations = async () => {
+        try {
+            const res = await labAPI.getLocations();
+            if (res.success) {
+                setLabLocations(res.locations || []);
+            }
+        } catch (err) {
+            console.error('Error fetching lab locations:', err);
+        }
+    };
+
     const handleCreateStaff = async (e) => {
         e.preventDefault();
         setCreating(true);
@@ -507,11 +597,16 @@ const HospitalAdminDashboard = () => {
                 if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
             }
 
-            const userData = { ...createForm, avatar: avatarUrl, departments: createForm.department ? [createForm.department] : [] };
+            const userData = {
+                ...createForm,
+                locationId: createForm.locationId || null,
+                avatar: avatarUrl,
+                departments: createForm.department ? [createForm.department] : []
+            };
             const res = await adminAPI.createUser(userData);
             if (res.success) {
                 toast.success(`Staff account created for ${createForm.name}!`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '' });
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '', locationId: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -552,6 +647,8 @@ const HospitalAdminDashboard = () => {
                 name: (editForm.name || '').trim(),
                 email: (editForm.email || '').trim(),
                 phone: cleanPhone,
+                roleId: editForm.roleId,
+                locationId: editForm.locationId || null,
                 avatar: avatarUrl,
                 specialty: editForm.specialty,
                 departments: editForm.department ? [editForm.department] : []
@@ -605,17 +702,26 @@ const HospitalAdminDashboard = () => {
     };
 
     const openEditModal = (userItem) => {
+        const rawRoleVal = userItem.roleId?._id || userItem.roleId || userItem.role;
+        const matchedRole = roles.find(r => 
+            String(r._id) === String(rawRoleVal) || 
+            (r.name && userItem.role && r.name.toLowerCase() === String(userItem.role).toLowerCase())
+        );
+        const resolvedRoleId = matchedRole ? matchedRole._id : (userItem.roleId || '');
+        const resolvedRoleName = matchedRole ? matchedRole.name : (userItem.role || 'Staff');
+
         const initData = {
             id: userItem.id || userItem._id,
             name: userItem.name || '',
             email: userItem.email || '',
             phone: userItem.phone || '',
-            roleId: userItem.roleId || userItem.role,
-            roleName: userItem.role || 'Staff',
+            roleId: resolvedRoleId,
+            roleName: resolvedRoleName,
             currentAvatar: userItem.avatar || null,
             newAvatarFile: null,
             specialty: userItem.specialty || '',
-            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
+            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : '',
+            locationId: userItem.locationId?._id || userItem.locationId || ''
         };
         setEditForm(initData);
         setInitialEditForm(initData);
@@ -2256,6 +2362,11 @@ const HospitalAdminDashboard = () => {
                                                                                 🏥 {deptName}
                                                                             </span>
                                                                         )}
+                                                                        {userItem.locationName && (
+                                                                            <span className="ha-staff-dept-tag" style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}>
+                                                                                📍 {userItem.locationName}
+                                                                            </span>
+                                                                        )}
                                                                         {isCurrentUser && (
                                                                             <span className="ha-staff-self-badge">You</span>
                                                                         )}
@@ -2361,6 +2472,11 @@ const HospitalAdminDashboard = () => {
                                                                 </div>
                                                                 {deptName && (
                                                                     <span className="ha-staff-mcard-dept">🏥 {deptName}</span>
+                                                                )}
+                                                                {userItem.locationName && (
+                                                                    <span className="ha-staff-mcard-dept" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '4px', padding: '2px 6px', display: 'inline-block', marginTop: '2px' }}>
+                                                                        📍 {userItem.locationName}
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                             <div className="ha-staff-mcard-role-col">
@@ -3286,21 +3402,35 @@ const HospitalAdminDashboard = () => {
                                         </select>
                                     </div>
 
-                                    {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
-                                        <div className="form-group">
-                                            <label className="staff-label">Department (Optional)</label>
-                                            <select
-                                                value={createForm.department}
-                                                onChange={e => setCreateForm({ ...createForm, department: e.target.value })}
-                                                className="staff-input"
-                                            >
-                                                <option value="">-- All Departments / General --</option>
-                                                {hospitalInfo.departments.map(dept => (
-                                                    <option key={dept} value={dept}>{dept}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
+                                    <div className="form-group">
+                                        <label className="staff-label">Department (Optional)</label>
+                                        <select
+                                            value={createForm.department}
+                                            onChange={e => setCreateForm({ ...createForm, department: e.target.value })}
+                                            className="staff-input"
+                                        >
+                                            <option value="">-- All Departments / General --</option>
+                                            {allAvailableDepartments.map(dept => (
+                                                <option key={dept} value={dept}>{dept}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="staff-label">Assign Laboratory Location (LMS)</label>
+                                        <select
+                                            value={createForm.locationId || ''}
+                                            onChange={e => setCreateForm({ ...createForm, locationId: e.target.value })}
+                                            className="staff-input"
+                                        >
+                                            <option value="">-- Main Processing Hub (Default) --</option>
+                                            {labLocations.map(loc => (
+                                                <option key={loc._id} value={loc._id}>
+                                                    {loc.locationName} ({loc.locationCode}) — {loc.locationType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
@@ -3373,33 +3503,60 @@ const HospitalAdminDashboard = () => {
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role Access</label>
-                                        <input
-                                            type="text"
-                                            value={(editForm.roleName || 'Staff').toUpperCase()}
-                                            disabled
+                                        <select
+                                            value={editForm.roleId || ''}
+                                            onChange={(e) => {
+                                                const selectedRole = roles.find(r => String(r._id) === String(e.target.value));
+                                                setEditForm(prev => ({
+                                                    ...prev,
+                                                    roleId: e.target.value,
+                                                    roleName: selectedRole ? selectedRole.name : prev.roleName
+                                                }));
+                                            }}
                                             className="staff-input"
-                                            style={{ opacity: 0.75, cursor: 'not-allowed', background: '#f8fafc', fontWeight: 600 }}
-                                        />
+                                            style={{ fontWeight: 600 }}
+                                        >
+                                            <option value="" disabled>-- Select Staff Role --</option>
+                                            {roles
+                                                .filter(role => !role.name.toLowerCase().includes('clinic') && !['centraladmin', 'superadmin', 'hospitaladmin', 'patient'].includes(role.name.toLowerCase()))
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>{role.name}</option>
+                                                ))}
+                                        </select>
                                     </div>
                                 </div>
 
-                                {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
-                                    <div className="form-row">
-                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                            <label className="staff-label">Assign Department</label>
-                                            <select
-                                                value={editForm.department}
-                                                onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
-                                                className="staff-input"
-                                            >
-                                                <option value="">-- All Departments / General --</option>
-                                                {hospitalInfo.departments.map(dept => (
-                                                    <option key={dept} value={dept}>{dept}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                <div className="form-row">
+                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="staff-label">Assign Department</label>
+                                        <select
+                                            value={editForm.department || ''}
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                                            className="staff-input"
+                                        >
+                                            <option value="">-- All Departments / General --</option>
+                                            {allAvailableDepartments.map(dept => (
+                                                <option key={dept} value={dept}>{dept}</option>
+                                            ))}
+                                        </select>
                                     </div>
-                                )}
+
+                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="staff-label">Assign Laboratory Location (LMS)</label>
+                                        <select
+                                            value={editForm.locationId || ''}
+                                            onChange={(e) => setEditForm(prev => ({ ...prev, locationId: e.target.value }))}
+                                            className="staff-input"
+                                        >
+                                            <option value="">-- Main Processing Hub (Default) --</option>
+                                            {labLocations.map(loc => (
+                                                <option key={loc._id} value={loc._id}>
+                                                    {loc.locationName} ({loc.locationCode}) — {loc.locationType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
                                     <button 

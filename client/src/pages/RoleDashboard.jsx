@@ -112,7 +112,19 @@ const RoleDashboard = () => {
             navigate('/doctor/dashboard', { replace: true });
         } else if (cleanRole.includes('pharmac')) {
             navigate('/pharmacy/inventory', { replace: true });
-        } else if (cleanRole === 'lab') {
+        } else if (cleanRole.includes('pathologist')) {
+            navigate('/lab/verification', { replace: true });
+        } else if (cleanRole.includes('phlebotomist') || cleanRole.includes('samplecollector')) {
+            navigate('/lab/collection', { replace: true });
+        } else if (cleanRole.includes('technician') || cleanRole.includes('labtech')) {
+            navigate('/lab/bench', { replace: true });
+        } else if (cleanRole.includes('labreceptionist')) {
+            navigate('/lab/reception', { replace: true });
+        } else if (cleanRole.includes('labaccountant')) {
+            navigate('/lab/billing', { replace: true });
+        } else if (cleanRole.includes('labmanager')) {
+            navigate('/lab/manager', { replace: true });
+        } else if (cleanRole.includes('labadmin') || cleanRole === 'lab') {
             navigate('/lab/dashboard', { replace: true });
         } else if (cleanRole.startsWith('ot')) {
             navigate('/ot/dashboard', { replace: true });

@@ -36,6 +36,12 @@ const DoctorIPDWorkspace = () => {
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
     const [icuChartModalOpen, setIcuChartModalOpen] = useState(false);
 
+    // Mount the chart modal only after a chart action is selected.
+    // This guarantees initialTab is applied on every open.
+    const openClinicalCharts = (tab) => {
+        setClinicalChartsModal({ open: true, tab });
+    };
+
     // Fetch admission details
     const fetchAdmission = useCallback(async (isSilent = false) => {
         if (!admissionId || admissionId === 'undefined') {
@@ -225,7 +231,7 @@ const DoctorIPDWorkspace = () => {
                             <button
                                 type="button"
                                 className="doc-ipd-chart-btn progress"
-                                onClick={() => setClinicalChartsModal({ open: true, tab: 'progress_notes' })}
+                                onClick={() => openClinicalCharts('progress_notes')}
                                 title="Open 1-Page Official Clinical Progress Notes (NABH Letterhead)"
                             >
                                 <FiFileText size={14} />
@@ -245,7 +251,7 @@ const DoctorIPDWorkspace = () => {
                             <button
                                 type="button"
                                 className="doc-ipd-chart-btn drug"
-                                onClick={() => setClinicalChartsModal({ open: true, tab: 'drug_stat_iv' })}
+                                onClick={() => openClinicalCharts('drug_stat_iv')}
                                 title="Open 2-Page Official Drug Chart (STAT, IV & MAR)"
                             >
                                 <FiDroplet size={14} />
@@ -292,14 +298,17 @@ const DoctorIPDWorkspace = () => {
                         patient={patient}
                     />
 
-                    <IPDClinicalChartsModal
-                        isOpen={clinicalChartsModal.open}
-                        onClose={() => setClinicalChartsModal(prev => ({ ...prev, open: false }))}
-                        admissionId={admissionId}
-                        admission={admission}
-                        patient={patient}
-                        initialTab={clinicalChartsModal.tab}
-                    />
+                    {clinicalChartsModal.open && (
+                        <IPDClinicalChartsModal
+                            key={`${admissionId}-${clinicalChartsModal.tab}`}
+                            isOpen={clinicalChartsModal.open}
+                            onClose={() => setClinicalChartsModal(prev => ({ ...prev, open: false }))}
+                            admissionId={admissionId}
+                            admission={admission}
+                            patient={patient}
+                            initialTab={clinicalChartsModal.tab}
+                        />
+                    )}
 
                     <ICUChartModal
                         isOpen={icuChartModalOpen}

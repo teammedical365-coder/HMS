@@ -102,6 +102,21 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
         }
     }
 
+    let locationName = null;
+    let locationCode = null;
+    if (user.locationId) {
+        try {
+            const LabLocation = require('../models/labLocation.model');
+            const loc = await LabLocation.findById(user.locationId).select('locationName locationCode').lean();
+            if (loc) {
+                locationName = loc.locationName;
+                locationCode = loc.locationCode;
+            }
+        } catch (locErr) {
+            // ignore lookup error
+        }
+    }
+
     return {
         id: user._id,
         name: user.name,
@@ -119,7 +134,10 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
         navLinks: roleData ? roleData.navLinks : [],
         avatar: user.avatar || null,
         departments: user.departments || [],
-        assignedDoctors: user.assignedDoctors || []
+        assignedDoctors: user.assignedDoctors || [],
+        locationId: user.locationId || null,
+        locationName: locationName,
+        locationCode: locationCode
     };
 }
 
@@ -598,7 +616,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 // Create User (by admin) — hospitalId is REQUIRED for all staff
 router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
-        const { name, email, password, phone, roleId, services, avatar, departments, assignedDoctors } = req.body;
+        const { name, email, password, phone, roleId, services, avatar, departments, assignedDoctors, locationId } = req.body;
 
         if (!phone || phone.trim() === '') {
             return res.status(400).json({ success: false, message: 'Phone number is required.' });
@@ -768,6 +786,22 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             finalDepartments = Array.from(derivedDepts);
         }
 
+        let assignedLocationId = null;
+        if (locationId) {
+            const LabLocation = require('../models/labLocation.model');
+            if (!mongoose.Types.ObjectId.isValid(locationId)) {
+                return res.status(400).json({ success: false, message: 'Invalid laboratory location ID format' });
+            }
+            const locDoc = await LabLocation.findOne({ _id: locationId, hospitalId: assignedHospitalId });
+            if (!locDoc) {
+                return res.status(400).json({ success: false, message: 'Laboratory location not found or does not belong to this hospital' });
+            }
+            if (!locDoc.isActive) {
+                return res.status(400).json({ success: false, message: 'Cannot assign staff to an inactive laboratory location' });
+            }
+            assignedLocationId = locDoc._id;
+        }
+
         const user = new User({
             name,
             email: email.toLowerCase(),
@@ -775,6 +809,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             phone: phone || '',
             role: roleId,
             hospitalId: assignedHospitalId,
+            locationId: assignedLocationId,
             services: (roleDoc.name || '').toLowerCase() === 'doctor' ? services : [],
             departments: finalDepartments,
             assignedDoctors: Array.isArray(assignedDoctors) ? assignedDoctors : [],
@@ -807,11 +842,17 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     departments: user.departments,
                     specialty: 'General', consultationFee: 0
                 });
-            } else if (roleName === 'lab' || roleName === 'lab technician') {
-                await Lab.create({
-                    name: user.name, email: user.email, phone: user.phone,
-                    userId: user._id, hospitalId: assignedHospitalId
-                });
+            } else if (roleName === 'lab' || roleName.includes('lab') || roleName === 'pathologist' || roleName.includes('phlebotomist') || roleName.includes('sample collector')) {
+                const existingLab = await Lab.findOne({ hospitalId: assignedHospitalId });
+                if (!existingLab) {
+                    await Lab.create({
+                        name: `${hName || 'Hospital'} Central Laboratory`,
+                        email: user.email,
+                        phone: user.phone,
+                        userId: user._id,
+                        hospitalId: assignedHospitalId
+                    });
+                }
             } else if (roleName === 'pharmacy' || roleName === 'pharmacist') {
                 await Pharmacy.create({
                     name: user.name, email: user.email, phone: user.phone,
@@ -868,7 +909,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
-        const { name, email, phone, roleId, avatar, specialty, departments, assignedDoctors } = req.body;
+        const { name, email, phone, roleId, avatar, specialty, departments, assignedDoctors, locationId } = req.body;
 
         if (phone && phone.trim() !== '') {
             const isDigits = /^\d+$/.test(phone.trim());
@@ -932,7 +973,33 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
 
         if (avatar !== undefined) user.avatar = avatar;
         if (specialty !== undefined) user.specialty = specialty;
-        if (departments !== undefined) {
+
+        // Support role update with hospital isolation and security checks
+        if (roleId) {
+            const roleDoc = await Role.findById(roleId);
+            if (!roleDoc) {
+                return res.status(400).json({ success: false, message: 'Invalid role. Role not found.' });
+            }
+            const targetRoleNameLower = (roleDoc.name || '').toLowerCase();
+            // Hospital Admin cannot elevate to centraladmin or superadmin
+            if (['centraladmin', 'superadmin', 'hospitaladmin'].includes(targetRoleNameLower) && !isCentral) {
+                return res.status(403).json({ success: false, message: 'Cannot assign Administrative roles' });
+            }
+            // Cannot assign roles belonging to another hospital
+            if (roleDoc.hospitalId && String(roleDoc.hospitalId) !== String(user.hospitalId)) {
+                return res.status(403).json({ success: false, message: 'Cannot assign a role belonging to another hospital' });
+            }
+            // Cannot assign doctor role from staff management
+            const isDoctorRole = (targetRoleNameLower === 'doctor' || targetRoleNameLower === 'clinic doctor' || (targetRoleNameLower.includes('doctor') && !targetRoleNameLower.includes('assistant')));
+            if (isDoctorRole && !isCentral) {
+                return res.status(403).json({ success: false, message: 'Doctor roles cannot be assigned from Staff Management' });
+            }
+            user.role = roleDoc._id;
+        }
+
+        if (req.body.department !== undefined && departments === undefined) {
+            user.departments = [String(req.body.department).trim()].filter(Boolean);
+        } else if (departments !== undefined) {
             user.departments = Array.isArray(departments) ? departments : [departments].filter(Boolean);
         }
 
@@ -943,6 +1010,25 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
                 const derivedDepts = new Set(user.departments || []);
                 assignedDocs.forEach(d => (d.departments || []).forEach(dept => dept && derivedDepts.add(dept)));
                 user.departments = Array.from(derivedDepts);
+            }
+        }
+
+        if (locationId !== undefined) {
+            if (!locationId) {
+                user.locationId = null;
+            } else {
+                const LabLocation = require('../models/labLocation.model');
+                if (!mongoose.Types.ObjectId.isValid(locationId)) {
+                    return res.status(400).json({ success: false, message: 'Invalid laboratory location ID format' });
+                }
+                const locDoc = await LabLocation.findOne({ _id: locationId, hospitalId: user.hospitalId });
+                if (!locDoc) {
+                    return res.status(400).json({ success: false, message: 'Laboratory location not found or does not belong to this hospital' });
+                }
+                if (!locDoc.isActive) {
+                    return res.status(400).json({ success: false, message: 'Cannot assign staff to an inactive laboratory location' });
+                }
+                user.locationId = locDoc._id;
             }
         }
 

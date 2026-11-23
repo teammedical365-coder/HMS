@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import DashboardLayout from '../components/layouts/DashboardLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
+import LabProtectedRoute from '../components/lab/LabProtectedRoute';
 import PatientProtectedRoute from '../components/PatientProtectedRoute';
 import RouteLoadingFallback from '../components/common/RouteLoadingFallback';
 import RouteErrorBoundary from '../components/common/RouteErrorBoundary';
@@ -99,8 +100,17 @@ const AdminSignup = lazy(() => import('../pages/administration/AdminSignup'));
 // Consent Management
 const ConsentManagement = lazy(() => import('../pages/admin/ConsentManagement'));
 
-// Lab Pages
+// Lab Pages (Phase 2 Workstations & Locations)
+const LabRouter = lazy(() => import('../pages/lab/LabRouter'));
 const LabDashboard = lazy(() => import('../pages/lab/LabDashboard'));
+const LabAdminDashboard = lazy(() => import('../pages/lab/LabAdminDashboard'));
+const LabManagerDashboard = lazy(() => import('../pages/lab/LabManagerDashboard'));
+const LabReceptionDashboard = lazy(() => import('../pages/lab/LabReceptionDashboard'));
+const LabCollectionDashboard = lazy(() => import('../pages/lab/LabCollectionDashboard'));
+const LabBenchDashboard = lazy(() => import('../pages/lab/LabBenchDashboard'));
+const LabVerificationDashboard = lazy(() => import('../pages/lab/LabVerificationDashboard'));
+const LabBillingDashboard = lazy(() => import('../pages/lab/LabBillingDashboard'));
+const LabLocationsPage = lazy(() => import('../pages/lab/LabLocationsPage'));
 const AssignedTests = lazy(() => import('../pages/lab/AssignedTests'));
 const CompletedReports = lazy(() => import('../pages/lab/CompletedReports'));
 
@@ -183,6 +193,15 @@ const SmartDashboardRedirector = () => {
     if (roleStr === 'doctor_assistant' || roleStr === 'doctor assistant' || roleStr === 'clinical assistant' || roleStr.includes('assistant')) {
         return <Navigate to="/assistant/dashboard" replace />;
     }
+
+    // Laboratory Management System (LMS) Phase 2 Workstation Routing
+    if (roleStr.includes('pathologist')) return <Navigate to="/lab/verification" replace />;
+    if (roleStr.includes('phlebotomist') || roleStr.includes('sample collector')) return <Navigate to="/lab/collection" replace />;
+    if (roleStr.includes('technician') || roleStr.includes('lab tech')) return <Navigate to="/lab/bench" replace />;
+    if (roleStr.includes('lab receptionist')) return <Navigate to="/lab/reception" replace />;
+    if (roleStr.includes('lab accountant')) return <Navigate to="/lab/billing" replace />;
+    if (roleStr.includes('lab manager')) return <Navigate to="/lab/manager" replace />;
+    if (roleStr.includes('lab admin') || roleStr === 'lab') return <Navigate to="/lab/dashboard" replace />;
 
     if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) {
         if (u.subscriptionPlan === 'starter' && roleStr === 'hospitaladmin') {
@@ -590,9 +609,18 @@ const MainRoutes = () => {
                                 <Route path="hospital-admin/local-sync" element={<Navigate to="/hospitaladmin/local-sync" replace />} />
                                 <Route path="hospitaladmin/settings" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><LocalSync /></ProtectedRoute>} />
 
-                                <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
-                                <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
-                                <Route path="lab/completed" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><CompletedReports /></ProtectedRoute>} />
+                                {/* Laboratory Management System (LMS) - Phase 2 Workstations & Locations */}
+                                <Route path="lab" element={<LabProtectedRoute><LabRouter /></LabProtectedRoute>} />
+                                <Route path="lab/dashboard" element={<LabProtectedRoute allowedRoles={['lab admin', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['settings:view', 'lab_view']}><LabAdminDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/manager" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:view', 'lab_view']}><LabManagerDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/reception" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:create', 'lab_view']}><LabReceptionDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/collection" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'phlebotomist / sample collector', 'phlebotomist', 'sample collector', 'lab technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['samples:collect', 'lab_view']}><LabCollectionDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/bench" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:entry', 'lab_view']}><LabBenchDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/verification" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:verify', 'lab_view']}><LabVerificationDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/billing" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab accountant', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['billing:view', 'lab_view']}><LabBillingDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/locations" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['settings:edit', 'lab_manage']}><LabLocationsPage /></LabProtectedRoute>} />
+                                <Route path="lab/tests" element={<LabProtectedRoute><AssignedTests /></LabProtectedRoute>} />
+                                <Route path="lab/completed" element={<LabProtectedRoute><CompletedReports /></LabProtectedRoute>} />
 
                                 {/* Pharmacy Management Pages */}
                                 <Route path="pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />

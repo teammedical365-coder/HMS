@@ -52,14 +52,48 @@ const AdminRoles = () => {
             items: [
                 { key: 'finance_view', label: 'View Hospital Financials' },
                 { key: 'billing_view', label: 'View Patient Billing' },
-                { key: 'billing_manage', label: 'Manage Patient Billing (Cashier)' }
+                { key: 'billing_manage', label: 'Manage Patient Billing (Cashier)' },
+                { key: 'billing:invoice_create', label: 'Create Lab Invoices' },
+                { key: 'billing:collect_payment', label: 'Collect Lab Payments' },
+                { key: 'billing:refund', label: 'Process Lab Refunds' }
+            ]
+        },
+        {
+            category: "LABORATORY MANAGEMENT (LMS)",
+            items: [
+                { key: 'orders:view', label: 'View Lab Orders' },
+                { key: 'orders:create', label: 'Create Lab Requisitions' },
+                { key: 'orders:update', label: 'Edit Lab Orders' },
+                { key: 'orders:cancel', label: 'Cancel Lab Orders' },
+                { key: 'orders:discount', label: 'Apply Order Discounts' },
+                { key: 'samples:view', label: 'View Specimen Queue' },
+                { key: 'samples:collect', label: 'Collect Phlebotomy Specimens' },
+                { key: 'samples:receive', label: 'Accession Lab Specimens' },
+                { key: 'samples:process', label: 'Process Samples on Bench' },
+                { key: 'samples:verify', label: 'Verify Specimen Quality' },
+                { key: 'samples:reject', label: 'Reject Specimen / Contamination' },
+                { key: 'samples:recollect', label: 'Order Specimen Recollection' },
+                { key: 'tests:view', label: 'View Diagnostic Test Catalog' },
+                { key: 'tests:manage', label: 'Manage Test Catalog & Tariffs' },
+                { key: 'results:enter', label: 'Enter Bench Test Findings' },
+                { key: 'results:edit_preliminary', label: 'Modify Preliminary Findings' },
+                { key: 'reports:view', label: 'View Diagnostic Reports' },
+                { key: 'reports:create', label: 'Draft Diagnostic Reports' },
+                { key: 'reports:verify', label: 'Pathologist Verification & Sign-off' },
+                { key: 'reports:release', label: 'Publish & Release Diagnostic Reports' },
+                { key: 'reports:reject', label: 'Reject Report for Re-testing' },
+                { key: 'reports:download', label: 'Download & Print Reports' }
             ]
         },
         {
             category: "ADMIN",
             items: [
                 { key: 'admin_manage_roles', label: 'Manage Roles' },
-                { key: 'admin_view_stats', label: 'View Admin Stats' }
+                { key: 'admin_view_stats', label: 'View Admin Stats' },
+                { key: 'users:view', label: 'View Staff Directory' },
+                { key: 'users:manage', label: 'Manage Lab Staff Accounts' },
+                { key: 'audit:view', label: 'View Regulatory Audit Trail' },
+                { key: 'settings:manage', label: 'Manage Laboratory Settings' }
             ]
         }
     ];
@@ -77,6 +111,14 @@ const AdminRoles = () => {
         appointment_view_all: { label: 'All Appointments', path: '/reception/dashboard' },
         lab_view: { label: 'Lab Dashboard', path: '/lab/dashboard' },
         lab_manage: { label: 'Lab Tests', path: '/lab/tests' },
+        'orders:view': { label: 'Lab Orders', path: '/lab/orders' },
+        'samples:view': { label: 'Sample Tracking', path: '/lab/samples' },
+        'samples:collect': { label: 'Phlebotomy Queue', path: '/lab/collection' },
+        'results:enter': { label: 'Bench Testing', path: '/lab/bench' },
+        'reports:verify': { label: 'Pathologist Queue', path: '/lab/verification' },
+        'reports:view': { label: 'Diagnostic Reports', path: '/lab/reports' },
+        'tests:manage': { label: 'Test Catalog', path: '/lab/catalog' },
+        'billing:invoice_create': { label: 'Lab Invoicing', path: '/lab/billing' },
         pharmacy_view: { label: 'Pharmacy', path: '/pharmacy/inventory' },
         pharmacy_manage: { label: 'Pharmacy Orders', path: '/pharmacy/orders' },
         admin_manage_roles: { label: 'Manage Users', path: '/admin/users' },

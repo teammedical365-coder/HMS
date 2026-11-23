@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../store/hooks';
 import { useBranding } from '../../context/BrandingContext';
 import { ipdClinicalAPI, admissionAPI, hospitalAPI } from '../../utils/api';
@@ -63,6 +64,66 @@ import TabletPenCanvas from './TabletPenCanvas';
 import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import toast from 'react-hot-toast';
 import './IPDClinicalChartsModal.css';
+
+
+
+function TabletSheetZoom({ children, zoom, setZoom }) {
+    const touchRef = useRef({ distance: 0, startZoom: 1 });
+
+    const zoomIn = () => setZoom(v => Math.min(2, +(v + 0.1).toFixed(2)));
+    const zoomOut = () => setZoom(v => Math.max(0.6, +(v - 0.1).toFixed(2)));
+    const fit = () => setZoom(1);
+
+    const handleTouchStart = (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            touchRef.current = {
+                distance: Math.hypot(dx, dy),
+                startZoom: zoom
+            };
+        }
+    };
+
+    const handleTouchMove = (e) => {
+        if (e.touches.length !== 2 || !touchRef.current.distance) return;
+
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const distance = Math.hypot(dx, dy);
+        const scale = distance / touchRef.current.distance;
+
+        setZoom(Math.min(2, Math.max(0.6,
+            +(touchRef.current.startZoom * scale).toFixed(2)
+        )));
+    };
+
+    const handleTouchEnd = (e) => {
+        if (e.touches.length < 2) touchRef.current.distance = 0;
+    };
+
+    return (
+        <div
+            className="tablet-sheet-zoom-area"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+        >
+            <div
+                className="tablet-sheet-zoom-content"
+                style={{
+                    zoom,
+                    width: "fit-content",
+                    minWidth: "100%",
+                    margin: "0 auto",
+                    transformOrigin: "top center"
+                }}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
 
 const toDateTimeLocalValue = (dtVal) => {
     const d = dtVal ? new Date(dtVal) : new Date();
@@ -1605,7 +1666,7 @@ const IPDClinicalChartsModal = ({
         </div>
     );
 
-    return (
+    return createPortal(
         <div className="ipdc-overlay" onClick={onClose}>
             <div className="ipdc-modal" onClick={(e) => e.stopPropagation()}>
                 {/* ── Modal Top Header ── */}
@@ -1837,7 +1898,8 @@ const IPDClinicalChartsModal = ({
                         TAB 1: PROGRESS NOTES (MASTER INLINE RULED EDITOR)
                        ========================================================= */}
                     {!loading && activeTab === 'progress_notes' && (
-                        <div className="ipdc-sheets-stack">
+                        <TabletSheetZoom>
+<div className="ipdc-sheets-stack">
                             {progressPages.map((pg, idx) => (
                                 <div key={idx} className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
                                     {/* Tablet Stylus Pen & Eraser Overlay */}
@@ -1936,13 +1998,15 @@ const IPDClinicalChartsModal = ({
                                 </div>
                             ))}
                         </div>
+</TabletSheetZoom>
                     )}
 
                     {/* =========================================================
                         TAB 2: DRUG CHART (CONTINUOUS 2-PAGE DOCUMENT)
                        ========================================================= */}
                     {!loading && activeTab === 'drug_chart' && (
-                        <div className="ipdc-sheets-stack">
+                        <TabletSheetZoom>
+<div className="ipdc-sheets-stack">
                             {/* ── SHEET 1: PAGE 1 (ALLERGIES, STAT-DOSES & I.V. FLUIDS) ── */}
                             <div className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
                                 <TabletPenCanvas
@@ -2937,6 +3001,7 @@ const IPDClinicalChartsModal = ({
                                 );
                             })}
                         </div>
+</TabletSheetZoom>
                     )}
                 </div>
 
@@ -3320,7 +3385,8 @@ const IPDClinicalChartsModal = ({
                     ipdNumber={ptDetails.ipdNumber}
                 />
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

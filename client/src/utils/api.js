@@ -969,7 +969,16 @@ export const labAPI = {
     updatePayment: async (id, paymentData) => (await apiClient.patch(`/api/lab/update-payment/${id}`, paymentData)).data,
     uploadReport: async (id, formData) => (await apiClient.post(`/api/lab/upload-report/${id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
-    })).data
+    })).data,
+
+    // Phase 2: Role-Scoped Dashboard Summary & Location APIs
+    getDashboardSummary: async () => (await apiClient.get('/api/lab/dashboard/summary')).data,
+    getLocations: async (status) => (await apiClient.get(`/api/lab/locations${status ? `?status=${status}` : ''}`)).data,
+    createLocation: async (data) => (await apiClient.post('/api/lab/locations', data)).data,
+    getLocation: async (id) => (await apiClient.get(`/api/lab/locations/${id}`)).data,
+    updateLocation: async (id, data) => (await apiClient.put(`/api/lab/locations/${id}`, data)).data,
+    updateLocationStatus: async (id, isActive) => (await apiClient.patch(`/api/lab/locations/${id}/status`, { isActive })).data,
+    assignStaffLocation: async (userId, locationId) => (await apiClient.post(`/api/lab/users/${userId}/location`, { locationId })).data
 };
 
 export const pharmacyAPI = {

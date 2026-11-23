@@ -1,0 +1,403 @@
+/* Medical365 LMS Laboratory Layout Styles */
+.lab-layout-wrapper {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: inherit;
+}
+
+/* Sidebar */
+.lab-sidebar {
+    width: 260px;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    transition: transform 0.25s ease-in-out;
+}
+
+.lab-sidebar-brand {
+    padding: 20px 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.lab-brand-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
+}
+
+.lab-brand-text h2 {
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+.lab-brand-text span {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #0ea5e9;
+    letter-spacing: 0.8px;
+    display: block;
+}
+
+.lab-sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px;
+}
+
+.lab-nav-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.6px;
+    padding: 8px 12px 6px;
+}
+
+.lab-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 9px;
+    color: #475569;
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    margin-bottom: 3px;
+}
+
+.lab-nav-item:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.lab-nav-item.active {
+    background: #e0f2fe;
+    color: #0284c7;
+    font-weight: 700;
+}
+
+.lab-nav-item.active .lab-nav-icon {
+    color: #0284c7;
+}
+
+.lab-nav-icon {
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    color: #64748b;
+}
+
+.lab-sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid #f1f5f9;
+    background: #fafafa;
+}
+
+.lab-sidebar-location-pill {
+    padding: 8px 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 11.5px;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.lab-sidebar-location-pill strong {
+    color: #0f172a;
+}
+
+.lab-sidebar-logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px;
+    background: #ffffff;
+    border: 1px solid #fee2e2;
+    color: #ef4444;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.lab-sidebar-logout-btn:hover {
+    background: #fef2f2;
+}
+
+/* Main Area */
+.lab-main-area {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Header */
+.lab-header {
+    height: 64px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+}
+
+.lab-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.lab-mobile-toggle {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #475569;
+    cursor: pointer;
+}
+
+.lab-header-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lab-header-location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.lab-header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.lab-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.lab-user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lab-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.lab-user-meta {
+    text-align: right;
+    line-height: 1.25;
+}
+
+.lab-user-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.lab-user-sub {
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+/* Page Content */
+.lab-content {
+    flex: 1;
+    padding: 24px 28px;
+    max-width: 1600px;
+    width: 100%;
+}
+
+/* Common LMS Stat Cards */
+.lms-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.lms-stat-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lms-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.05);
+}
+
+.lms-stat-info h3 {
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 4px;
+}
+
+.lms-stat-info p {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #64748b;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lms-stat-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+/* Common Section Containers */
+.lms-section-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+}
+
+.lms-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 14px;
+}
+
+.lms-section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Action Buttons */
+.lms-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+}
+
+.lms-btn-primary {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    color: #ffffff;
+}
+
+.lms-btn-primary:hover {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+}
+
+.lms-btn-secondary {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.lms-btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .lab-sidebar {
+        transform: translateX(-100%);
+    }
+    .lab-sidebar.open {
+        transform: translateX(0);
+    }
+    .lab-main-area {
+        margin-left: 0;
+    }
+    .lab-mobile-toggle {
+        display: block;
+    }
+}
