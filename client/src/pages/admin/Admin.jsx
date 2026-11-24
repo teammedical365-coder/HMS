@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, publicAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, publicAPI, labAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import toast from 'react-hot-toast';
 import '../administration/SuperAdmin.css';
 import './Admin.css';
+
+const isLabRole = (roleName) => {
+    const r = (roleName || '').toLowerCase().trim();
+    return r.includes('lab') || r.includes('pathologist') || r.includes('phlebotomist') || r.includes('technician') || r.includes('sample collector');
+};
 
 const HospitalSelect = ({ hospitals, value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -139,7 +144,7 @@ const Admin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: '', assignedDoctors: []
+        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: '', assignedDoctors: [], locationId: ''
     });
     const [initialEditForm, setInitialEditForm] = useState(null);
 
@@ -151,6 +156,7 @@ const Admin = () => {
             (editForm.email || '').trim().toLowerCase() !== (initialEditForm.email || '').trim().toLowerCase() ||
             (editForm.phone || '').trim() !== (initialEditForm.phone || '').trim() ||
             (editForm.department || '') !== (initialEditForm.department || '') ||
+            (editForm.locationId || '') !== (initialEditForm.locationId || '') ||
             !doctorsMatch ||
             Boolean(editForm.newAvatarFile)
         );
@@ -163,12 +169,13 @@ const Admin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', assignedDoctors: []
+        name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', assignedDoctors: [], locationId: ''
     });
     const [creating, setCreating] = useState(false);
     const [clinicDoctorExists, setClinicDoctorExists] = useState(false);
     const [checkingDocLimit, setCheckingDocLimit] = useState(false);
     const [availableDoctors, setAvailableDoctors] = useState([]);
+    const [labLocations, setLabLocations] = useState([]);
 
     const [hospitals, setHospitals] = useState([]);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
@@ -254,6 +261,14 @@ const Admin = () => {
         fetchRoles();
         fetchHospital();
         
+        const fetchLabLocs = async () => {
+            try {
+                const res = await labAPI.getLocations();
+                if (res.success) setLabLocations(res.locations || []);
+            } catch (err) {}
+        };
+        fetchLabLocs();
+
         const fetchDocs = async () => {
             try {
                 const res = await publicAPI.getDoctors();
@@ -500,7 +515,8 @@ const Admin = () => {
             newAvatarFile: null,
             specialty: '',
             department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : '',
-            assignedDoctors: formattedAssigned
+            assignedDoctors: formattedAssigned,
+            locationId: userItem.locationId?._id || userItem.locationId || ''
         };
         setEditForm(initData);
         setInitialEditForm(initData);
@@ -547,7 +563,8 @@ const Admin = () => {
                 avatar: avatarUrl,
                 specialty: editForm.specialty,
                 departments: editForm.department ? [editForm.department] : [],
-                assignedDoctors: editForm.assignedDoctors || []
+                assignedDoctors: editForm.assignedDoctors || [],
+                locationId: editForm.locationId || null
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -806,7 +823,7 @@ const Admin = () => {
                                                     const name = (r.name || '').toLowerCase().trim();
                                                     if (['patient', 'user'].includes(name)) return false;
                                                     if ((name.includes('doctor') || name.includes('doc')) && !name.includes('assistant')) return false;
-                                                    if (name.includes('admin')) return false;
+                                                    if (name.includes('admin') && name !== 'lab admin') return false;
                                                     const isClinic = hospital?.clinicType === 'clinic';
                                                     if (!isClinic && name.includes('clinic')) return false;
                                                     return true;
@@ -864,6 +881,31 @@ const Admin = () => {
                                                             ✓ Auto-derived Authorized Departments: {derivedDepts.join(', ')}
                                                         </div>
                                                     )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isLabRole(roleName)) {
+                                        return (
+                                            <div className="form-row" style={{ marginTop: '14px', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                    <label className="staff-label" style={{ color: '#0369a1', fontWeight: 700 }}>
+                                                        🔬 Assign Laboratory Location (Optional — defaults to Primary Processing Hub)
+                                                    </label>
+                                                    <select
+                                                        value={createForm.locationId || ''}
+                                                        onChange={(e) => setCreateForm(prev => ({ ...prev, locationId: e.target.value }))}
+                                                        className="staff-input"
+                                                        style={{ marginTop: '8px' }}
+                                                    >
+                                                        <option value="">-- Primary Processing Lab (Default) --</option>
+                                                        {labLocations.filter(loc => loc.isActive !== false).map(loc => (
+                                                            <option key={loc._id} value={loc._id}>
+                                                                {loc.locationName} ({loc.locationCode}) — {loc.locationType === 'PROCESSING_LAB' ? 'Processing Hub' : loc.locationType === 'COLLECTION_CENTRE' ? 'Collection Centre' : 'Branch'}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                         );
@@ -1027,6 +1069,7 @@ const Admin = () => {
                                             <th className="staff-col-hospital">Hospital</th>
                                             <th className="staff-col-plan">Plan Name</th>
                                             <th className="staff-col-role">Role</th>
+                                            <th className="staff-col-location">Location</th>
                                             <th className="staff-col-email">Email</th>
                                             <th className="staff-col-phone">Phone</th>
                                             <th className="staff-col-actions">Actions</th>
@@ -1084,6 +1127,7 @@ const Admin = () => {
                                             <th className="staff-col-hospital">Hospital</th>
                                             <th className="staff-col-plan">Plan Name</th>
                                             <th className="staff-col-role">Role</th>
+                                            <th className="staff-col-location">Location</th>
                                             <th className="staff-col-email">Email</th>
                                             <th className="staff-col-phone">Phone</th>
                                             <th className="staff-col-actions">Actions</th>
@@ -1126,6 +1170,17 @@ const Admin = () => {
                                                     <td className="staff-col-role">
                                                         <span className="staff-role-tag">
                                                             {(userItem.role || 'No Role').toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="staff-col-location">
+                                                        <span style={{ fontSize: '12px', color: '#334155', fontWeight: 500 }}>
+                                                            {userItem.locationCode || userItem.locationName ? (
+                                                                <span className="staff-role-tag" style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
+                                                                    {userItem.locationName || userItem.locationCode}
+                                                                </span>
+                                                            ) : isLabRole(userItem.role) ? (
+                                                                <span style={{ color: '#64748b', fontSize: '11px' }}>Primary Hub</span>
+                                                            ) : '—'}
                                                         </span>
                                                     </td>
                                                     <td className="staff-col-email">{userItem.email}</td>
@@ -1281,6 +1336,31 @@ const Admin = () => {
                                                             ✓ Auto-derived Authorized Departments: {derivedDepts.join(', ')}
                                                         </div>
                                                     )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isLabRole(roleName)) {
+                                        return (
+                                            <div className="form-row" style={{ marginTop: '14px', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                    <label className="staff-label" style={{ color: '#0369a1', fontWeight: 700 }}>
+                                                        🔬 Assign Laboratory Location (Optional — defaults to Primary Processing Hub)
+                                                    </label>
+                                                    <select
+                                                        value={editForm.locationId || ''}
+                                                        onChange={(e) => setEditForm(prev => ({ ...prev, locationId: e.target.value }))}
+                                                        className="staff-input"
+                                                        style={{ marginTop: '8px' }}
+                                                    >
+                                                        <option value="">-- Primary Processing Lab (Default) --</option>
+                                                        {labLocations.filter(loc => loc.isActive !== false).map(loc => (
+                                                            <option key={loc._id} value={loc._id}>
+                                                                {loc.locationName} ({loc.locationCode}) — {loc.locationType === 'PROCESSING_LAB' ? 'Processing Hub' : loc.locationType === 'COLLECTION_CENTRE' ? 'Collection Centre' : 'Branch'}
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                             </div>
                                         );

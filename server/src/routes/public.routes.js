@@ -173,8 +173,15 @@ router.get('/manifest.json', async (req, res) => {
 
         let cleanDomain = requestingDomain.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
         
-        // Absolute URL banayenge Chrome ke error ko rokne ke liye
-        const frontendUrl = `https://${cleanDomain}`;
+        let protocol = 'https';
+        let portPart = '';
+        if (cleanDomain.includes('localhost') || cleanDomain === '127.0.0.1') {
+            protocol = 'http';
+            const originHeader = req.get('origin');
+            const port = (referer ? new URL(referer).port : null) || (originHeader ? new URL(originHeader).port : null) || '5173';
+            if (port) portPart = `:${port}`;
+        }
+        const frontendUrl = `${protocol}://${cleanDomain}${portPart}`;
 
         const Hospital = require('../models/hospital.model');
         let query = null;

@@ -454,6 +454,16 @@ const ClinicalVoiceScribeModal = ({
         setSelectedSections(initialSelected);
     };
 
+    const triggerAISummary = (overrideText = null) => {
+        if (isStructuring) return;
+        const textToUse = overrideText !== null ? overrideText : transcript;
+        if (!textToUse || !textToUse.trim()) {
+            toast.error('Please record or enter clinical notes before summarizing.');
+            return;
+        }
+        processWithGemini(null, textToUse);
+    };
+
     const handleDiscardAndClose = () => {
         if (isRecording) {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -633,44 +643,75 @@ const ClinicalVoiceScribeModal = ({
                         {/* Action Buttons */}
                         <div className="cvs-controls-row">
                             {!isRecording ? (
-                                <button type="button" className="cvs-ctl-btn cvs-btn-start" onClick={handleStartRecording}>
+                                <button type="button" className="cvs-ctl-btn cvs-btn-start" onClick={handleStartRecording} disabled={isStructuring}>
                                     <FiMic /> Start AI Voice Scribe
                                 </button>
                             ) : (
                                 <>
-                                    <button type="button" className="cvs-ctl-btn cvs-btn-pause" onClick={handlePauseResume}>
+                                    <button type="button" className="cvs-ctl-btn cvs-btn-pause" onClick={handlePauseResume} disabled={isStructuring}>
                                         {isPaused ? <><FiPlay /> Resume</> : <><FiPause /> Pause</>}
                                     </button>
-                                    <button type="button" className="cvs-ctl-btn cvs-btn-stop" onClick={handleStopRecording}>
+                                    <button type="button" className="cvs-ctl-btn cvs-btn-stop" onClick={handleStopRecording} disabled={isStructuring}>
                                         <FiSquare /> Stop &amp; Structure Clinical Note
                                     </button>
                                 </>
                             )}
-                            <button type="button" className="cvs-ctl-btn cvs-btn-cancel" onClick={handleDiscardAndClose}>
+                            <button type="button" className="cvs-ctl-btn cvs-btn-cancel" onClick={handleDiscardAndClose} disabled={isStructuring}>
                                 Cancel
                             </button>
                         </div>
                     </div>
 
+                    {/* Professional AI Summarization Loading Animation Overlay */}
+                    {isStructuring && (
+                        <div className="cvs-ai-loading-overlay">
+                            <div className="cvs-ai-loading-card">
+                                <div className="cvs-ai-spinner-container">
+                                    <div className="cvs-ai-pulse-glow" />
+                                    <div className="cvs-ai-spinner" />
+                                    <FiZap className="cvs-ai-spinner-icon" />
+                                </div>
+                                <h4 className="cvs-ai-loading-title">AI is summarizing your clinical notes...</h4>
+                                <p className="cvs-ai-loading-desc">
+                                    Analyzing clinical dialogue, extracting vitals, and structuring into hospital note sections with Gemini AI.
+                                </p>
+                                <div className="cvs-ai-progress-bar-track">
+                                    <div className="cvs-ai-progress-bar-fill" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Speech Transcript Section */}
                     <div className="cvs-section-card">
-                        <div className="cvs-section-title">
+                        <div className="cvs-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <FiEdit3 color="#0284c7" />
                                 <span>Spoken Transcript (Doctor / Patient)</span>
                             </div>
-                            <span style={{ fontSize: '11px', color: '#64748b' }}>
-                                Editable before clinical structuring
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    className="cvs-btn-summarize"
+                                    onClick={() => triggerAISummary()}
+                                    disabled={isStructuring || !transcript.trim()}
+                                    title="Generate AI Clinical Summary from transcript using Gemini AI"
+                                >
+                                    <FiZap /> {isStructuring ? 'Summarizing...' : 'Generate AI Summary'}
+                                </button>
+                                <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                    Editable before clinical structuring
+                                </span>
+                            </div>
                         </div>
                         <textarea
                             className="cvs-transcript-textarea"
                             value={transcript + (interimTranscript ? ' ' + interimTranscript : '')}
                             onChange={(e) => {
                                 setTranscript(e.target.value);
-                                processTranscriptStructuring(e.target.value);
                             }}
                             placeholder="Voice dictation or doctor-patient dialogue will appear here live. You can also paste or edit text directly..."
+                            disabled={isStructuring}
                         />
                     </div>
 
@@ -744,16 +785,16 @@ const ClinicalVoiceScribeModal = ({
                         <span>AI drafts are never finalized automatically. Human review is strictly enforced.</span>
                     </div>
                     <div className="cvs-footer-actions">
-                        <button type="button" className="cvs-btn-discard" onClick={handleDiscardAndClose}>
+                        <button type="button" className="cvs-btn-discard" onClick={handleDiscardAndClose} disabled={isStructuring}>
                             <FiTrash2 style={{ marginRight: '4px' }} /> Discard Draft
                         </button>
                         <button
                             type="button"
                             className="cvs-btn-approve"
                             onClick={handleApprove}
-                            disabled={Object.keys(proposedSections).length === 0}
+                            disabled={isStructuring || Object.keys(proposedSections).length === 0}
                         >
-                            <FiCheck /> Approve &amp; Insert into Progress Notes
+                            <FiCheck /> Approve &amp; Insert into Clinical Notes
                         </button>
                     </div>
                 </div>

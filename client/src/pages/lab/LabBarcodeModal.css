@@ -1,0 +1,243 @@
+/* ============================================================
+   LMS Phase 6 — Barcode Label Printing & Thermal Label CSS
+   ============================================================ */
+
+.lbm-barcode-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2600;
+    padding: 20px;
+}
+
+.lbm-barcode-card {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 580px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.lbm-barcode-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #0f172a;
+    color: #ffffff;
+}
+
+.lbm-barcode-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.lbm-barcode-body {
+    padding: 24px;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.lbm-copies-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.lbm-copies-btn {
+    padding: 4px 10px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.lbm-copies-btn.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+/* Thermal Sticker Label Container */
+.lbm-sticker-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.lbm-label-sticker {
+    background: #ffffff;
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+    padding: 12px 14px;
+    width: 100%;
+    max-width: 380px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    color: #0f172a;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.lbm-sticker-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+}
+
+.lbm-sticker-lab {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #0f172a;
+}
+
+.lbm-sticker-priority {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.lbm-sticker-priority.stat {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.lbm-sticker-priority.urgent {
+    background: #d97706;
+    color: #ffffff;
+}
+
+.lbm-sticker-priority.routine {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.lbm-sticker-patient {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.lbm-sticker-meta {
+    font-size: 10.5px;
+    color: #475569;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.lbm-sticker-barcode-box {
+    text-align: center;
+    padding: 4px 0;
+    background: #ffffff;
+}
+
+.lbm-sticker-barcode-text {
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #0f172a;
+    margin-top: 2px;
+}
+
+.lbm-sticker-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 4px;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #334155;
+    font-weight: 600;
+}
+
+.lbm-barcode-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* ============================================================
+   THERMAL LABEL PRINT MEDIA RULES
+   ============================================================ */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+
+    .lbm-barcode-overlay {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        background: transparent !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+
+    .lbm-barcode-card {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+    }
+
+    .lbm-barcode-hdr,
+    .lbm-barcode-footer,
+    .lbm-copies-selector {
+        display: none !important;
+    }
+
+    .lbm-sticker-container {
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+
+    .lbm-label-sticker,
+    .lbm-label-sticker * {
+        visibility: visible !important;
+    }
+
+    .lbm-label-sticker {
+        border: none !important;
+        box-shadow: none !important;
+        page-break-after: always !important;
+        margin: 0 auto 10mm auto !important;
+        width: 50mm !important; /* Standard 2" x 1" or 50mm x 30mm thermal label */
+    }
+}

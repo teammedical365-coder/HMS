@@ -111,6 +111,25 @@ const LabBenchDashboard = lazy(() => import('../pages/lab/LabBenchDashboard'));
 const LabVerificationDashboard = lazy(() => import('../pages/lab/LabVerificationDashboard'));
 const LabBillingDashboard = lazy(() => import('../pages/lab/LabBillingDashboard'));
 const LabLocationsPage = lazy(() => import('../pages/lab/LabLocationsPage'));
+const LabMasterCatalogPage = lazy(() => import('../pages/lab/LabMasterCatalogPage'));
+const LabPatientsPage = lazy(() => import('../pages/lab/LabPatientsPage'));
+const LabOrdersPage = lazy(() => import('../pages/lab/LabOrdersPage'));
+const LabOrderBookingPage = lazy(() => import('../pages/lab/LabOrderBookingPage'));
+const LabAccessioningPage = lazy(() => import('../pages/lab/LabAccessioningPage'));
+const LabSampleDetailPage = lazy(() => import('../pages/lab/LabSampleDetailPage'));
+const LabRecollectionsPage = lazy(() => import('../pages/lab/LabRecollectionsPage'));
+const LabTransfersPage = lazy(() => import('../pages/lab/LabTransfersPage'));
+const LabResultDashboard = lazy(() => import('../pages/lab/LabResultDashboard'));
+const LabResultEntryPage = lazy(() => import('../pages/lab/LabResultEntryPage'));
+const LabVerificationPage = lazy(() => import('../pages/lab/LabVerificationPage'));
+const LabCriticalAlertsPage = lazy(() => import('../pages/lab/LabCriticalAlertsPage'));
+const LabResultDetailPage = lazy(() => import('../pages/lab/LabResultDetailPage'));
+const LabReportDashboard = lazy(() => import('../pages/lab/LabReportDashboard'));
+const LabReportGenerator = lazy(() => import('../pages/lab/LabReportGenerator'));
+const LabReportReviewPage = lazy(() => import('../pages/lab/LabReportReviewPage'));
+const LabReleasedReportsPage = lazy(() => import('../pages/lab/LabReleasedReportsPage'));
+const LabReportTemplatePage = lazy(() => import('../pages/lab/LabReportTemplatePage'));
+const LabReportDeliveryPage = lazy(() => import('../pages/lab/LabReportDeliveryPage'));
 const AssignedTests = lazy(() => import('../pages/lab/AssignedTests'));
 const CompletedReports = lazy(() => import('../pages/lab/CompletedReports'));
 
@@ -615,12 +634,33 @@ const MainRoutes = () => {
                                 <Route path="lab/manager" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:view', 'lab_view']}><LabManagerDashboard /></LabProtectedRoute>} />
                                 <Route path="lab/reception" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:create', 'lab_view']}><LabReceptionDashboard /></LabProtectedRoute>} />
                                 <Route path="lab/collection" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'phlebotomist / sample collector', 'phlebotomist', 'sample collector', 'lab technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['samples:collect', 'lab_view']}><LabCollectionDashboard /></LabProtectedRoute>} />
+                                                                <Route path="lab/accessioning" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['samples:accession', 'lab_view']}><LabAccessioningPage /></LabProtectedRoute>} />
                                 <Route path="lab/bench" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:entry', 'lab_view']}><LabBenchDashboard /></LabProtectedRoute>} />
-                                <Route path="lab/verification" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:verify', 'lab_view']}><LabVerificationDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/samples/:sampleId" element={<LabProtectedRoute><LabSampleDetailPage /></LabProtectedRoute>} />
+                                <Route path="lab/recollections" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'phlebotomist / sample collector', 'phlebotomist', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']}><LabRecollectionsPage /></LabProtectedRoute>} />
+                                <Route path="lab/sample-transfers" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'phlebotomist / sample collector', 'phlebotomist', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']}><LabTransfersPage /></LabProtectedRoute>} />
+                                <Route path="lab/transfers" element={<Navigate to="/lab/sample-transfers" replace />} />
+                                <Route path="lab/results" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:view', 'lab_view']}><LabResultDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/results/entry" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:enter', 'lab_view']}><LabResultEntryPage /></LabProtectedRoute>} />
+                                <Route path="lab/results/verification" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:verify', 'lab_view']}><LabVerificationPage /></LabProtectedRoute>} />
+                                <Route path="lab/results/critical-alerts" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'lab technician', 'technician', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:view', 'lab_view']}><LabCriticalAlertsPage /></LabProtectedRoute>} />
+                                <Route path="lab/results/:id" element={<LabProtectedRoute><LabResultDetailPage /></LabProtectedRoute>} />
+                                <Route path="lab/verification" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['results:verify', 'lab_view']}><LabVerificationPage /></LabProtectedRoute>} />
                                 <Route path="lab/billing" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab accountant', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['billing:view', 'lab_view']}><LabBillingDashboard /></LabProtectedRoute>} />
                                 <Route path="lab/locations" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['settings:edit', 'lab_manage']}><LabLocationsPage /></LabProtectedRoute>} />
+                                <Route path="lab/catalog" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['settings:view', 'lab_view', 'lab_manage']}><LabMasterCatalogPage /></LabProtectedRoute>} />
+                                <Route path="lab/patients" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['patients:view', 'lab_view']}><LabPatientsPage /></LabProtectedRoute>} />
+                                <Route path="lab/orders" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:view', 'lab_view']}><LabOrdersPage /></LabProtectedRoute>} />
+                                <Route path="lab/orders/create" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab receptionist', 'hospitaladmin', 'centraladmin', 'superadmin']} requiredPermissions={['orders:create', 'lab_view']}><LabOrderBookingPage /></LabProtectedRoute>} />
+                                <Route path="lab/orders/new" element={<Navigate to="/lab/orders/create" replace />} />
                                 <Route path="lab/tests" element={<LabProtectedRoute><AssignedTests /></LabProtectedRoute>} />
                                 <Route path="lab/completed" element={<LabProtectedRoute><CompletedReports /></LabProtectedRoute>} />
+                                <Route path="lab/reports" element={<LabProtectedRoute><LabReportDashboard /></LabProtectedRoute>} />
+                                <Route path="lab/reports/generate" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'lab technician', 'technician', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']}><LabReportGenerator /></LabProtectedRoute>} />
+                                <Route path="lab/reports/review" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']}><LabReportReviewPage /></LabProtectedRoute>} />
+                                <Route path="lab/reports/released" element={<LabProtectedRoute><LabReleasedReportsPage /></LabProtectedRoute>} />
+                                <Route path="lab/reports/templates" element={<LabProtectedRoute allowedRoles={['lab admin', 'lab manager', 'pathologist', 'hospitaladmin', 'centraladmin', 'superadmin']}><LabReportTemplatePage /></LabProtectedRoute>} />
+                                <Route path="lab/reports/delivery" element={<LabProtectedRoute><LabReportDeliveryPage /></LabProtectedRoute>} />
 
                                 {/* Pharmacy Management Pages */}
                                 <Route path="pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />

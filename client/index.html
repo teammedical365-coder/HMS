@@ -71,7 +71,14 @@
           manifest.start_url = exactOrigin + '/';
           if (manifest.icons) {
             manifest.icons.forEach(icon => {
-              if (icon.src && icon.src.startsWith('/')) icon.src = exactOrigin + icon.src;
+              if (icon.src && icon.src.startsWith('/')) {
+                icon.src = exactOrigin + icon.src;
+              } else if (icon.src && icon.src.includes('localhost')) {
+                try {
+                  const url = new URL(icon.src);
+                  icon.src = exactOrigin + url.pathname;
+                } catch (e) {}
+              }
               if (icon.sizes === '192x192') icon.purpose = 'any';
             });
           }

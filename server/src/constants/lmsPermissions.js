@@ -53,7 +53,15 @@ const LMS_PERMISSIONS = {
     BILLING_MANAGE: 'billing:manage',
     BILLING_INVOICE_CREATE: 'billing:invoice_create',
     BILLING_COLLECT_PAYMENT: 'billing:collect_payment',
+    BILLING_DISCOUNT: 'billing:discount',
+    BILLING_DISCOUNT_APPROVE: 'billing:discount:approve',
     BILLING_REFUND: 'billing:refund',
+    BILLING_REFUND_APPROVE: 'billing:refund:approve',
+    BILLING_ADVANCE_CREATE: 'billing:advance:create',
+    BILLING_ADVANCE_ADJUST: 'billing:advance:adjust',
+    BILLING_REPORTS_VIEW: 'billing:reports:view',
+    BILLING_CASH_REGISTER_VIEW: 'billing:cash_register:view',
+    BILLING_CASH_REGISTER_CLOSE: 'billing:cash_register:close',
 
     // Users & Staff Directory
     USERS_VIEW: 'users:view',
@@ -130,7 +138,15 @@ const LMS_ROLE_TEMPLATES = [
             'billing:manage',
             'billing:invoice_create',
             'billing:collect_payment',
+            'billing:discount',
+            'billing:discount:approve',
             'billing:refund',
+            'billing:refund:approve',
+            'billing:advance:create',
+            'billing:advance:adjust',
+            'billing:reports:view',
+            'billing:cash_register:view',
+            'billing:cash_register:close',
             'users:view',
             'users:manage',
             'roles:view',
@@ -321,7 +337,15 @@ const LMS_ROLE_TEMPLATES = [
             'billing:manage',
             'billing:invoice_create',
             'billing:collect_payment',
-            'billing:refund'
+            'billing:discount',
+            'billing:discount:approve',
+            'billing:refund',
+            'billing:refund:approve',
+            'billing:advance:create',
+            'billing:advance:adjust',
+            'billing:reports:view',
+            'billing:cash_register:view',
+            'billing:cash_register:close'
         ]
     }
 ];

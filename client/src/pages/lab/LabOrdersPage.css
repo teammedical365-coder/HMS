@@ -1,0 +1,202 @@
+/* ============================================================
+   LMS Phase 4 — Lab Orders Directory Styling
+   ============================================================ */
+
+.lmd-orders-top-tabs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 12px;
+}
+
+.lmd-order-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lmd-order-tab-btn:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.lmd-order-tab-btn.active {
+    background: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.rec-badge {
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.75rem;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    margin-left: 4px;
+}
+
+.btn-create-order {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    transition: all 0.2s;
+}
+
+.btn-create-order:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+}
+
+.lmd-orders-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.lmd-orders-search {
+    display: flex;
+    align-items: center;
+    position: relative;
+    flex: 1;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.lmd-orders-search .search-icon {
+    position: absolute;
+    left: 14px;
+    color: #94a3b8;
+}
+
+.lmd-orders-search input {
+    width: 100%;
+    padding: 10px 14px 10px 42px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.9rem;
+    outline: none;
+    background: #ffffff;
+}
+
+.lmd-orders-search input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.token-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: 1px solid #cbd5e1;
+}
+
+.lmd-orders-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+/* Order Detail Content inside Modal */
+.lmd-order-detail-content {
+    padding: 20px 24px;
+}
+
+.detail-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.88rem;
+}
+
+.detail-tests-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.detail-test-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.detail-placeholders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.detail-ph-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px;
+    background: #f8fafc;
+    font-size: 0.82rem;
+}
+
+.detail-ph-card .sub {
+    color: #64748b;
+    margin: 2px 0 4px;
+}
+
+.detail-ph-card .status {
+    margin-top: 6px;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.detail-pricing-summary {
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    margin-top: 14px;
+}
+
+.detail-pricing-summary .net {
+    font-size: 1.15rem;
+    color: #1e3a8a;
+}

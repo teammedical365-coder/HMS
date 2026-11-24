@@ -10,6 +10,7 @@ import {
 } from '../../utils/inpatientNotesPdf';
 import RuledSectionEditor from './RuledSectionEditor';
 import TabletPenCanvas from './TabletPenCanvas';
+import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import {
     FiX, FiPrinter, FiDownload, FiFileText, FiSave,
     FiMessageSquare, FiEdit2, FiClock, FiRotateCcw, FiRotateCw,
@@ -39,6 +40,7 @@ const InpatientClinicalNotesModal = ({
     const [savingNotes, setSavingNotes] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     // Active tool: 'type' | 'pen' | 'eraser'
     const [activeTool, setActiveTool] = useState('type');
@@ -265,6 +267,28 @@ const InpatientClinicalNotesModal = ({
                 [pageKey]: newStrokes
             }
         }));
+    };
+
+    // AI Voice Scribe approval & structuring handler
+    const handleApproveVoiceScribe = ({ sections, session }) => {
+        if (!sections || Object.keys(sections).length === 0) return;
+        commitStateUpdate((prev) => {
+            const next = { ...prev };
+            Object.entries(sections).forEach(([key, val]) => {
+                if (!val) return;
+                if (key === 'generalExamination' && typeof val === 'object') {
+                    next.generalExamination = {
+                        ...(next.generalExamination || {}),
+                        ...val
+                    };
+                } else if (typeof val === 'string' && val.trim()) {
+                    const existing = next[key] ? String(next[key]).trim() : '';
+                    next[key] = existing ? `${existing}\n${val.trim()}` : val.trim();
+                }
+            });
+            return next;
+        });
+        toast.success('Approved AI content structured into Clinical Notes!');
     };
 
     // Continuation Page Management
@@ -561,6 +585,27 @@ const InpatientClinicalNotesModal = ({
                         >
                             <FiPlus size={12} />
                             <span>Add Continuation Page</span>
+                        </button>
+
+                        <div className="ipn-tool-divider" />
+
+                        <button
+                            type="button"
+                            className="ipn-tool-btn ipn-tool-btn-ai"
+                            onClick={() => setIsScribeModalOpen(true)}
+                            title="AI Voice Scribe & Ambient Dictation (Gemini 3.6 Flash)"
+                            style={{
+                                background: '#ecfdf5',
+                                borderColor: '#a7f3d0',
+                                color: '#047857',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <FiZap size={13} color="#059669" />
+                            <span>AI Voice Scribe</span>
                         </button>
                     </div>
                 </div>
@@ -1049,6 +1094,16 @@ const InpatientClinicalNotesModal = ({
                             })}
                         </div>
                 </div>
+
+                {/* AI Voice Scribe Modal */}
+                <ClinicalVoiceScribeModal
+                    isOpen={isScribeModalOpen}
+                    onClose={() => setIsScribeModalOpen(false)}
+                    onApproveAndInsert={handleApproveVoiceScribe}
+                    patientName={ptBannerDetails.name}
+                    uhid={ptBannerDetails.uhid}
+                    ipdNumber={ptBannerDetails.ipdNumber}
+                />
             </div>
         </div>
     );

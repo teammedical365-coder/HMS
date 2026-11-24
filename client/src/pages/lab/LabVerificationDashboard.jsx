@@ -23,7 +23,7 @@ const LabVerificationDashboard = () => {
             if (res.success) setSummary(res.summary);
         } catch (err) {
             console.error('Failed to load pathologist verification queue:', err);
-            setError('Unable to load clinical verification workstation.');
+            setError(err?.response?.data?.message || err?.message || 'Unable to load clinical verification workstation.');
         } finally {
             setLoading(false);
         }

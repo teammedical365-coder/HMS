@@ -60,6 +60,35 @@ const tenantResolver = async (req, res, next) => {
             return next();
         }
 
+        // 1.1 Handle *.localhost subdomains for local development multi-tenancy (e.g. pacifichospital.localhost)
+        if (hostname.endsWith('.localhost')) {
+            const slug = hostname.replace('.localhost', '');
+            
+            const now = Date.now();
+            const cached = tenantCache.get(hostname);
+            if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+                req.tenant = cached.tenant;
+                return next();
+            }
+
+            const hospital = await Hospital.findOne({
+                $or: [
+                    { slug: slug },
+                    { customDomain: hostname },
+                    { customDomain: slug }
+                ],
+                isActive: true
+            }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
+
+            setTenantCache(hostname, {
+                tenant: hospital || null,
+                timestamp: now
+            });
+
+            req.tenant = hospital || null;
+            return next();
+        }
+
         // 2. Handle *.medical365.in subdomains — look up by slug
         if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
             const slug = hostname.replace(`.${BASE_DOMAIN}`, '');

@@ -36,11 +36,12 @@ const TabletPenCanvas = ({
         if (!ctx) return;
 
         const dpr = dprRef.current || window.devicePixelRatio || 1;
-        const rect = container.getBoundingClientRect();
+        const logicalWidth = container.offsetWidth || 794;
+        const logicalHeight = container.offsetHeight || 1123;
 
         // Use setTransform to avoid accumulating scale
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
         const listToRender = strokeList !== undefined ? strokeList : strokesRef.current;
         if (!Array.isArray(listToRender)) return;
@@ -82,26 +83,27 @@ const TabletPenCanvas = ({
         });
     }, []);
 
-    // Resize canvas to match parent DOM node with Retina/HiDPI scaling
+    // Resize canvas to match parent DOM node with Retina/HiDPI scaling & Zoom normalization
     useEffect(() => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
         if (!canvas || !container) return;
 
         const updateCanvasSize = () => {
-            const rect = container.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) return;
+            const logicalWidth = container.offsetWidth || 794;
+            const logicalHeight = container.offsetHeight || 1123;
+            if (logicalWidth === 0 || logicalHeight === 0) return;
 
             const dpr = window.devicePixelRatio || 1;
             dprRef.current = dpr;
 
-            // Physical pixel buffer
-            canvas.width = Math.round(rect.width * dpr);
-            canvas.height = Math.round(rect.height * dpr);
+            // Physical pixel buffer scaled by DPR to keep lines razor sharp
+            canvas.width = Math.round(logicalWidth * dpr);
+            canvas.height = Math.round(logicalHeight * dpr);
 
-            // CSS display size
-            canvas.style.width = `${rect.width}px`;
-            canvas.style.height = `${rect.height}px`;
+            // CSS display size matches container 100% to avoid double-scaling under CSS zoom
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
 
             renderAllStrokes(strokesRef.current);
         };
@@ -118,15 +120,20 @@ const TabletPenCanvas = ({
         renderAllStrokes(strokes);
     }, [strokes, renderAllStrokes]);
 
-    // Logical CSS pixel coordinates extraction
+    // Logical CSS pixel coordinates extraction with scale normalization for all zoom levels
     const getCanvasCoordinates = (e, customRect = null) => {
         const canvas = canvasRef.current;
+        const container = containerRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
         const rect = customRect || canvas.getBoundingClientRect();
+        const logicalWidth = container?.offsetWidth || 794;
+        const logicalHeight = container?.offsetHeight || 1123;
+        const scaleX = rect.width > 0 ? (logicalWidth / rect.width) : 1;
+        const scaleY = rect.height > 0 ? (logicalHeight / rect.height) : 1;
         const pressure = typeof e.pressure === 'number' && e.pressure > 0 ? e.pressure : 0.5;
         return {
-            x: Math.round((e.clientX - rect.left) * 10) / 10,
-            y: Math.round((e.clientY - rect.top) * 10) / 10,
+            x: Math.round((e.clientX - rect.left) * scaleX * 10) / 10,
+            y: Math.round((e.clientY - rect.top) * scaleY * 10) / 10,
             pressure
         };
     };
@@ -177,13 +184,16 @@ const TabletPenCanvas = ({
         }
 
         // PEN TOOL: Begin brand new stroke with isolated points array
+        const container = containerRef.current;
+        const logicalWidth = container?.offsetWidth || 794;
+        const logicalHeight = container?.offsetHeight || 1123;
         const newStroke = {
             id: `stroke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             color: penColor,
             width: penWidth,
             tool: 'pen',
-            canvasWidth: Math.round(rect.width) || 790,
-            canvasHeight: Math.round(rect.height) || 1117,
+            canvasWidth: logicalWidth,
+            canvasHeight: logicalHeight,
             points: [coords]
         };
         currentStrokeRef.current = newStroke;

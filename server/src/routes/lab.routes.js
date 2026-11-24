@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const multer = require('multer');
 const LabReport = require('../models/labReport.model');
 const Appointment = require('../models/appointment.model');
@@ -286,7 +287,7 @@ const canManageLab = (req) => {
 // 6.1 List all locations for authenticated hospital
 router.get('/locations', verifyToken, verifyLab, async (req, res) => {
     try {
-        const hid = req.user.hospitalId;
+        const hid = req.user.hospitalId || req.headers['x-hospital-id'] || req.user.hospital || (req.tenant ? req.tenant._id : null);
         if (!hid && !['centraladmin', 'superadmin'].includes(req.user.role)) {
             return res.status(403).json({ success: false, message: 'Hospital context required' });
         }
@@ -295,8 +296,30 @@ router.get('/locations', verifyToken, verifyLab, async (req, res) => {
             query.isActive = true;
         }
 
-        const locations = await LabLocation.find(query).sort({ isProcessingLab: -1, createdAt: 1 }).lean();
+        let locations = await LabLocation.find(query).sort({ isProcessingLab: -1, createdAt: 1 }).lean();
         
+        // Auto-provision primary processing hub if hospital has 0 locations
+        if (hid && locations.length === 0) {
+            let hospName = 'Central Diagnostic Laboratory';
+            try {
+                const hosp = await Hospital.findById(hid).select('name hospitalCode').lean();
+                if (hosp?.name) hospName = hosp.name;
+            } catch (e) {}
+
+            const defaultLoc = await LabLocation.create({
+                hospitalId: hid,
+                locationName: `${hospName} — Main Processing Lab`,
+                locationCode: 'MAIN-01',
+                locationType: 'PROCESSING_LAB',
+                isProcessingLab: true,
+                isActive: true,
+                contactPerson: 'Laboratory Director',
+                phone: req.user.phone || '',
+                email: req.user.email || ''
+            });
+            locations = [defaultLoc.toObject ? defaultLoc.toObject() : defaultLoc];
+        }
+
         // Calculate staff count per location
         const locationsWithStaff = await Promise.all(locations.map(async (loc) => {
             const staffCount = await User.countDocuments({ locationId: loc._id });
@@ -541,7 +564,7 @@ router.post('/users/:userId/location', verifyToken, verifyLab, async (req, res) 
 
 router.get('/dashboard/summary', verifyToken, verifyLab, async (req, res) => {
     try {
-        const hid = req.user.hospitalId;
+        const hid = req.user.hospitalId || req.headers['x-hospital-id'] || req.user.hospital || (req.tenant ? req.tenant._id : null);
         const hospitalFilter = hid ? { hospitalId: hid } : {};
         const roleData = req.user._roleData;
         const roleName = roleData ? roleData.name : String(req.user.role || 'Staff');
@@ -575,16 +598,20 @@ router.get('/dashboard/summary', verifyToken, verifyLab, async (req, res) => {
             totalStaffCount,
             activeProcessingLab
         ] = await Promise.all([
-            LabReport.countDocuments({ ...hospitalFilter, reportStatus: 'PENDING' }),
-            LabReport.countDocuments({ ...hospitalFilter, reportStatus: 'UPLOADED' }),
+            LabReport.countDocuments({ ...hospitalFilter, reportStatus: { $in: ['PENDING', 'GENERATED', 'UNDER_REVIEW'] } }),
+            LabReport.countDocuments({ ...hospitalFilter, reportStatus: { $in: ['UPLOADED', 'RELEASED', 'APPROVED', 'DONE'] } }),
             hid ? LabLocation.countDocuments({ hospitalId: hid, isActive: true }) : 0,
             hid ? User.countDocuments({ hospitalId: hid, role: { $nin: ['patient', 'centraladmin', 'superadmin', 'hospitaladmin'] } }) : 0,
             hid ? LabLocation.findOne({ hospitalId: hid, isProcessingLab: true, isActive: true }).select('locationName locationCode').lean() : null
         ]);
 
         // Revenue calculation based on existing reports
+        const revenueMatch = { paymentStatus: 'PAID' };
+        if (hid) {
+            revenueMatch.hospitalId = new mongoose.Types.ObjectId(hid);
+        }
         const revenueAgg = await LabReport.aggregate([
-            { $match: { ...hospitalFilter, paymentStatus: 'PAID' } },
+            { $match: revenueMatch },
             { $group: { _id: null, total: { $sum: '$amount' } } }
         ]);
         const totalRevenue = (revenueAgg.length > 0 && revenueAgg[0].total) ? revenueAgg[0].total : 0;

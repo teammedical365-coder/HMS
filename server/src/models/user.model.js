@@ -48,9 +48,11 @@ const userSchema = new mongoose.Schema({
     state: String,
     country: { type: String, default: 'India' },
     zipCode: String,
+    pinCode: { type: String, default: '' },
 
     // Contact
     alternateMobile: String,
+    alternatePhone: { type: String, default: '' },
     whatsappNumber: String,
 
     // Emergency Contact
@@ -59,6 +61,14 @@ const userSchema = new mongoose.Schema({
         relation: String,
         mobile: String
     },
+
+    // Laboratory Reception & Referring Doctor
+    referringDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'LabDoctor', default: null },
+    referringDoctorName: { type: String, default: '' },
+    isActive: { type: Boolean, default: true },
+    deactivatedAt: { type: Date, default: null },
+    deactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deactivationReason: { type: String, default: '' },
 
     // Identity Verification (KYC)
     aadhaarNumber: { 

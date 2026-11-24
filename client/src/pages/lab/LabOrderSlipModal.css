@@ -1,0 +1,543 @@
+/* ============================================================
+   LMS Phase 4 — Order Slip & Token Printing Modal Styling
+   ============================================================ */
+
+.lmd-slip-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.lmd-slip-modal-card {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 900px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+}
+
+.lmd-slip-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: #1e293b;
+    color: #ffffff;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.lmd-slip-hdr-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.lmd-slip-hdr-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lmd-slip-btn-print {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.lmd-slip-btn-print:hover {
+    background: #1d4ed8;
+}
+
+.lmd-slip-btn-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #ffffff;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+
+.lmd-slip-btn-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Printable Document */
+.lmd-printable-document {
+    padding: 32px;
+    color: #0f172a;
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Token Ticket (Compact) */
+.lmd-token-ticket {
+    max-width: 400px;
+    margin: 0 auto;
+    border: 2px dashed #cbd5e1;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.lmd-ticket-hdr h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+.lmd-ticket-hdr .sub {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 4px 0 16px;
+    letter-spacing: 1px;
+}
+
+.lmd-ticket-token-box {
+    background: #eff6ff;
+    border: 2px solid #3b82f6;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.lmd-ticket-token-box .token-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    letter-spacing: 1.5px;
+}
+
+.lmd-ticket-token-box .token-number {
+    font-size: 3rem;
+    font-weight: 900;
+    color: #1d4ed8;
+    line-height: 1.1;
+    margin-top: 4px;
+}
+
+.lmd-ticket-info-grid {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.9rem;
+    padding: 12px 0;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.lmd-ticket-footer {
+    margin-top: 16px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.lmd-ticket-footer .small {
+    font-size: 0.72rem;
+    margin-top: 6px;
+    color: #94a3b8;
+}
+
+/* Full Requisition Slip */
+.lmd-slip-brand-hdr {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.hosp-name {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.hosp-details {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.brand-right {
+    display: flex;
+    gap: 12px;
+    text-align: right;
+}
+
+.slip-badge-order,
+.slip-badge-token {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #f8fafc;
+}
+
+.slip-badge-order .lbl,
+.slip-badge-token .lbl {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.5px;
+}
+
+.slip-badge-order .val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #2563eb;
+    margin-top: 2px;
+}
+
+.slip-badge-token .token-val {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #0f172a;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.lmd-slip-divider {
+    border: none;
+    border-top: 2px solid #0f172a;
+    margin: 16px 0 20px;
+}
+
+.lmd-slip-section-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.slip-meta-box {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: #f8fafc;
+}
+
+.slip-meta-box h3,
+.lmd-slip-items-section h3,
+.lmd-slip-specimens-section h3 {
+    margin: 0 0 10px;
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #475569;
+    letter-spacing: 0.8px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 6px;
+}
+
+.meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.meta-table td {
+    padding: 4px 6px;
+    vertical-align: top;
+}
+
+.meta-lbl {
+    color: #64748b;
+    width: 32%;
+    font-weight: 500;
+}
+
+.meta-val {
+    color: #0f172a;
+}
+
+.meta-val.bold {
+    font-weight: 700;
+}
+
+.text-blue {
+    color: #2563eb;
+}
+
+.text-green {
+    color: #16a34a;
+}
+
+.priority-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.priority-pill.routine {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.priority-pill.urgent {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.priority-pill.stat {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* Items Table */
+.lmd-slip-items-section {
+    margin-bottom: 24px;
+}
+
+.lmd-slip-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.lmd-slip-items-table th {
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+
+.lmd-slip-items-table td {
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.badge-item {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.badge-item.test {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.badge-item.pkg {
+    background: #f3e8ff;
+    color: #7e22ce;
+}
+
+.pkg-row {
+    background: #faf5ff;
+}
+
+.fasting-note {
+    font-size: 0.75rem;
+    color: #b45309;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.pkg-sub {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Specimens Section */
+.lmd-slip-specimens-section {
+    margin-bottom: 24px;
+}
+
+.lmd-specimen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.specimen-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #f8fafc;
+}
+
+.specimen-card-hdr {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+}
+
+.smp-id {
+    color: #2563eb;
+}
+
+.smp-container {
+    color: #475569;
+}
+
+.specimen-details {
+    font-size: 0.78rem;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.tests-list {
+    margin-top: 4px;
+    color: #64748b;
+}
+
+/* Pricing Footer */
+.lmd-slip-pricing-footer {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    margin-bottom: 32px;
+    align-items: start;
+}
+
+.slip-notes {
+    font-size: 0.78rem;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    background: #f8fafc;
+}
+
+.slip-notes ul {
+    margin: 6px 0 0 16px;
+    padding: 0;
+}
+
+.slip-notes li {
+    margin-bottom: 4px;
+}
+
+.slip-total-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.88rem;
+}
+
+.tot-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.tot-row.net-total {
+    border-top: 2px solid #0f172a;
+    padding-top: 8px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+/* Signatures */
+.lmd-slip-signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px;
+    text-align: center;
+    padding-top: 20px;
+}
+
+.sig-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #475569;
+}
+
+.sig-line {
+    width: 80%;
+    border-top: 1px dashed #94a3b8;
+    height: 1px;
+    margin-bottom: 4px;
+}
+
+/* ============================================================
+   PRINT STYLESHEET: Hides modals, headers, navbars
+   ============================================================ */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .lmd-printable-document,
+    .lmd-printable-document * {
+        visibility: visible;
+    }
+
+    .lmd-printable-document {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0 10mm;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    .no-print,
+    .lab-sidebar,
+    .navbar,
+    .lmd-slip-hdr,
+    .lmd-slip-overlay {
+        display: none !important;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+}

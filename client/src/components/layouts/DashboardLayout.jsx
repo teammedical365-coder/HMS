@@ -39,6 +39,34 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             ];
         }
 
+        const isLabRoute = location.pathname.startsWith('/lab');
+        const isLabRole = roleClean.includes('lab') || roleClean.includes('pathologist') || roleClean.includes('phlebotomist');
+
+        if (isLabRole || (isLabRoute && (role === 'hospitaladmin' || role === 'centraladmin' || role === 'superadmin' || role === 'doctor' || role === 'lab admin'))) {
+            const labNav = [];
+            if (role === 'hospitaladmin' || role === 'centraladmin' || role === 'superadmin') {
+                labNav.push({ label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') });
+            }
+            labNav.push(
+                { label: 'Lab Admin Desk', path: '/lab/dashboard', icon: <FiHome />, prefetchKey: 'lab_dash', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
+                { label: 'Manager Desk', path: '/lab/manager', icon: <FiActivity />, prefetchKey: 'lab_mgr', prefetchFn: () => import('../../pages/lab/LabManagerDashboard') },
+                { label: 'Reception Intake', path: '/lab/reception', icon: <FiUsers />, prefetchKey: 'lab_rec', prefetchFn: () => import('../../pages/lab/LabReceptionDashboard') },
+                { label: 'Phlebotomy Queue', path: '/lab/collection', icon: <FiPackage />, prefetchKey: 'lab_col', prefetchFn: () => import('../../pages/lab/LabCollectionDashboard') },
+                { label: 'Accessioning Station', path: '/lab/accessioning', icon: <FiCheckCircle />, prefetchKey: 'lab_acc', prefetchFn: () => import('../../pages/lab/LabAccessioningPage') },
+                { label: 'Technical Bench', path: '/lab/bench', icon: <FiCpu />, prefetchKey: 'lab_bench', prefetchFn: () => import('../../pages/lab/LabBenchDashboard') },
+                { label: 'Result Entry', path: '/lab/results/entry', icon: <FiFileText />, prefetchKey: 'lab_res_entry', prefetchFn: () => import('../../pages/lab/LabResultEntryPage') },
+                { label: 'Pathologist Review', path: '/lab/results/verification', icon: <FiShield />, prefetchKey: 'lab_verif', prefetchFn: () => import('../../pages/lab/LabVerificationDashboard') },
+                { label: 'Panic Alerts', path: '/lab/results/critical-alerts', icon: <FiHeart />, prefetchKey: 'lab_alerts', prefetchFn: () => import('../../pages/lab/LabCriticalAlertsPage') },
+                { label: 'Lab Billing & Ledger', path: '/lab/billing', icon: <FiDollarSign />, prefetchKey: 'lab_bill', prefetchFn: () => import('../../pages/lab/LabBillingDashboard') },
+                { label: 'Diagnostic Reports', path: '/lab/reports', icon: <FiFileText />, prefetchKey: 'lab_reps', prefetchFn: () => import('../../pages/lab/LabReportDashboard') },
+                { label: 'Master Data Catalog', path: '/lab/catalog', icon: <FiGrid />, prefetchKey: 'lab_cat', prefetchFn: () => import('../../pages/lab/LabMasterCatalogPage') },
+                { label: 'Laboratory Locations', path: '/lab/locations', icon: <FiBox />, prefetchKey: 'lab_locs', prefetchFn: () => import('../../pages/lab/LabLocationsPage') },
+                { label: 'Patient Directory', path: '/lab/patients', icon: <FiUsers />, prefetchKey: 'lab_pats', prefetchFn: () => import('../../pages/lab/LabPatientsPage') },
+                { label: 'Clinical Orders', path: '/lab/orders', icon: <FiClipboard />, prefetchKey: 'lab_ords', prefetchFn: () => import('../../pages/lab/LabOrdersPage') }
+            );
+            return labNav;
+        }
+
         if (role === 'centraladmin' || role === 'superadmin') {
             return [
                 { label: 'System Overview', path: '/supremeadmin', icon: <FiHome />, prefetchKey: 'ca_dash', prefetchFn: () => import('../../pages/centraladmin/CentralAdminDashboard') },
@@ -53,6 +81,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_clinic', prefetchFn: () => import('../../pages/hospitaladmin/ClinicDashboard') },
+                    { label: 'Laboratory LMS', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'ha_lab', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
                     { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                     { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
@@ -63,6 +92,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') },
+                { label: 'Laboratory LMS', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'ha_lab', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
                 { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText />, prefetchKey: 'ha_ql', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
@@ -108,12 +138,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Patient Registration', path: '/reception/dashboard?view=intake', icon: <FiPlusSquare />, prefetchKey: 'rec_intake', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
                 { label: 'Patient Billing', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'rec_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                 { label: 'Cash Refunds', path: '/reception/refunds', icon: <FiDollarSign />, prefetchKey: 'rec_refunds', prefetchFn: () => import('../../pages/reception/ReceptionRefunds') },
-            ];
-        }
-        if (role === 'lab') {
-            return [
-                { label: 'Lab Dashboard', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'lab_dash', prefetchFn: () => import('../../pages/lab/LabDashboard') },
-                { label: 'Assigned Tests', path: '/lab/tests', icon: <FiFileText />, prefetchKey: 'lab_tests', prefetchFn: () => import('../../pages/lab/AssignedTests') },
             ];
         }
         if (role.includes('pharmac')) {

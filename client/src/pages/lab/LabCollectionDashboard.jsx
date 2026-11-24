@@ -1,312 +1,397 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { labAPI } from '../../utils/api';
 import LabLayout from '../../components/lab/LabLayout';
+import LabBarcodeModal from './LabBarcodeModal';
+import LabSampleActionModal from './LabSampleActionModal';
 import {
     FiLayers, FiCheckCircle, FiClock, FiAlertTriangle,
-    FiPrinter, FiRefreshCw, FiInfo, FiTag
+    FiPrinter, FiRefreshCw, FiSearch, FiTag, FiActivity,
+    FiInbox, FiExternalLink, FiFilter
 } from 'react-icons/fi';
 
 const TUBE_TYPES = [
     { code: 'EDTA', color: '#9333ea', bg: '#faf5ff', border: '#e9d5ff', label: 'EDTA Purple', tests: 'CBC, ESR, HbA1c' },
     { code: 'SERUM', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Plain Red / Gold', tests: 'LFT, KFT, Lipid, Hormones' },
-    { code: 'CITRATE', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd', label: 'Sodium Citrate Blue', tests: 'PT / INR, D-Dimer' },
+    { code: 'CITRATE', color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd', label: 'Citrate Blue', tests: 'PT / INR, D-Dimer' },
     { code: 'FLUORIDE', color: '#475569', bg: '#f8fafc', border: '#cbd5e1', label: 'Fluoride Grey', tests: 'Blood Glucose (F/PP)' },
     { code: 'HEPARIN', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', label: 'Heparin Green', tests: 'Electrolytes, Blood Gas' }
 ];
 
 const LabCollectionDashboard = () => {
     const navigate = useNavigate();
-    const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [collectedIds, setCollectedIds] = useState(new Set());
-    const [selectedProblem, setSelectedProblem] = useState(null);
+    const [search, setSearch] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState('');
+    const [samples, setSamples] = useState([]);
+    const [pendingPlaceholders, setPendingPlaceholders] = useState([]);
+    const [stats, setStats] = useState({});
 
-    const loadData = async () => {
+    // Modal States
+    const [barcodeModal, setBarcodeModal] = useState({ open: false, data: null });
+    const [actionModal, setActionModal] = useState({ open: false, type: '', data: null });
+
+    const loadCollectionQueue = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await labAPI.getDashboardSummary();
-            if (res.success) setSummary(res.summary);
+            const [queueResult, statsResult] = await Promise.allSettled([
+                labAPI.samples.getCollectionQueue({ search, priority: priorityFilter }),
+                labAPI.samples.getDashboardStats()
+            ]);
+
+            const errors = [];
+            if (queueResult.status === 'fulfilled' && queueResult.value?.success) {
+                setSamples(queueResult.value.samples || []);
+                setPendingPlaceholders(queueResult.value.pendingPlaceholders || []);
+            } else if (queueResult.status === 'rejected') {
+                errors.push(queueResult.reason?.response?.data?.message || queueResult.reason?.message || 'Queue unavailable');
+            }
+
+            if (statsResult.status === 'fulfilled' && statsResult.value?.success) {
+                setStats(statsResult.value.stats || {});
+            } else if (statsResult.status === 'rejected') {
+                errors.push(statsResult.reason?.response?.data?.message || statsResult.reason?.message || 'Stats unavailable');
+            }
+
+            if (queueResult.status === 'rejected' && statsResult.status === 'rejected') {
+                setError(`Unable to load phlebotomy collection queue (${errors.join('; ')}).`);
+            }
         } catch (err) {
-            console.error('Failed to load phlebotomy data:', err);
-            setError('Unable to load sample collection workstation.');
+            console.error('Failed to load collection queue:', err);
+            setError(err?.response?.data?.message || err?.message || 'Unable to load phlebotomy collection queue.');
         } finally {
             setLoading(false);
         }
-    };
+    }, [search, priorityFilter]);
 
     useEffect(() => {
-        loadData();
-    }, []);
+        loadCollectionQueue();
+    }, [loadCollectionQueue]);
 
-    const handleMarkCollected = (id) => {
-        setCollectedIds(prev => new Set(prev).add(id));
+    // Handle Quick Barcode Generation for a Placeholder
+    const handleGenerateBarcode = async (item) => {
+        try {
+            const res = await labAPI.samples.generateBarcode({
+                orderId: item.orderId,
+                specimenPlaceholderId: item.specimenPlaceholderId
+            });
+            if (res.success && res.sample) {
+                // Fetch label data and open label printer modal
+                const lbl = await labAPI.samples.getLabel(res.sample._id);
+                if (lbl.success) {
+                    setBarcodeModal({
+                        open: true,
+                        data: { ...lbl.labelData, sampleId: res.sample._id }
+                    });
+                }
+                loadCollectionQueue();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || err.message || 'Failed to generate barcode');
+        }
     };
 
-    const metrics = summary?.metrics || {};
+    // Open Print Label Modal for existing sample
+    const handleOpenLabel = async (sample) => {
+        try {
+            const res = await labAPI.samples.getLabel(sample._id);
+            if (res.success) {
+                setBarcodeModal({
+                    open: true,
+                    data: { ...res.labelData, sampleId: sample._id }
+                });
+            }
+        } catch (err) {
+            alert('Failed to load label data');
+        }
+    };
 
     return (
         <LabLayout
             title="Phlebotomy & Specimen Collection"
-            subtitle={`${summary?.labName || 'Central Lab'} — Specimen Drawing, Tube Preparation & Phlebotomy Queue`}
+            subtitle="Specimen Drawing, Code 128 Barcode Printing, Draw Confirmation & Quality Identification"
         >
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
-                    <FiRefreshCw className="spin" style={{ fontSize: '32px', marginBottom: '12px' }} />
-                    <p>Loading collection queue & specimen manifest...</p>
-                </div>
-            ) : error ? (
-                <div className="lab-card" style={{ borderLeft: '4px solid #ef4444', color: '#b91c1c' }}>
-                    <FiAlertTriangle style={{ marginRight: '8px' }} />
-                    {error}
-                    <button onClick={loadData} className="lab-btn lab-btn-secondary" style={{ marginLeft: '16px' }}>
-                        Retry
-                    </button>
-                </div>
-            ) : (
-                <>
-                    {/* Phlebotomy Metrics */}
-                    <div className="lab-stats-grid">
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#fef2f2', color: '#dc2626' }}>
-                                <FiLayers />
-                            </div>
-                            <div className="lab-stat-val">
-                                {Math.max(0, (metrics.pendingRequests || 0) - collectedIds.size)}
-                            </div>
-                            <div className="lab-stat-lbl">Pending Drawing</div>
-                            <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px' }}>
-                                Awaiting phlebotomy
-                            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* 1. TOP METRICS CARDS */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                            <FiInbox />
                         </div>
-
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                                <FiCheckCircle />
+                        <div>
+                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
+                                {(pendingPlaceholders.length || 0)}
                             </div>
-                            <div className="lab-stat-val">{collectedIds.size + 4}</div>
-                            <div className="lab-stat-lbl">Samples Drawn Today</div>
-                            <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '4px' }}>
-                                Routed to lab benches
-                            </div>
-                        </div>
-
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                                <FiClock />
-                            </div>
-                            <div className="lab-stat-val">6.2 min</div>
-                            <div className="lab-stat-lbl">Avg. Drawing Time</div>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                                Registration to tube labeled
-                            </div>
-                        </div>
-
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#faf5ff', color: '#9333ea' }}>
-                                <FiTag />
-                            </div>
-                            <div className="lab-stat-val">0</div>
-                            <div className="lab-stat-lbl">Rejected / Clotted</div>
-                            <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '4px' }}>
-                                Zero re-draw requests
-                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Pending Order Draws</div>
                         </div>
                     </div>
 
-                    {/* Specimen Tube Color Reference Bar */}
-                    <div className="lab-card" style={{ marginBottom: '24px' }}>
-                        <div className="lab-card-header">
-                            <div>
-                                <h3 className="lab-card-title">Specimen Tube Guide & Vacutainer Color Codes</h3>
-                                <p className="lab-card-subtitle">Follow standard draw order and additive inversion guidelines</p>
-                            </div>
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#faf5ff', color: '#9333ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                            <FiTag />
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '10px' }}>
-                            {TUBE_TYPES.map(t => (
-                                <div
-                                    key={t.code}
-                                    style={{
-                                        padding: '10px 12px',
-                                        borderRadius: '8px',
-                                        background: t.bg,
-                                        border: `1px solid ${t.border}`,
-                                        borderLeft: `5px solid ${t.color}`
-                                    }}
-                                >
-                                    <div style={{ fontWeight: 700, fontSize: '13px', color: t.color }}>
-                                        {t.label}
-                                    </div>
-                                    <div style={{ fontSize: '11px', color: '#475569', marginTop: '3px' }}>
-                                        {t.tests}
-                                    </div>
+                        <div>
+                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
+                                {stats.barcodeGenerated || 0}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Barcodes Printed</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                            <FiCheckCircle />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#059669' }}>
+                                {stats.collected || 0}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Specimens Collected</div>
+                        </div>
+                    </div>
+
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                            <FiAlertTriangle />
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '22px', fontWeight: 800, color: '#dc2626' }}>
+                                {stats.recollectionRequested || 0}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Recollection Redraws</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. SPECIMEN TUBE GUIDE BANNER */}
+                <div style={{ background: '#ffffff', padding: '14px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '8px' }}>
+                        Phlebotomy Tube Color Guide & Mixing Protocols
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+                        {TUBE_TYPES.map(t => (
+                            <div key={t.code} style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '8px 12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: t.color, fontSize: '12px' }}>
+                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: t.color }}></span>
+                                    {t.label}
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Phlebotomy Collection Worklist */}
-                    <div className="lab-card">
-                        <div className="lab-card-header">
-                            <div>
-                                <h3 className="lab-card-title">Sample Collection Worklist</h3>
-                                <p className="lab-card-subtitle">Draw blood/specimens, attach tube barcodes and dispatch to bench</p>
+                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{t.tests}</div>
                             </div>
-                            <button onClick={loadData} className="lab-btn lab-btn-secondary" style={{ fontSize: '12px', padding: '6px 12px' }}>
-                                <FiRefreshCw style={{ marginRight: '6px' }} /> Refresh Worklist
-                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 3. FILTERS & SEARCH BAR */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', background: '#ffffff', padding: '14px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '280px' }}>
+                        <FiSearch style={{ color: '#94a3b8' }} />
+                        <input
+                            type="text"
+                            placeholder="Scan or type barcode, patient name, UHID, or order number..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            style={{ width: '100%', border: 'none', outline: 'none', fontSize: '14px' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <select
+                            value={priorityFilter}
+                            onChange={(e) => setPriorityFilter(e.target.value)}
+                            style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                        >
+                            <option value="">All Priorities</option>
+                            <option value="STAT">STAT Priority</option>
+                            <option value="Urgent">Urgent Priority</option>
+                            <option value="Routine">Routine</option>
+                        </select>
+                        <button onClick={loadCollectionQueue} className="lbd-btn-action">
+                            <FiRefreshCw className={loading ? 'spin' : ''} /> Refresh Queue
+                        </button>
+                    </div>
+                </div>
+
+                {/* 4. PENDING RECEPTION DRAWS (Ready for Barcode Printing) */}
+                {pendingPlaceholders.length > 0 && (
+                    <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FiTag style={{ color: '#2563eb' }} /> Ready for Barcode Generation ({pendingPlaceholders.length})
+                            </h3>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>Confirmed reception orders awaiting physical tube prep</span>
                         </div>
 
-                        <div className="lab-table-container">
-                            <table className="lab-table">
+                        <div className="lbd-table-wrapper">
+                            <table className="lbd-table">
                                 <thead>
                                     <tr>
-                                        <th>Patient & MRN</th>
-                                        <th>Doctor</th>
-                                        <th>Test Investigation</th>
-                                        <th>Required Tubes</th>
+                                        <th>Order Ref</th>
+                                        <th>Token</th>
+                                        <th>Patient Demographics</th>
+                                        <th>Specimen & Container</th>
+                                        <th>Investigations</th>
                                         <th>Priority</th>
-                                        <th>Collection Status</th>
-                                        <th>Actions</th>
+                                        <th className="lbd-table-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {summary?.recentActivity && summary.recentActivity.length > 0 ? (
-                                        summary.recentActivity.map((act, index) => {
-                                            const isCollected = collectedIds.has(act.id);
-                                            const tube = TUBE_TYPES[index % TUBE_TYPES.length];
-                                            return (
-                                                <tr key={act.id}>
-                                                    <td>
-                                                        <strong>{act.patientName}</strong>
-                                                        <div style={{ fontSize: '11px', color: '#64748b' }}>MRN: {act.patientId}</div>
-                                                    </td>
-                                                    <td>{act.doctorName}</td>
-                                                    <td>
-                                                        {act.testNames?.length > 0 ? act.testNames.join(', ') : 'Blood Investigation'}
-                                                    </td>
-                                                    <td>
-                                                        <span
-                                                            style={{
-                                                                display: 'inline-block',
-                                                                padding: '3px 8px',
-                                                                borderRadius: '4px',
-                                                                fontSize: '11px',
-                                                                fontWeight: 600,
-                                                                background: tube.bg,
-                                                                color: tube.color,
-                                                                border: `1px solid ${tube.border}`
-                                                            }}
-                                                        >
-                                                            {tube.label}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <span className={`lab-badge ${index === 0 ? 'badge-danger' : 'badge-neutral'}`}>
-                                                            {index === 0 ? 'STAT / URGENT' : 'Routine'}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        {isCollected ? (
-                                                            <span className="lab-badge badge-success">
-                                                                <FiCheckCircle style={{ marginRight: '4px' }} /> Collected
-                                                            </span>
-                                                        ) : (
-                                                            <span className="lab-badge badge-warning">
-                                                                Pending Draw
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                                            {!isCollected ? (
-                                                                <button
-                                                                    className="lab-btn lab-btn-primary"
-                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                    onClick={() => handleMarkCollected(act.id)}
-                                                                >
-                                                                    <FiCheckCircle style={{ marginRight: '4px' }} /> Mark Drawn
-                                                                </button>
-                                                            ) : (
-                                                                <button
-                                                                    className="lab-btn lab-btn-secondary"
-                                                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                    onClick={() => navigate('/lab/bench')}
-                                                                >
-                                                                    Route to Bench
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                className="lab-btn lab-btn-secondary"
-                                                                style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                onClick={() => setSelectedProblem(act)}
-                                                            >
-                                                                Issue
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                                                No pending patients in the phlebotomy queue.
+                                    {pendingPlaceholders.map((ph, idx) => (
+                                        <tr key={idx}>
+                                            <td><strong style={{ color: '#2563eb' }}>{ph.orderNumber}</strong></td>
+                                            <td><span style={{ padding: '2px 8px', background: '#f1f5f9', borderRadius: '6px', fontWeight: 700 }}>TKN-{ph.tokenNumber}</span></td>
+                                            <td>
+                                                <div><strong>{ph.patientSnapshot?.name}</strong></div>
+                                                <div style={{ fontSize: '11px', color: '#64748b' }}>UHID: {ph.patientSnapshot?.uhid || 'N/A'} • {ph.patientSnapshot?.phone}</div>
+                                            </td>
+                                            <td>
+                                                <div><strong>{ph.containerType}</strong></div>
+                                                <div style={{ fontSize: '11px', color: '#64748b' }}>{ph.specimenType} ({ph.requiredVolume})</div>
+                                            </td>
+                                            <td><span style={{ fontSize: '12px', color: '#334155' }}>{(ph.testNames || []).join(', ')}</span></td>
+                                            <td>
+                                                <span className={`lbm-sticker-priority ${(ph.priority || 'Routine').toLowerCase()}`}>
+                                                    {ph.priority}
+                                                </span>
+                                            </td>
+                                            <td className="lbd-table-right">
+                                                <button
+                                                    onClick={() => handleGenerateBarcode(ph)}
+                                                    className="lbd-btn-action lbd-btn-action-primary"
+                                                >
+                                                    <FiTag /> Generate Barcode
+                                                </button>
                                             </td>
                                         </tr>
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                )}
 
-                    {/* Specimen Issue Modal */}
-                    {selectedProblem && (
-                        <div style={{
-                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                            background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center',
-                            justifyContent: 'center', zIndex: 1000
-                        }}>
-                            <div style={{
-                                background: '#fff', borderRadius: '12px', padding: '24px',
-                                maxWidth: '440px', width: '90%', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-                            }}>
-                                <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: '#b91c1c' }}>
-                                    Report Specimen Issue
-                                </h3>
-                                <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
-                                    Patient: <strong>{selectedProblem.patientName}</strong> (MRN: {selectedProblem.patientId})
-                                </p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                                    {['Hemolyzed Specimen', 'Clotted Blood in Tube', 'Insufficient Volume (QNS)', 'Patient Refused / Vasovagal', 'Incorrect Tube Type'].map(reason => (
-                                        <button
-                                            key={reason}
-                                            className="lab-btn lab-btn-secondary"
-                                            style={{ textAlign: 'left', justifyContent: 'flex-start', fontSize: '12px', padding: '8px 12px' }}
-                                            onClick={() => {
-                                                alert(`Issue "${reason}" recorded for patient ${selectedProblem.patientName}. Notified reception.`);
-                                                setSelectedProblem(null);
-                                            }}
-                                        >
-                                            <FiAlertTriangle style={{ marginRight: '8px', color: '#dc2626' }} />
-                                            {reason}
-                                        </button>
+                {/* 5. PHLEBOTOMY SPECIMEN COLLECTION QUEUE */}
+                <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FiLayers style={{ color: '#059669' }} /> Phlebotomy Collection Worklist ({samples.length})
+                        </h3>
+                    </div>
+
+                    {samples.length === 0 ? (
+                        <div className="lbd-empty-state">
+                            <FiCheckCircle style={{ color: '#059669' }} />
+                            <h3>No Samples in Phlebotomy Queue</h3>
+                            <p>All active orders have been collected or no samples match your filter criteria.</p>
+                        </div>
+                    ) : (
+                        <div className="lbd-table-wrapper">
+                            <table className="lbd-table">
+                                <thead>
+                                    <tr>
+                                        <th>Barcode</th>
+                                        <th>Order / Token</th>
+                                        <th>Patient Details</th>
+                                        <th>Specimen & Container</th>
+                                        <th>Tests Included</th>
+                                        <th>Status</th>
+                                        <th className="lbd-table-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {samples.map((s) => (
+                                        <tr key={s._id}>
+                                            <td>
+                                                <strong style={{ color: '#2563eb', fontFamily: 'monospace', fontSize: '13px' }}>
+                                                    {s.barcode}
+                                                </strong>
+                                                {s.recollection?.isRecollection && (
+                                                    <div style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700 }}>
+                                                        REPLACEMENT DRAW
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div><strong>{s.orderNumber}</strong></div>
+                                                <div style={{ fontSize: '11px', color: '#64748b' }}>TKN-{s.tokenNumber}</div>
+                                            </td>
+                                            <td>
+                                                <div><strong>{s.patientSnapshot?.name}</strong></div>
+                                                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                                    UHID: {s.patientSnapshot?.uhid || 'N/A'} • {s.patientSnapshot?.phone}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div><strong>{s.containerType}</strong></div>
+                                                <div style={{ fontSize: '11px', color: '#64748b' }}>{s.specimenType} ({s.collectedVolume || s.requiredVolume})</div>
+                                            </td>
+                                            <td>
+                                                <span style={{ fontSize: '12px', color: '#334155' }}>
+                                                    {(s.tests || []).map(t => t.testCode).join(', ')}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`lbd-badge ${s.status === 'COLLECTED' ? 'lbd-badge-paid' : s.status.includes('RECOLLECTION') ? 'lbd-badge-unpaid' : 'lbd-badge-partial'}`}>
+                                                    {s.status.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="lbd-table-right">
+                                                <div className="lbd-row-actions">
+                                                    {/* Print Barcode Label */}
+                                                    <button
+                                                        onClick={() => handleOpenLabel(s)}
+                                                        className="lbd-btn-action"
+                                                        title="Print Barcode Label"
+                                                    >
+                                                        <FiPrinter /> Label ({s.labelPrintCount || 1})
+                                                    </button>
+
+                                                    {/* Confirm Collection Button */}
+                                                    {s.status !== 'COLLECTED' && (
+                                                        <button
+                                                            onClick={() => setActionModal({ open: true, type: 'collect', data: s })}
+                                                            className="lbd-btn-action lbd-btn-action-success"
+                                                            title="Confirm Physical Specimen Draw"
+                                                        >
+                                                            <FiCheckCircle /> Confirm Draw
+                                                        </button>
+                                                    )}
+
+                                                    {/* Track Detail Link */}
+                                                    <button
+                                                        onClick={() => navigate(`/lab/samples/${s._id}`)}
+                                                        className="lbd-btn-action"
+                                                        title="View Sample Audit Timeline"
+                                                    >
+                                                        <FiExternalLink /> Track
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
                                     ))}
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                    <button
-                                        className="lab-btn lab-btn-secondary"
-                                        onClick={() => setSelectedProblem(null)}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
+                                </tbody>
+                            </table>
                         </div>
                     )}
-                </>
+                </div>
+            </div>
+
+            {/* MODALS */}
+            {barcodeModal.open && (
+                <LabBarcodeModal
+                    labelData={barcodeModal.data}
+                    onClose={() => setBarcodeModal({ open: false, data: null })}
+                    onReprinted={() => loadCollectionQueue()}
+                />
+            )}
+
+            {actionModal.open && (
+                <LabSampleActionModal
+                    type={actionModal.type}
+                    data={actionModal.data}
+                    onClose={() => setActionModal({ open: false, type: '', data: null })}
+                    onSuccess={() => loadCollectionQueue()}
+                />
             )}
         </LabLayout>
     );

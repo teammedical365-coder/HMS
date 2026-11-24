@@ -978,7 +978,202 @@ export const labAPI = {
     getLocation: async (id) => (await apiClient.get(`/api/lab/locations/${id}`)).data,
     updateLocation: async (id, data) => (await apiClient.put(`/api/lab/locations/${id}`, data)).data,
     updateLocationStatus: async (id, isActive) => (await apiClient.patch(`/api/lab/locations/${id}/status`, { isActive })).data,
-    assignStaffLocation: async (userId, locationId) => (await apiClient.post(`/api/lab/users/${userId}/location`, { locationId })).data
+    assignStaffLocation: async (userId, locationId) => (await apiClient.post(`/api/lab/users/${userId}/location`, { locationId })).data,
+
+    // Phase 3: Master Data Management APIs
+    master: {
+        getTests: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/master/tests${qs ? `?${qs}` : ''}`)).data;
+        },
+        createTest: async (data) => (await apiClient.post('/api/lab/master/tests', data)).data,
+        getTest: async (id) => (await apiClient.get(`/api/lab/master/tests/${id}`)).data,
+        updateTest: async (id, data) => (await apiClient.put(`/api/lab/master/tests/${id}`, data)).data,
+        toggleTestStatus: async (id) => (await apiClient.patch(`/api/lab/master/tests/${id}/status`)).data,
+        importTestsCsv: async (csvText) => (await apiClient.post('/api/lab/master/tests/import/csv', { csvText })).data,
+
+        getPackages: async () => (await apiClient.get('/api/lab/master/packages')).data,
+        createPackage: async (data) => (await apiClient.post('/api/lab/master/packages', data)).data,
+        updatePackage: async (id, data) => (await apiClient.put(`/api/lab/master/packages/${id}`, data)).data,
+        togglePackageStatus: async (id) => (await apiClient.patch(`/api/lab/master/packages/${id}/status`)).data,
+
+        getSpecimens: async () => (await apiClient.get('/api/lab/master/specimens')).data,
+        createSpecimen: async (data) => (await apiClient.post('/api/lab/master/specimens', data)).data,
+        getContainers: async () => (await apiClient.get('/api/lab/master/containers')).data,
+        createContainer: async (data) => (await apiClient.post('/api/lab/master/containers', data)).data,
+
+        getDoctors: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/master/doctors${qs ? `?${qs}` : ''}`)).data;
+        },
+        createDoctor: async (data) => (await apiClient.post('/api/lab/master/doctors', data)).data,
+        updateDoctor: async (id, data) => (await apiClient.put(`/api/lab/master/doctors/${id}`, data)).data,
+        toggleDoctorStatus: async (id) => (await apiClient.patch(`/api/lab/master/doctors/${id}/status`)).data,
+
+        getPrices: async () => (await apiClient.get('/api/lab/master/prices')).data,
+        updatePrices: async (updates) => (await apiClient.put('/api/lab/master/prices', { updates })).data
+    },
+
+    // Phase 4: Reception Intake & Order Booking APIs
+    reception: {
+        getPatients: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/reception/patients${qs ? `?${qs}` : ''}`)).data;
+        },
+        checkDuplicatePatient: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/reception/patients/duplicate-check${qs ? `?${qs}` : ''}`)).data;
+        },
+        registerPatient: async (data) => (await apiClient.post('/api/lab/reception/patients', data)).data,
+        getPatient: async (id) => (await apiClient.get(`/api/lab/reception/patients/${id}`)).data,
+        updatePatient: async (id, data) => (await apiClient.put(`/api/lab/reception/patients/${id}`, data)).data,
+        deactivatePatient: async (id, reason) => (await apiClient.patch(`/api/lab/reception/patients/${id}/deactivate`, { reason })).data,
+        uploadPrescriptions: async (patientId, formData) => (await apiClient.post(`/api/lab/reception/patients/${patientId}/prescriptions`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })).data,
+
+        getPricePreview: async (data) => (await apiClient.post('/api/lab/reception/orders/price-preview', data)).data,
+        createOrder: async (data) => (await apiClient.post('/api/lab/reception/orders', data)).data,
+        getOrders: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/reception/orders${qs ? `?${qs}` : ''}`)).data;
+        },
+        getOrder: async (id) => (await apiClient.get(`/api/lab/reception/orders/${id}`)).data,
+        cancelOrder: async (id, reason) => (await apiClient.post(`/api/lab/reception/orders/${id}/cancel`, { reason })).data,
+        getRecollections: async () => (await apiClient.get('/api/lab/reception/recollections')).data,
+        acknowledgeRecollection: async (orderId, placeholderId) => (await apiClient.patch(`/api/lab/reception/recollections/${orderId}/${placeholderId}/acknowledge`)).data,
+        getOrderSlip: async (id) => (await apiClient.get(`/api/lab/reception/orders/${id}/slip`)).data
+    },
+
+    // Phase 5: Billing & Invoicing APIs
+    billing: {
+        generateInvoice: async (data) => (await apiClient.post('/api/lab/billing/invoices', data)).data,
+        getInvoices: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/invoices${qs ? `?${qs}` : ''}`)).data;
+        },
+        getInvoice: async (id) => (await apiClient.get(`/api/lab/billing/invoices/${id}`)).data,
+        getInvoiceByOrder: async (orderId) => (await apiClient.get(`/api/lab/billing/invoices/by-order/${orderId}`)).data,
+        getInvoicePrint: async (id) => (await apiClient.get(`/api/lab/billing/invoices/${id}/print`)).data,
+        applyDiscount: async (id, data) => (await apiClient.post(`/api/lab/billing/invoices/${id}/discount`, data)).data,
+        recordPayment: async (data) => (await apiClient.post('/api/lab/billing/payments', data)).data,
+        getPayments: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/payments${qs ? `?${qs}` : ''}`)).data;
+        },
+        getPaymentReceipt: async (id) => (await apiClient.get(`/api/lab/billing/payments/${id}/receipt`)).data,
+        getAdvanceBalance: async (patientId) => (await apiClient.get(`/api/lab/billing/advances/${patientId}`)).data,
+        depositAdvance: async (data) => (await apiClient.post('/api/lab/billing/advances', data)).data,
+        processRefund: async (data) => (await apiClient.post('/api/lab/billing/refunds', data)).data,
+        getRefunds: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/refunds${qs ? `?${qs}` : ''}`)).data;
+        },
+        getCashRegister: async () => (await apiClient.get('/api/lab/billing/cash-register')).data,
+        openCashRegister: async (data) => (await apiClient.post('/api/lab/billing/cash-register/open', data)).data,
+        closeCashRegister: async (data) => (await apiClient.post('/api/lab/billing/cash-register/close', data)).data,
+        getDashboardMetrics: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/dashboard${qs ? `?${qs}` : ''}`)).data;
+        },
+        getCollectionsReport: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/reports/collections${qs ? `?${qs}` : ''}`)).data;
+        },
+        getStaffReport: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/billing/reports/staff${qs ? `?${qs}` : ''}`)).data;
+        }
+    },
+
+    // Phase 6: Sample Accessioning & Technical Workflow APIs
+    samples: {
+        getCollectionQueue: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/samples/collection-queue${qs ? `?${qs}` : ''}`)).data;
+        },
+        generateBarcode: async (data) => (await apiClient.post('/api/lab/samples/generate-barcode', data)).data,
+        collectSample: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/collect`, data)).data,
+        getLabel: async (id) => (await apiClient.get(`/api/lab/samples/${id}/label`)).data,
+        reprintLabel: async (id) => (await apiClient.post(`/api/lab/samples/${id}/reprint-label`)).data,
+        getAccessionQueue: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/samples/accession-queue${qs ? `?${qs}` : ''}`)).data;
+        },
+        acceptSample: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/accept`, data)).data,
+        rejectSample: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/reject`, data)).data,
+        getRecollections: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/samples/recollections${qs ? `?${qs}` : ''}`)).data;
+        },
+        recollectSample: async (id, data) => (await apiClient.post(`/api/lab/samples/recollections/${id}/recollect`, data)).data,
+        getProcessingQueue: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/samples/processing-queue${qs ? `?${qs}` : ''}`)).data;
+        },
+        startProcessing: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/processing/start`, data)).data,
+        completeProcessing: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/processing/complete`, data)).data,
+        holdProcessing: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/processing/hold`, data)).data,
+        createTransfer: async (data) => (await apiClient.post('/api/lab/samples/transfers', data)).data,
+        getTransfers: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/samples/transfers${qs ? `?${qs}` : ''}`)).data;
+        },
+        receiveTransfer: async (id) => (await apiClient.post(`/api/lab/samples/transfers/${id}/receive`)).data,
+        getDashboardStats: async () => (await apiClient.get('/api/lab/samples/dashboard')).data,
+        getTimeline: async (id) => (await apiClient.get(`/api/lab/samples/${id}/timeline`)).data
+    },
+    results: {
+        getEntryQueue: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/results/entry-queue${qs ? `?${qs}` : ''}`)).data;
+        },
+        initializeResult: async (data) => (await apiClient.post('/api/lab/results/initialize', data)).data,
+        getResultById: async (id) => (await apiClient.get(`/api/lab/results/${id}`)).data,
+        saveDraft: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/draft`, data)).data,
+        submitResult: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/submit`, data)).data,
+        getVerificationQueue: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/results/verification-queue${qs ? `?${qs}` : ''}`)).data;
+        },
+        verifyResult: async (id, data = {}) => (await apiClient.post(`/api/lab/results/${id}/verify`, data)).data,
+        rejectResult: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/reject`, data)).data,
+        requestCorrection: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/request-correction`, data)).data,
+        createAmendment: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/amendment`, data)).data,
+        getResultHistory: async (id) => (await apiClient.get(`/api/lab/results/${id}/history`)).data,
+        getCriticalAlerts: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/results/critical-alerts${qs ? `?${qs}` : ''}`)).data;
+        },
+        acknowledgeCriticalAlert: async (id, data) => (await apiClient.post(`/api/lab/results/critical-alerts/${id}/acknowledge`, data)).data,
+        escalateCriticalAlert: async (id, data) => (await apiClient.post(`/api/lab/results/critical-alerts/${id}/escalate`, data)).data,
+        getDashboardStats: async () => (await apiClient.get('/api/lab/results/dashboard')).data,
+        getDepartmentSummary: async () => (await apiClient.get('/api/lab/results/department-summary')).data
+    },
+
+    // Phase 8: PDF Report Generation, Release & Delivery APIs
+    reports: {
+        getReports: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/reports${qs ? `?${qs}` : ''}`)).data;
+        },
+        getPendingOrders: async () => (await apiClient.get('/api/lab/reports/pending-orders')).data,
+        generateReport: async (data) => (await apiClient.post('/api/lab/reports/generate', data)).data,
+        getReportById: async (id) => (await apiClient.get(`/api/lab/reports/${id}`)).data,
+        getPreviewUrl: (id) => `/api/lab/reports/${id}/preview`,
+        getDownloadUrl: (id) => `/api/lab/reports/${id}/download`,
+        submitReview: async (id) => (await apiClient.post(`/api/lab/reports/${id}/submit-review`)).data,
+        approveReport: async (id) => (await apiClient.post(`/api/lab/reports/${id}/approve`)).data,
+        rejectReport: async (id, data) => (await apiClient.post(`/api/lab/reports/${id}/reject`, data)).data,
+        releaseReport: async (id) => (await apiClient.post(`/api/lab/reports/${id}/release`)).data,
+        amendReport: async (id, data) => (await apiClient.post(`/api/lab/reports/${id}/amend`, data)).data,
+        getReportHistory: async (id) => (await apiClient.get(`/api/lab/reports/${id}/history`)).data,
+        generateToken: async (id, data = {}) => (await apiClient.post(`/api/lab/reports/${id}/token`, data)).data,
+        deliverReport: async (id, data) => (await apiClient.post(`/api/lab/reports/${id}/deliver`, data)).data,
+        getTemplates: async () => (await apiClient.get('/api/lab/reports/templates/all')).data,
+        createTemplate: async (data) => (await apiClient.post('/api/lab/reports/templates', data)).data,
+        updateTemplate: async (id, data) => (await apiClient.put(`/api/lab/reports/templates/${id}`, data)).data
+    }
 };
 
 export const pharmacyAPI = {

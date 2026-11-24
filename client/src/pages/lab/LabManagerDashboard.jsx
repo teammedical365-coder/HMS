@@ -22,7 +22,7 @@ const LabManagerDashboard = () => {
             if (res.success) setSummary(res.summary);
         } catch (err) {
             console.error('Failed to load manager dashboard:', err);
-            setError('Unable to load laboratory operations data.');
+            setError(err?.response?.data?.message || err?.message || 'Unable to load laboratory operations data.');
         } finally {
             setLoading(false);
         }

@@ -8,6 +8,7 @@ export default defineConfig({
 
     // --- BUILD SECTION TO FIX REDUX & CHUNK SPLITTING ---
     build: {
+        reportCompressedSize: false,
         commonjsOptions: {
             transformMixedEsModules: true,
             include: [/use-sync-external-store/, /node_modules/],

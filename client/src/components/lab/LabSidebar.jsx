@@ -5,7 +5,8 @@ import { logout } from '../../store/slices/authSlice';
 import {
     FiHome, FiUsers, FiMapPin, FiActivity, FiLayers,
     FiCheckCircle, FiFileText, FiDollarSign, FiClock,
-    FiClipboard, FiLogOut, FiInbox, FiCpu, FiGrid
+    FiClipboard, FiLogOut, FiInbox, FiCpu, FiGrid,
+    FiCheckSquare, FiRefreshCw, FiTruck, FiEdit3, FiAlertOctagon, FiSend, FiSliders, FiPlus
 } from 'react-icons/fi';
 
 const LabSidebar = ({ isOpen, onClose }) => {
@@ -43,7 +44,9 @@ const LabSidebar = ({ isOpen, onClose }) => {
         } else if (isTech) {
             primaryItems.push({ label: 'Technical Bench', path: '/lab/bench', icon: <FiCpu /> });
         } else if (isPathologist) {
-            primaryItems.push({ label: 'Pathologist Review', path: '/lab/verification', icon: <FiCheckCircle /> });
+            primaryItems.push({ label: 'Pathologist Review', path: '/lab/results/verification', icon: <FiCheckCircle /> });
+            primaryItems.push({ label: 'Critical Alerts', path: '/lab/results/critical-alerts', icon: <FiAlertOctagon /> });
+            primaryItems.push({ label: 'Result Overview', path: '/lab/results', icon: <FiFileText /> });
         } else if (isAccountant) {
             primaryItems.push({ label: 'Billing Dashboard', path: '/lab/billing', icon: <FiDollarSign /> });
         } else {
@@ -56,10 +59,28 @@ const LabSidebar = ({ isOpen, onClose }) => {
             const stations = [];
             stations.push({ label: 'Reception Queue', path: '/lab/reception', icon: <FiInbox /> });
             stations.push({ label: 'Phlebotomy Queue', path: '/lab/collection', icon: <FiLayers /> });
+            stations.push({ label: 'Accessioning Station', path: '/lab/accessioning', icon: <FiCheckSquare /> });
             stations.push({ label: 'Bench Testing', path: '/lab/bench', icon: <FiCpu /> });
-            stations.push({ label: 'Verification Queue', path: '/lab/verification', icon: <FiCheckCircle /> });
+            stations.push({ label: 'Result Entry', path: '/lab/results/entry', icon: <FiEdit3 /> });
+            stations.push({ label: 'Verification Queue', path: '/lab/results/verification', icon: <FiCheckCircle /> });
+            stations.push({ label: 'Panic Alerts', path: '/lab/results/critical-alerts', icon: <FiAlertOctagon /> });
             stations.push({ label: 'Billing & Invoicing', path: '/lab/billing', icon: <FiDollarSign /> });
+            stations.push({ label: 'Recollections', path: '/lab/recollections', icon: <FiRefreshCw /> });
+            stations.push({ label: 'Sample Transfers', path: '/lab/sample-transfers', icon: <FiTruck /> });
             sections.push({ title: 'Clinical Stations', items: stations });
+        } else if (isTech) {
+            const techStations = [];
+            techStations.push({ label: 'Result Entry', path: '/lab/results/entry', icon: <FiEdit3 /> });
+            techStations.push({ label: 'Accessioning Station', path: '/lab/accessioning', icon: <FiCheckSquare /> });
+            techStations.push({ label: 'Panic Alerts', path: '/lab/results/critical-alerts', icon: <FiAlertOctagon /> });
+            techStations.push({ label: 'Recollections', path: '/lab/recollections', icon: <FiRefreshCw /> });
+            techStations.push({ label: 'Sample Transfers', path: '/lab/sample-transfers', icon: <FiTruck /> });
+            sections.push({ title: 'Specimen Workflows', items: techStations });
+        } else if (isPhleb) {
+            const phlebStations = [];
+            phlebStations.push({ label: 'Recollections', path: '/lab/recollections', icon: <FiRefreshCw /> });
+            phlebStations.push({ label: 'Sample Transfers', path: '/lab/sample-transfers', icon: <FiTruck /> });
+            sections.push({ title: 'Specimen Workflows', items: phlebStations });
         }
 
         // Shared Clinical Operations & Catalog
@@ -67,14 +88,36 @@ const LabSidebar = ({ isOpen, onClose }) => {
         if (isAdmin || isManager) {
             opItems.push({ label: 'Lab Locations', path: '/lab/locations', icon: <FiMapPin /> });
         }
+        if (isAdmin || isManager || isPathologist) {
+            opItems.push({ label: 'Master Data Catalog', path: '/lab/catalog', icon: <FiGrid /> });
+        }
+        if (isAdmin || isManager || isReception) {
+            opItems.push({ label: 'Patient Directory', path: '/lab/patients', icon: <FiUsers /> });
+            opItems.push({ label: 'Book Requisition', path: '/lab/orders/create', icon: <FiInbox /> });
+            opItems.push({ label: 'Lab Orders', path: '/lab/orders', icon: <FiClipboard /> });
+        }
         if (isReception) {
-            opItems.push({ label: 'Patient Directory', path: '/reception/patients', icon: <FiUsers /> });
             opItems.push({ label: 'Invoicing & Receipts', path: '/lab/billing', icon: <FiDollarSign /> });
         }
         if (isAdmin || isManager || isTech || isPhleb || (!isReception && !isAccountant)) {
             opItems.push({ label: 'Assigned Tests', path: '/lab/tests', icon: <FiClipboard /> });
         }
         opItems.push({ label: 'Completed Reports', path: '/lab/completed', icon: <FiFileText /> });
+                // Phase 8: Diagnostic Reports Workstation
+        const reportItems = [
+            { label: 'Reports Console', path: '/lab/reports', icon: <FiFileText /> },
+            { label: 'Released Reports', path: '/lab/reports/released', icon: <FiCheckCircle /> }
+        ];
+        if (isAdmin || isManager || isTech || isPathologist) {
+            reportItems.splice(1, 0, { label: 'Generate Reports', path: '/lab/reports/generate', icon: <FiPlus /> });
+        }
+        if (isAdmin || isManager || isPathologist) {
+            reportItems.splice(2, 0, { label: 'Review & Sign-off', path: '/lab/reports/review', icon: <FiCheckSquare /> });
+            reportItems.push({ label: 'Report Templates', path: '/lab/reports/templates', icon: <FiSliders /> });
+        }
+        reportItems.push({ label: 'Report Delivery', path: '/lab/reports/delivery', icon: <FiSend /> });
+        sections.push({ title: 'Diagnostic Reports', items: reportItems });
+
         sections.push({ title: 'Management & Records', items: opItems });
 
         return sections;

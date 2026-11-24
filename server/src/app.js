@@ -350,6 +350,18 @@ app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/admin-entities', adminEntitiesRoutes);
+const labReceptionRoutes = require('./routes/labReception.routes');
+const labBillingRoutes = require('./routes/labBilling.routes');
+const labSampleRoutes = require('./routes/labSample.routes');
+const labResultRoutes = require('./routes/labResult.routes');
+const labReportRoutes = require('./routes/labReport.routes');
+
+app.use('/api/lab/reports', labReportRoutes);
+app.use('/api/lab/results', labResultRoutes);
+app.use('/api/lab/samples', labSampleRoutes);
+app.use('/api/lab/billing', labBillingRoutes);
+app.use('/api/lab/reception', labReceptionRoutes);
+app.use('/api/lab/master', require('./routes/labMaster.routes'));
 app.use('/api/lab', labRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reports', reportRoutes);

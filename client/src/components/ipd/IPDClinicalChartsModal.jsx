@@ -61,7 +61,6 @@ import {
     FiZap
 } from 'react-icons/fi';
 import TabletPenCanvas from './TabletPenCanvas';
-import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import toast from 'react-hot-toast';
 import './IPDClinicalChartsModal.css';
 
@@ -182,7 +181,6 @@ const IPDClinicalChartsModal = ({
     // Progress Notes State
     const [progressNotes, setProgressNotes] = useState([]);
     const [manualExtraPages, setManualExtraPages] = useState(0);
-    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     // Master Inline Editor Toolbar state
     const [activeTool, setActiveTool] = useState('type'); // 'type' | 'pen' | 'eraser'
@@ -1155,39 +1153,6 @@ const IPDClinicalChartsModal = ({
         }
     };
 
-    const handleApproveVoiceScribe = ({ sections, session }) => {
-        const parts = [];
-        if (sections) {
-            Object.entries(sections).forEach(([key, val]) => {
-                if (!val) return;
-                if (typeof val === 'string' && val.trim()) {
-                    parts.push(val.trim());
-                } else if (typeof val === 'object' && Object.keys(val).length > 0) {
-                    const subParts = Object.entries(val).filter(([, v]) => Boolean(v)).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(', ');
-                    if (subParts) parts.push(subParts);
-                }
-            });
-        }
-        const textToInsert = parts.length > 0 ? parts.join('\n') : (session?.rawTranscript || '');
-
-        if (textToInsert) {
-            if (activeTab === 'progress_notes') {
-                const newEntry = {
-                    _id: `draft_${Date.now()}`,
-                    recordedAt: new Date().toISOString(),
-                    sheetNo: String(progressPages.length || 1),
-                    note: textToInsert,
-                    authorName: user?.name ? (isDoctorUser ? `Dr. ${user.name.replace(/^dr\.?\s*/i, '')}` : user.name.replace(/^dr\.?\s*/i, '')) : 'Clinical Staff',
-                    authorRole: user?._roleData?.name || user?.role || 'Clinician',
-                    isNew: true
-                };
-                setProgressNotes(prev => [...prev, newEntry]);
-                setDirtyNotes(true);
-                toast.success('Gemini AI consultation structured into Progress Notes!');
-            }
-        }
-    };
-
     // ==================== PROGRESS NOTES HANDLERS ====================
     const handleAddProgressNote = async (e) => {
         e.preventDefault();
@@ -1779,18 +1744,6 @@ const IPDClinicalChartsModal = ({
                         </div>
 
                         <div className="ipdc-toolbar-group">
-                            {activeTab === 'progress_notes' && (
-                                <button
-                                    type="button"
-                                    className="ipdc-tool-btn ipdc-tool-btn-ai"
-                                    onClick={() => setIsScribeModalOpen(true)}
-                                    title="AI Voice Scribe (Gemini 3.6 Flash)"
-                                >
-                                    <FiZap size={13} />
-                                    <span>AI Voice Scribe</span>
-                                </button>
-                            )}
-
                             <button
                                 type="button"
                                 className="ipdc-tool-btn"
@@ -3368,16 +3321,6 @@ const IPDClinicalChartsModal = ({
                         </div>
                     </div>
                 )}
-
-                {/* AI Voice Scribe Modal */}
-                <ClinicalVoiceScribeModal
-                    isOpen={isScribeModalOpen}
-                    onClose={() => setIsScribeModalOpen(false)}
-                    onApproveAndInsert={handleApproveVoiceScribe}
-                    patientName={ptDetails.name}
-                    uhid={ptDetails.uhid}
-                    ipdNumber={ptDetails.ipdNumber}
-                />
             </div>
         </div>,
         document.body
