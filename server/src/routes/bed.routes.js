@@ -47,6 +47,7 @@ router.get('/', verifyToken, resolveTenant, async (req, res) => {
             
         res.json({ success: true, beds });
     } catch (err) {
+        console.error('[GET /api/beds] Error:', err);
         res.status(500).json({ success: false, message: 'Error fetching beds' });
     }
 });
@@ -54,8 +55,17 @@ router.get('/', verifyToken, resolveTenant, async (req, res) => {
 // POST /api/beds - Create a bed (Admin only)
 router.post('/', verifyAdminAccess, resolveTenant, async (req, res) => {
     try {
-        const { bedNumber, ward, bedType } = req.body;
+        const bedNumber = String(req.body.bedNumber || '').trim();
+        const ward = String(req.body.ward || '').trim();
+        const bedType = req.body.bedType || 'General';
         const hospitalId = req.hospitalId || req.user.hospitalId;
+
+        if (!hospitalId) {
+            return res.status(400).json({ success: false, message: 'Hospital context is required to create a bed' });
+        }
+        if (!bedNumber || !ward) {
+            return res.status(400).json({ success: false, message: 'Bed number and ward are required' });
+        }
         
         const Bed = getBedModel(req);
         const existing = await Bed.findOne({ hospitalId, bedNumber, ward });
@@ -67,7 +77,7 @@ router.post('/', verifyAdminAccess, resolveTenant, async (req, res) => {
             hospitalId,
             bedNumber,
             ward,
-            bedType: bedType || 'General'
+            bedType
         });
         
         await bed.save();
@@ -85,7 +95,15 @@ router.post('/', verifyAdminAccess, resolveTenant, async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Bed created', bed });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Error creating bed' });
+        console.error('[POST /api/beds] Error creating bed:', err);
+        if (err.name === 'ValidationError') {
+            const firstMsg = Object.values(err.errors || {})[0]?.message || err.message;
+            return res.status(400).json({ success: false, message: firstMsg });
+        }
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: 'Bed already exists in this ward' });
+        }
+        res.status(500).json({ success: false, message: err.message || 'Error creating bed' });
     }
 });
 
@@ -137,7 +155,12 @@ router.put('/:id', verifyAdminAccess, resolveTenant, async (req, res) => {
 
         res.json({ success: true, message: 'Bed updated', bed });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Error updating bed' });
+        console.error('[PUT /api/beds/:id] Error updating bed:', err);
+        if (err.name === 'ValidationError') {
+            const firstMsg = Object.values(err.errors || {})[0]?.message || err.message;
+            return res.status(400).json({ success: false, message: firstMsg });
+        }
+        res.status(500).json({ success: false, message: err.message || 'Error updating bed' });
     }
 });
 
@@ -167,6 +190,7 @@ router.delete('/:id', verifyAdminAccess, resolveTenant, async (req, res) => {
 
         res.json({ success: true, message: 'Bed deleted' });
     } catch (err) {
+        console.error('[DELETE /api/beds/:id] Error deleting bed:', err);
         res.status(500).json({ success: false, message: 'Error deleting bed' });
     }
 });

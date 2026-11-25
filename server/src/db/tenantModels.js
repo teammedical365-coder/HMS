@@ -274,7 +274,7 @@ const bedSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, required: true },
     bedNumber: { type: String, required: true, trim: true },
     ward: { type: String, required: true, trim: true },
-    bedType: { type: String, enum: ['General', 'ICU', 'Private', 'Semi-Private', 'Other'], default: 'General' },
+    bedType: { type: String, enum: ['General', 'ICU', 'NICU', 'Private', 'Semi-Private', 'Emergency', 'Post-Op', 'Deluxe', 'Other'], default: 'General' },
     status: { type: String, enum: ['AVAILABLE', 'OCCUPIED', 'MAINTENANCE'], default: 'AVAILABLE' },
     currentPatient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     currentAdmission: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', default: null }

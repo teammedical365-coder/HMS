@@ -76,6 +76,8 @@ async function getTenantConnection(hospitalId) {
 
     const connection = mongoose.createConnection(process.env.MONGODB_URL, {
         dbName: dbName, // CRITICAL: Standard Mongoose way to isolate tenant databases dynamically
+        autoIndex: false,  // Prevent Mongoose from eagerly creating ~35 empty collections per tenant (Atlas 500-collection limit)
+        autoCreate: false, // Materialize tenant collections lazily on first actual document write
         serverSelectionTimeoutMS: 15000,
         socketTimeoutMS: 45000,
         connectTimeoutMS: 30000,
