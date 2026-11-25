@@ -42,10 +42,10 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         const isLabRoute = location.pathname.startsWith('/lab');
         const isLabRole = roleClean.includes('lab') || roleClean.includes('pathologist') || roleClean.includes('phlebotomist');
 
-        if (isLabRole || (isLabRoute && (role === 'hospitaladmin' || role === 'centraladmin' || role === 'superadmin' || role === 'doctor' || role === 'lab admin'))) {
+        if (isLabRole || (isLabRoute && (role === 'centraladmin' || role === 'superadmin' || role === 'doctor' || role === 'lab admin'))) {
             const labNav = [];
-            if (role === 'hospitaladmin' || role === 'centraladmin' || role === 'superadmin') {
-                labNav.push({ label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') });
+            if (role === 'centraladmin' || role === 'superadmin') {
+                labNav.push({ label: 'System Overview', path: '/supremeadmin', icon: <FiHome />, prefetchKey: 'ca_dash', prefetchFn: () => import('../../pages/centraladmin/CentralAdminDashboard') });
             }
             labNav.push(
                 { label: 'Lab Admin Desk', path: '/lab/dashboard', icon: <FiHome />, prefetchKey: 'lab_dash', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
@@ -81,7 +81,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_clinic', prefetchFn: () => import('../../pages/hospitaladmin/ClinicDashboard') },
-                    { label: 'Laboratory LMS', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'ha_lab', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
                     { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                     { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
@@ -92,7 +91,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') },
-                { label: 'Laboratory LMS', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'ha_lab', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
                 { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText />, prefetchKey: 'ha_ql', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
