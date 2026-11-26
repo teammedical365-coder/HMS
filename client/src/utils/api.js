@@ -973,6 +973,7 @@ export const labAPI = {
 
     // Phase 2: Role-Scoped Dashboard Summary & Location APIs
     getDashboardSummary: async () => (await apiClient.get('/api/lab/dashboard/summary')).data,
+    searchDashboard: async (q) => (await apiClient.get(`/api/lab/dashboard/search?q=${encodeURIComponent(q || '')}`)).data,
     getLocations: async (status) => (await apiClient.get(`/api/lab/locations${status ? `?status=${status}` : ''}`)).data,
     createLocation: async (data) => (await apiClient.post('/api/lab/locations', data)).data,
     getLocation: async (id) => (await apiClient.get(`/api/lab/locations/${id}`)).data,
@@ -1094,6 +1095,9 @@ export const labAPI = {
         },
         generateBarcode: async (data) => (await apiClient.post('/api/lab/samples/generate-barcode', data)).data,
         collectSample: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/collect`, data)).data,
+        dispatchToLab: async (id, data = {}) => (await apiClient.post(`/api/lab/samples/${id}/dispatch-to-lab`, data)).data,
+        receiveSample: async (id, data = {}) => (await apiClient.post(`/api/lab/samples/${id}/receive`, data)).data,
+        updateBenchStage: async (id, data) => (await apiClient.post(`/api/lab/samples/${id}/bench-stage`, data)).data,
         getLabel: async (id) => (await apiClient.get(`/api/lab/samples/${id}/label`)).data,
         reprintLabel: async (id) => (await apiClient.post(`/api/lab/samples/${id}/reprint-label`)).data,
         getAccessionQueue: async (params = {}) => {

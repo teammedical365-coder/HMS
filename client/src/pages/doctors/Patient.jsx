@@ -25,6 +25,7 @@ const Patient = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('all'); // 'all' | 'today'
     const [statusFilter, setStatusFilter] = useState('all');
+    const [summaryCardFilter, setSummaryCardFilter] = useState('all'); // 'all' | 'upcoming' | 'completed_today'
     const [sortBy, setSortBy] = useState('latest'); // 'latest' | 'oldest' | 'name-asc' | 'name-desc'
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
@@ -303,15 +304,36 @@ const Patient = () => {
     const clearAllFilters = () => {
         setSearchQuery('');
         setStatusFilter('all');
+        setSummaryCardFilter('all');
         setSortBy('latest');
         setFromDate('');
         setToDate('');
         setFilterPopoverOpen(false);
     };
 
+    const handleSummaryCardSelect = (cardType) => {
+        setFromDate('');
+        setToDate('');
+        setFilterPopoverOpen(false);
+        if (cardType === 'all') {
+            setSummaryCardFilter('all');
+            setActiveTab('all');
+            setStatusFilter('all');
+        } else if (cardType === 'upcoming') {
+            setSummaryCardFilter('upcoming');
+            setActiveTab('all');
+            setStatusFilter('all');
+        } else if (cardType === 'completed_today') {
+            setSummaryCardFilter('completed_today');
+            setActiveTab('today');
+            setStatusFilter('completed');
+        }
+    };
+
     // Active filters count
     const activeFilterCount = 
         (statusFilter !== 'all' ? 1 : 0) +
+        (summaryCardFilter !== 'all' ? 1 : 0) +
         (sortBy !== 'latest' ? 1 : 0) +
         (fromDate ? 1 : 0) +
         (toDate ? 1 : 0);
@@ -334,6 +356,17 @@ const Patient = () => {
         const status = (a.status || 'confirmed').toLowerCase();
         const matchesStatus = statusFilter === 'all' || status === statusFilter.toLowerCase();
 
+        let matchesSummaryCard = true;
+        if (summaryCardFilter === 'upcoming') {
+            const d = a.appointmentDate ? new Date(a.appointmentDate) : null;
+            const todayMidnight = new Date();
+            todayMidnight.setHours(0, 0, 0, 0);
+            matchesSummaryCard = Boolean(d && !isNaN(d.getTime()) && d >= todayMidnight && (status === 'pending' || status === 'confirmed'));
+        } else if (summaryCardFilter === 'completed_today') {
+            const todayStrMatch = new Date().toDateString();
+            matchesSummaryCard = Boolean(status === 'completed' && a.appointmentDate && new Date(a.appointmentDate).toDateString() === todayStrMatch);
+        }
+
         // Date Range Filtering
         let matchesDateRange = true;
         if (fromDate || toDate) {
@@ -353,7 +386,7 @@ const Patient = () => {
             }
         }
 
-        return matchesQuery && matchesStatus && matchesDateRange;
+        return matchesQuery && matchesStatus && matchesSummaryCard && matchesDateRange;
     });
 
     // Sorting
@@ -444,9 +477,17 @@ const Patient = () => {
                 </div>
             </div>
 
-            {/* ─── 2. STATS ROW (3 SUMMARY CARDS) ─── */}
+            {/* ─── 2. STATS ROW (3 CLICKABLE SUMMARY CARDS) ─── */}
             <div className="doc-stats-grid">
-                <div className="doc-stat-box stat-blue">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={summaryCardFilter === 'all' && activeTab === 'all' && statusFilter === 'all'}
+                    className={`doc-stat-box stat-blue doc-stat-clickable ${summaryCardFilter === 'all' && activeTab === 'all' && statusFilter === 'all' ? 'is-selected-card' : ''}`}
+                    onClick={() => handleSummaryCardSelect('all')}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSummaryCardSelect('all'); } }}
+                    title="View all patients"
+                >
                     <div className="doc-stat-icon-wrapper">
                         <FiUsers className="doc-stat-svg-icon" />
                     </div>
@@ -459,7 +500,15 @@ const Patient = () => {
                     </div>
                 </div>
 
-                <div className="doc-stat-box stat-orange">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={summaryCardFilter === 'upcoming'}
+                    className={`doc-stat-box stat-orange doc-stat-clickable ${summaryCardFilter === 'upcoming' ? 'is-selected-card' : ''}`}
+                    onClick={() => handleSummaryCardSelect('upcoming')}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSummaryCardSelect('upcoming'); } }}
+                    title="View upcoming appointments"
+                >
                     <div className="doc-stat-icon-wrapper">
                         <FiCalendar className="doc-stat-svg-icon" />
                     </div>
@@ -472,7 +521,15 @@ const Patient = () => {
                     </div>
                 </div>
 
-                <div className="doc-stat-box stat-green">
+                <div
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={summaryCardFilter === 'completed_today'}
+                    className={`doc-stat-box stat-green doc-stat-clickable ${summaryCardFilter === 'completed_today' ? 'is-selected-card' : ''}`}
+                    onClick={() => handleSummaryCardSelect('completed_today')}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSummaryCardSelect('completed_today'); } }}
+                    title="View appointments completed today"
+                >
                     <div className="doc-stat-icon-wrapper">
                         <FiCheckCircle className="doc-stat-svg-icon" />
                     </div>
@@ -559,8 +616,8 @@ const Patient = () => {
                         <div className="doc-toolbar-controls-group">
                             <button 
                                 type="button"
-                                className={`doc-tab-pill ${activeTab === 'all' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('all')}
+                                className={`doc-tab-pill ${activeTab === 'all' && summaryCardFilter === 'all' ? 'active' : ''}`}
+                                onClick={() => { setSummaryCardFilter('all'); setActiveTab('all'); }}
                             >
                                 <FiCalendar size={14} />
                                 <span>All Appointments</span>
@@ -569,8 +626,8 @@ const Patient = () => {
 
                             <button 
                                 type="button"
-                                className={`doc-tab-pill ${activeTab === 'today' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('today')}
+                                className={`doc-tab-pill ${activeTab === 'today' && summaryCardFilter === 'all' ? 'active' : ''}`}
+                                onClick={() => { setSummaryCardFilter('all'); setStatusFilter('all'); setActiveTab('today'); }}
                             >
                                 <FiClock size={14} />
                                 <span>Today's Queue</span>

@@ -378,18 +378,37 @@ const HospitalAdminDashboard = () => {
         finally { setLoadingDeptUpis(false); }
     };
 
+    const [upiFeedback, setUpiFeedback] = useState(null);
+    const isValidUpiVpa = (val) => /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9.-]{1,63}$/.test(String(val || '').trim());
+
     const handleAddDeptUpi = async (e) => {
         e.preventDefault();
+        const cleanUpiId = (newDeptUpi.upiId || '').replace(/\s+/g, '').trim();
+        const cleanLabel = (newDeptUpi.label || '').trim();
+        if (!isValidUpiVpa(cleanUpiId)) {
+            const msg = 'Invalid UPI ID format. Use format name@bank without spaces (e.g. counter@upi).';
+            setUpiFeedback({ type: 'error', text: msg });
+            toast.error(msg);
+            return;
+        }
         setSavingDeptUpi(true);
+        setUpiFeedback(null);
         try {
-            const res = await hospitalAPI.createDepartmentUpi(newDeptUpi);
+            const res = await hospitalAPI.createDepartmentUpi({
+                ...newDeptUpi,
+                label: cleanLabel,
+                upiId: cleanUpiId
+            });
             if (res.success) {
                 setNewDeptUpi({ staffUserId: '', upiId: '', label: '' });
+                setUpiFeedback({ type: 'success', text: `Department UPI (${cleanUpiId}) added successfully.` });
                 toast.success('Department UPI account added successfully!');
                 fetchDepartmentUpis(); // refresh lists
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to add Department UPI');
+            const errMsg = err.response?.data?.message || 'Failed to add Department UPI';
+            setUpiFeedback({ type: 'error', text: errMsg });
+            toast.error(errMsg);
         } finally {
             setSavingDeptUpi(false);
         }
@@ -3202,18 +3221,35 @@ const HospitalAdminDashboard = () => {
                             <p>Manage payment options, banking integrations, and gateways.</p>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                        <div className="ha-upi-subtabs" style={{ display: 'flex', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
                             <button onClick={() => setAccountsSubTab('upi')} className={`ha-tab ${accountsSubTab === 'upi' ? 'ha-tab-active' : ''}`}>UPI Settings</button>
                             <button onClick={() => setAccountsSubTab('bank')} className={`ha-tab ${accountsSubTab === 'bank' ? 'ha-tab-active' : ''}`}>Bank Details (Coming Soon)</button>
                             <button onClick={() => setAccountsSubTab('card')} className={`ha-tab ${accountsSubTab === 'card' ? 'ha-tab-active' : ''}`}>Card Payments (Coming Soon)</button>
                         </div>
 
                         {accountsSubTab === 'upi' && (
-                            <div className="admin-card" style={{ padding: '24px' }}>
+                            <div className="admin-card ha-upi-card" style={{ padding: '24px' }}>
                                 <h3 style={{ marginBottom: '20px', color: '#0f172a' }}>Department UPI Management</h3>
 
-                                <form onSubmit={handleAddDeptUpi} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '30px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                    <div style={{ flex: '1 1 200px' }}>
+                                {upiFeedback && (
+                                    <div
+                                        role="alert"
+                                        className={`ha-upi-feedback ha-upi-feedback-${upiFeedback.type}`}
+                                    >
+                                        <span>{upiFeedback.text}</span>
+                                        <button
+                                            type="button"
+                                            className="ha-upi-feedback-dismiss"
+                                            onClick={() => setUpiFeedback(null)}
+                                            aria-label="Dismiss UPI message"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                )}
+
+                                <form onSubmit={handleAddDeptUpi} className="ha-upi-form" style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '30px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                    <div className="ha-upi-field" style={{ flex: '1 1 200px' }}>
                                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Assign To Staff *</label>
                                         <select
                                             value={newDeptUpi.staffUserId}
@@ -3227,15 +3263,29 @@ const HospitalAdminDashboard = () => {
                                             ))}
                                         </select>
                                     </div>
-                                    <div style={{ flex: '1 1 200px' }}>
+                                    <div className="ha-upi-field" style={{ flex: '1 1 200px' }}>
                                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Account Label / Counter Name *</label>
                                         <input type="text" value={newDeptUpi.label} onChange={(e) => setNewDeptUpi({ ...newDeptUpi, label: e.target.value })} required placeholder="e.g. Reception Desk" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
                                     </div>
-                                    <div style={{ flex: '1 1 200px' }}>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>UPI ID *</label>
-                                        <input type="text" value={newDeptUpi.upiId} onChange={(e) => setNewDeptUpi({ ...newDeptUpi, upiId: e.target.value })} required placeholder="e.g. counter@upi" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                    <div className="ha-upi-field" style={{ flex: '1 1 200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>UPI ID * <span style={{ fontWeight: 500, color: '#64748b' }}>(no spaces)</span></label>
+                                        <input
+                                            type="text"
+                                            value={newDeptUpi.upiId}
+                                            onChange={(e) => {
+                                                const sanitized = e.target.value.replace(/\s+/g, '');
+                                                setNewDeptUpi({ ...newDeptUpi, upiId: sanitized });
+                                                if (upiFeedback?.type === 'error') setUpiFeedback(null);
+                                            }}
+                                            required
+                                            autoCapitalize="none"
+                                            autoCorrect="off"
+                                            spellCheck={false}
+                                            placeholder="e.g. counter@upi"
+                                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                        />
                                     </div>
-                                    <button type="submit" disabled={savingDeptUpi || upiStaffOptions.length === 0} style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', opacity: (savingDeptUpi || upiStaffOptions.length === 0) ? 0.7 : 1 }}>
+                                    <button type="submit" className="ha-upi-submit-btn" disabled={savingDeptUpi || upiStaffOptions.length === 0} style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', opacity: (savingDeptUpi || upiStaffOptions.length === 0) ? 0.7 : 1 }}>
                                         {savingDeptUpi ? 'Saving...' : '+ Add UPI Account'}
                                     </button>
                                 </form>
@@ -3246,30 +3296,38 @@ const HospitalAdminDashboard = () => {
                                 ) : deptUpis.length === 0 ? (
                                     <p style={{ color: '#64748b' }}>No department UPI accounts configured yet.</p>
                                 ) : (
-                                    <div style={{ display: 'grid', gap: '12px' }}>
-                                        {deptUpis.map((upi) => (
-                                            <div key={upi._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</span>
-                                                        <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: upi.isActive ? '#dcfce7' : '#f1f5f9', color: upi.isActive ? '#166534' : '#64748b', fontWeight: 600 }}>
-                                                            {upi.isActive ? 'Active' : 'Inactive'}
-                                                        </span>
+                                    <div className="ha-upi-list" style={{ display: 'grid', gap: '12px' }}>
+                                        {deptUpis.map((upi) => {
+                                            const hasInvalidFormat = !isValidUpiVpa(upi.upiId);
+                                            return (
+                                                <div key={upi._id} className="ha-upi-account-row flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                                                    <div className="ha-upi-account-info">
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</span>
+                                                            <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: upi.isActive ? '#dcfce7' : '#f1f5f9', color: upi.isActive ? '#166534' : '#64748b', fontWeight: 600 }}>
+                                                                {upi.isActive ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                            {hasInvalidFormat && (
+                                                                <span className="ha-upi-invalid-badge" title="This UPI ID has spaces or an invalid handle and cannot generate valid QR payments. Delete and re-add without spaces.">
+                                                                    ⚠ Invalid UPI ID format (check spaces/@handle)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="ha-upi-id-text" style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>
+                                                            <span style={{ fontFamily: 'monospace', color: hasInvalidFormat ? '#b91c1c' : '#0f172a', fontWeight: 600 }}>{upi.upiId}</span> — Assigned to: <strong>{upi.staffUserId?.name || 'Unknown'}</strong> ({upi.staffRoleName})
+                                                        </div>
                                                     </div>
-                                                    <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>
-                                                        {upi.upiId} — Assigned to: <strong>{upi.staffUserId?.name || 'Unknown'}</strong> ({upi.staffRoleName})
+                                                    <div className="ha-upi-account-actions" style={{ display: 'flex', gap: '8px' }}>
+                                                        <button type="button" onClick={() => handleToggleDeptUpi(upi)} style={{ padding: '8px 16px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                            {upi.isActive ? 'Deactivate' : 'Activate'}
+                                                        </button>
+                                                        <button type="button" onClick={() => handleDeleteDeptUpi(upi._id)} style={{ padding: '8px 16px', background: '#fee2e2', color: '#ef4444', border: '1px solid #f87171', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                            Delete
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <button type="button" onClick={() => handleToggleDeptUpi(upi)} style={{ padding: '8px 16px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                        {upi.isActive ? 'Deactivate' : 'Activate'}
-                                                    </button>
-                                                    <button type="button" onClick={() => handleDeleteDeptUpi(upi._id)} style={{ padding: '8px 16px', background: '#fee2e2', color: '#ef4444', border: '1px solid #f87171', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

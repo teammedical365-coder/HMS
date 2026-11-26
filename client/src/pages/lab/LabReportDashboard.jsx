@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     FiFileText, FiClock, FiCheckCircle, FiSend, FiAlertCircle,
-    FiSearch, FiFilter, FiDownload, FiEye, FiPlus, FiPrinter,
-    FiRefreshCw, FiSliders, FiArrowRight
+    FiSearch, FiEye, FiPlus,
+    FiRefreshCw
 } from 'react-icons/fi';
 import { labAPI } from '../../utils/api';
 import LabReportPreviewModal from './LabReportPreviewModal';
@@ -85,13 +85,6 @@ const LabReportDashboard = () => {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5">
-                    <button
-                        onClick={() => navigate('/lab/reports/templates')}
-                        className="inline-flex items-center px-3.5 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 shadow-sm transition"
-                    >
-                        <FiSliders className="w-4 h-4 mr-2 text-slate-500" />
-                        Branding Templates
-                    </button>
                     <button
                         onClick={() => navigate('/lab/reports/review')}
                         className="inline-flex items-center px-3.5 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition"
@@ -252,9 +245,9 @@ const LabReportDashboard = () => {
                                 </tr>
                             ) : reports.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" className="text-center py-12 text-slate-400">
+                                    <td colSpan="6" className="text-center py-12 text-slate-500">
                                         <FiFileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                                        No reports match the current criteria.
+                                        No diagnostic reports found.
                                     </td>
                                 </tr>
                             ) : (

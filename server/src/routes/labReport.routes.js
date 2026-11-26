@@ -98,6 +98,40 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+// Phase 8 Diagnostic Report statuses (excludes legacy ungenerated OPD 'PENDING' request placeholders)
+const PHASE8_REPORT_STATUSES = [
+  'GENERATED',
+  'UNDER_REVIEW',
+  'APPROVED',
+  'RELEASED',
+  'REJECTED',
+  'AMENDMENT_PENDING',
+  'SUPERSEDED'
+];
+
+// Helper: Resolve Hospital Branding Header for PDF Generation (Medical365 Tenant Branding)
+async function resolveHospitalPdfBranding(hospitalId, template = null) {
+  const hosp = hospitalId
+    ? await Hospital.findById(hospitalId).select('name address city state zipCode phone email branding logo').lean()
+    : null;
+
+  const tplObj = template ? { ...template } : {};
+  const tplHeader = tplObj.hospitalHeader || {};
+  const hospAddress = [hosp?.address, hosp?.city, hosp?.state, hosp?.zipCode].filter(Boolean).join(', ');
+
+  tplObj.primaryColor = hosp?.branding?.primaryColor || tplObj.primaryColor || '#0284c7';
+  tplObj.hospitalHeader = {
+    ...tplHeader,
+    name: hosp?.branding?.appName || hosp?.name || tplHeader.name || 'Medical 365',
+    tagline: hosp?.branding?.tagline || tplHeader.tagline || 'Diagnostic Pathology & Laboratory Services',
+    address: hospAddress || tplHeader.address || '',
+    phone: hosp?.phone || tplHeader.phone || '',
+    email: hosp?.email || tplHeader.email || '',
+    accreditationText: tplHeader.accreditationText || 'Clinical Pathology & Laboratory Medicine'
+  };
+  return tplObj;
+}
+
 // =========================================================================
 // 2. PUBLIC PATIENT ACCESS ROUTE (No Auth Middleware Required)
 // =========================================================================
@@ -141,8 +175,9 @@ router.get('/public/access/:token', async (req, res) => {
         hospitalId: report.hospitalId,
         isDefault: true
       }).lean();
+      const mergedTemplate = await resolveHospitalPdfBranding(report.hospitalId, template);
 
-      const pdfBuffer = await generateReportPDF(report, template || {});
+      const pdfBuffer = await generateReportPDF(report, mergedTemplate);
 
       // Increment download metric asynchronously
       await LabReport.findByIdAndUpdate(report._id, {
@@ -212,10 +247,16 @@ router.get('/', async (req, res) => {
       limit = 20
     } = req.query;
 
-    const query = { hospitalId: req.hospitalId };
+    const basePhase8Match = {
+      hospitalId: req.hospitalId,
+      reportNumber: { $exists: true, $nin: [null, ''] },
+      reportStatus: { $in: PHASE8_REPORT_STATUSES }
+    };
+
+    const query = { ...basePhase8Match };
 
     if (status && status !== 'ALL') {
-      query.reportStatus = status;
+      query.reportStatus = PHASE8_REPORT_STATUSES.includes(status) ? status : '__NONE__';
     }
 
     if (reportType && reportType !== 'ALL') {
@@ -254,18 +295,26 @@ router.get('/', async (req, res) => {
     const skip = (Math.max(1, parseInt(page)) - 1) * Math.max(1, parseInt(limit));
     const take = Math.max(1, Math.min(100, parseInt(limit)));
 
+    const statsMatch = {
+      ...(req.hospitalId && mongoose.Types.ObjectId.isValid(req.hospitalId)
+        ? { hospitalId: new mongoose.Types.ObjectId(req.hospitalId) }
+        : { hospitalId: req.hospitalId }),
+      reportNumber: { $exists: true, $nin: [null, ''] },
+      reportStatus: { $in: PHASE8_REPORT_STATUSES }
+    };
+
     const [reports, totalCount, statsAgg] = await Promise.all([
       LabReport.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(take)
-        .populate('orderId', 'orderNumber orderStatus tokenNumber priority tests')
+        .populate('orderId', 'orderNumber orderStatus status tokenNumber priority tests')
         .populate('generatedBy', 'name email role')
         .populate('approvedBy', 'name email role')
         .lean(),
       LabReport.countDocuments(query),
       LabReport.aggregate([
-        { $match: { hospitalId: new mongoose.Types.ObjectId(req.hospitalId) } },
+        { $match: statsMatch },
         { $group: { _id: '$reportStatus', count: { $sum: 1 } } }
       ])
     ]);
@@ -580,8 +629,9 @@ router.get('/:id/preview', async (req, res) => {
       hospitalId: req.hospitalId,
       isDefault: true
     }).lean();
+    const mergedTemplate = await resolveHospitalPdfBranding(req.hospitalId, template);
 
-    const pdfBuffer = await generateReportPDF(report, template || {});
+    const pdfBuffer = await generateReportPDF(report, mergedTemplate);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${report.reportNumber || 'Report'}.pdf"`);
@@ -614,8 +664,9 @@ router.get('/:id/download', async (req, res) => {
       hospitalId: req.hospitalId,
       isDefault: true
     }).lean();
+    const mergedTemplate = await resolveHospitalPdfBranding(req.hospitalId, template);
 
-    const pdfBuffer = await generateReportPDF(report.toObject(), template || {});
+    const pdfBuffer = await generateReportPDF(report.toObject(), mergedTemplate);
 
     // Increment download metrics
     report.downloadCount = (report.downloadCount || 0) + 1;
@@ -851,15 +902,21 @@ router.post('/:id/release', verifyApprovalPermission, async (req, res) => {
 
     await report.save();
 
-    // Check if associated LabOrder should have status updated
+    // Update associated LabOrder & any linked legacy HMS LabReport status
     if (report.orderId) {
       try {
-        await LabOrder.findByIdAndUpdate(report.orderId, {
+        const updatedOrder = await LabOrder.findByIdAndUpdate(report.orderId, {
           $set: {
-            orderStatus: 'Report Released',
-            status: 'Report Released'
+            status: 'Completed'
           }
-        });
+        }, { new: true }).lean();
+
+        if (updatedOrder?.legacyLabReportId) {
+          await LabReport.updateOne(
+            { _id: updatedOrder.legacyLabReportId, reportStatus: 'PENDING' },
+            { $set: { testStatus: 'DONE', reportStatus: 'UPLOADED' } }
+          );
+        }
       } catch (e) {
         // non-blocking
       }

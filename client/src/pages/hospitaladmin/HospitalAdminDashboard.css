@@ -5813,5 +5813,206 @@
     }
 }
 
+/* ============================================================
+   UPI FEEDBACK BANNER & INVALID VPA PILL
+   ============================================================ */
+.ha-upi-feedback {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    overflow-wrap: anywhere;
+}
+
+.ha-upi-feedback-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+}
+
+.ha-upi-feedback-success {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #15803d;
+}
+
+.ha-upi-feedback-dismiss {
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 4px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.ha-upi-invalid-badge {
+    font-size: 11.5px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    font-weight: 600;
+}
+
+/* ============================================================
+   TABLET-ONLY UI FIXES (768px – 1366px): BUG 09 & BUG 10
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 1366px) {
+    /* Bug 09: My Profile & My Hospital Cards */
+    .ha-profile-modern-card,
+    .ha-hospital-modern-card {
+        padding: 18px 20px;
+    }
+
+    .ha-profile-body {
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .ha-profile-info-block {
+        min-width: 200px;
+        overflow-wrap: anywhere;
+    }
+
+    .ha-profile-email {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .ha-profile-actions {
+        flex-wrap: wrap;
+    }
+
+    .ha-profile-hologram-wrap {
+        width: 136px;
+        height: 92px;
+    }
+
+    .ha-hospital-pill-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 18px;
+        padding: 16px 18px;
+        align-items: stretch;
+    }
+
+    .ha-hospital-pill-col {
+        padding: 6px 12px;
+        min-width: 0;
+    }
+
+    .ha-hospital-pill-col:nth-child(2n) {
+        border-right: none;
+        padding-right: 4px;
+    }
+
+    .ha-hospital-pill-col:nth-child(2n + 1) {
+        padding-left: 4px;
+    }
+
+    .ha-hospital-pill-col:nth-child(-n + 2) {
+        padding-bottom: 12px;
+        border-bottom: 1px dashed #dbeafe;
+    }
+
+    .ha-hospital-pill-info {
+        min-width: 0;
+        flex: 1;
+        overflow: visible;
+    }
+
+    .ha-hospital-pill-value {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+    }
+
+    /* Bug 10: Department UPI Management Form & Account Cards */
+    .ha-upi-subtabs {
+        flex-wrap: wrap;
+        gap: 10px !important;
+    }
+
+    .ha-upi-card {
+        padding: 20px !important;
+    }
+
+    .ha-upi-form {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 16px !important;
+        align-items: end !important;
+    }
+
+    .ha-upi-field {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .ha-upi-field select,
+    .ha-upi-field input {
+        min-height: 42px;
+        box-sizing: border-box;
+    }
+
+    .ha-upi-submit-btn {
+        min-height: 42px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .ha-upi-account-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 14px !important;
+        flex-wrap: wrap;
+    }
+
+    .ha-upi-account-info {
+        flex: 1 1 280px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .ha-upi-id-text {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.45;
+    }
+
+    .ha-upi-account-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+    }
+
+    .ha-upi-account-actions button {
+        min-height: 40px;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 920px) {
+    .ha-profile-hologram-wrap {
+        width: 108px;
+        height: 78px;
+    }
+}
+
+
 
 

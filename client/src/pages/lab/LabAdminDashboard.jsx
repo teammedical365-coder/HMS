@@ -1,404 +1,555 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../store/hooks';
+import { useBranding } from '../../context/BrandingContext';
 import { labAPI } from '../../utils/api';
-import LabLayout from '../../components/lab/LabLayout';
+import { useLabAdminSummary } from '../../components/lab/LabAdminShell';
 import {
-    FiActivity, FiUsers, FiMapPin, FiClipboard,
-    FiCheckCircle, FiDollarSign, FiClock, FiAlertTriangle,
-    FiArrowRight, FiShield, FiCpu, FiLayers, FiRefreshCw,
-    FiPlus, FiFileText, FiInbox, FiTruck
+    FiClipboard, FiClock, FiCheckCircle, FiCalendar,
+    FiRefreshCw, FiGrid, FiChevronDown, FiUsers,
+    FiCpu, FiFileText, FiActivity, FiArrowRight,
+    FiAlertTriangle, FiShield
 } from 'react-icons/fi';
+import './LabAdminDashboard.css';
+
+// Crisp conical laboratory flask SVG icon for Samples Collected & Specimen Pipeline
+const ConicalFlaskIcon = ({ size = 18 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 3h6" />
+        <path d="M10 3v5.4a2 2 0 0 1-.4 1.2L4.7 16.5A2.5 2.5 0 0 0 6.7 20.5h10.6a2.5 2.5 0 0 0 2-4L14.4 9.6a2 2 0 0 1-.4-1.2V3" />
+        <path d="M7.5 15h9" />
+    </svg>
+);
+
+const getTimeGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+};
+
+const formatBannerDate = (dateObj) => {
+    try {
+        const weekday = dateObj.toLocaleDateString('en-GB', { weekday: 'short' });
+        const day = dateObj.toLocaleDateString('en-GB', { day: '2-digit' });
+        const month = dateObj.toLocaleDateString('en-GB', { month: 'short' });
+        const year = dateObj.getFullYear();
+        return `${weekday}, ${day} ${month}, ${year}`;
+    } catch (_) {
+        return dateObj.toDateString();
+    }
+};
+
+const formatCurrencyINR = (val) => {
+    const num = Number(val) || 0;
+    return `₹${num.toLocaleString('en-IN')}`;
+};
 
 const LabAdminDashboard = () => {
     const navigate = useNavigate();
-    const [summary, setSummary] = useState(null);
-    const [locations, setLocations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const { user } = useAuth();
+    const { hospitalName: brandingHospitalName } = useBranding();
+    const shellCtx = useLabAdminSummary();
 
-    const loadData = async () => {
-        setLoading(true);
-        setError(null);
+    // Fallback local state if rendered outside LabAdminShell
+    const [localSummary, setLocalSummary] = useState(null);
+    const [localLoading, setLocalLoading] = useState(!shellCtx);
+    const [localRefreshing, setLocalRefreshing] = useState(false);
+    const [localError, setLocalError] = useState(null);
+
+    const [overviewExpanded, setOverviewExpanded] = useState(false);
+    const [currentDate, setCurrentDate] = useState(() => new Date());
+
+    const loadStandaloneSummary = useCallback(async (isManual = false) => {
+        if (shellCtx) {
+            setCurrentDate(new Date());
+            return shellCtx.refreshSummary();
+        }
+        if (isManual) setLocalRefreshing(true);
+        else setLocalLoading(true);
+        setLocalError(null);
         try {
-            const [sumResult, locResult] = await Promise.allSettled([
-                labAPI.getDashboardSummary(),
-                labAPI.getLocations()
-            ]);
-
-            const errors = [];
-            if (sumResult.status === 'fulfilled' && sumResult.value?.success) {
-                setSummary(sumResult.value.summary);
-            } else if (sumResult.status === 'rejected') {
-                errors.push(sumResult.reason?.response?.data?.message || sumResult.reason?.message || 'Summary unavailable');
-            }
-
-            if (locResult.status === 'fulfilled' && locResult.value?.success) {
-                setLocations(locResult.value.locations || []);
-            } else if (locResult.status === 'rejected') {
-                errors.push(locResult.reason?.response?.data?.message || locResult.reason?.message || 'Locations unavailable');
-            }
-
-            if (sumResult.status === 'rejected' && locResult.status === 'rejected') {
-                setError(`Unable to load laboratory administration metrics (${errors.join('; ')}).`);
+            const res = await labAPI.getDashboardSummary();
+            if (res?.success && res.summary) {
+                setLocalSummary(res.summary);
+                setCurrentDate(new Date());
             }
         } catch (err) {
-            console.error('Failed to load lab admin data:', err);
-            setError(err?.response?.data?.message || err?.message || 'Unable to load laboratory administration metrics.');
+            setLocalError(err?.response?.data?.message || err?.message || 'Unable to load laboratory dashboard summary.');
         } finally {
-            setLoading(false);
+            setLocalLoading(false);
+            setLocalRefreshing(false);
         }
-    };
+    }, [shellCtx]);
 
     useEffect(() => {
-        loadData();
-    }, []);
+        if (!shellCtx) {
+            loadStandaloneSummary(false);
+        }
+    }, [shellCtx, loadStandaloneSummary]);
 
+    const summary = shellCtx ? shellCtx.summary : localSummary;
+    const loading = shellCtx ? shellCtx.loading : localLoading;
+    const refreshing = shellCtx ? shellCtx.refreshing : localRefreshing;
+    const error = shellCtx ? shellCtx.error : localError;
+
+    const userName = user?.name || 'Administrator';
+    const actualHospitalName = (brandingHospitalName && brandingHospitalName !== 'Medical 365')
+        ? brandingHospitalName
+        : (summary?.hospitalName || brandingHospitalName || 'Medical 365');
+
+    // Real License Check (only renders banner if actual licensing state explicitly reports UNLICENSED)
+    const licenseStatus = summary?.license?.status || user?.licenseStatus || null;
+    const isUnlicensedReadOnly = licenseStatus === 'UNLICENSED' || user?.isReadOnlyUnlicensed === true;
+
+    // 4 Live Today's Lab Orders Summary KPIs
+    const todaySummary = summary?.todaySummary || {};
     const metrics = summary?.metrics || {};
 
-    // Calculate sanitized location & operational metrics
-    const totalLocations = locations.length || metrics.totalLocations || metrics.locationsCount || 0;
-    const processingCount = locations.filter(l => l.isProcessingLab).length || (totalLocations > 0 ? 1 : 0);
-    const collectionCount = Math.max(0, totalLocations - processingCount);
-    const totalStaff = metrics.totalStaffCount || metrics.totalStaff || 7;
-    const pendingOrders = metrics.pendingRequests || metrics.pendingOrders || 0;
-    const completedReports = metrics.completedReports || 0;
-    const totalRevenue = metrics.totalRevenue || 0;
+    const todayTotalOrders = todaySummary.todayTotalOrders ?? metrics.todayTotalOrders ?? 0;
+    const todayPendingOrders = todaySummary.todayPendingOrders ?? metrics.todayPendingOrders ?? 0;
+    const todaySamplesCollected = todaySummary.todaySamplesCollected ?? metrics.todaySamplesCollected ?? 0;
+    const todayReportsReleased = todaySummary.todayReportsReleased ?? metrics.todayReportsReleased ?? 0;
+
+    // Comprehensive Live Overview Data (Strictly operational — no Staff metrics)
+    const ov = summary?.overview || {};
+    const ordersOv = ov.orders || {};
+    const patientsOv = ov.patients || {};
+    const collectionOv = ov.sampleCollection || {};
+    const processingOv = ov.sampleProcessing || {};
+    const verificationOv = ov.verification || {};
+    const reportsOv = ov.reportsAndCatalog || {};
+    const dailyOv = ov.dailyOperations || {};
 
     return (
-        <LabLayout
-            title="Laboratory Administration"
-            subtitle={`${summary?.labName || 'Central Lab'} — Operational Governance & Infrastructure`}
-        >
-            {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
-                    <FiRefreshCw className="spin" style={{ fontSize: '32px', marginBottom: '12px' }} />
-                    <p>Loading laboratory administrative data...</p>
+        <div className="lad-page">
+            {/* Conditional Real License Status Banner (never hardcoded as unlicensed) */}
+            {isUnlicensedReadOnly && (
+                <div className="lad-license-banner" role="status">
+                    <div className="lad-license-left">
+                        <FiShield size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <div>
+                            <strong>Medical365 Local Edition: UNLICENSED (Read-Only Mode)</strong>{' '}
+                            Patient and diagnostic records remain fully accessible for view and printing. Write operations require activation.
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="lad-license-activate-btn"
+                        onClick={() => navigate('/hospitaladmin/local-sync')}
+                    >
+                        Activate License
+                    </button>
                 </div>
-            ) : error ? (
-                <div className="lab-card" style={{ borderLeft: '4px solid #ef4444', color: '#b91c1c' }}>
-                    <FiAlertTriangle style={{ marginRight: '8px' }} />
-                    {error}
-                    <button onClick={loadData} className="lab-btn lab-btn-secondary" style={{ marginLeft: '16px' }}>
+            )}
+
+            {/* Error Alert if API fails */}
+            {error && (
+                <div className="lad-error-banner">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FiAlertTriangle size={16} />
+                        <span>{error}</span>
+                    </div>
+                    <button type="button" className="lad-refresh-btn" onClick={() => loadStandaloneSummary(true)}>
                         Retry
                     </button>
                 </div>
-            ) : (
-                <>
-                    {/* 1. Top KPI Metric Cards (Responsive Grid) */}
-                    <div className="lab-stats-grid">
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                                <FiMapPin />
-                            </div>
-                            <div className="lab-stat-val">{totalLocations}</div>
-                            <div className="lab-stat-lbl">Active Locations</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-                                {processingCount} Processing Hub, {collectionCount} Collection Centers
-                            </div>
-                        </div>
+            )}
 
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                                <FiUsers />
-                            </div>
-                            <div className="lab-stat-val">{totalStaff}</div>
-                            <div className="lab-stat-lbl">Laboratory Staff</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-                                Across 7 clinical tiers
-                            </div>
-                        </div>
+            {/* 1. Welcome Card */}
+            <section className="lad-welcome-card">
+                <div className="lad-welcome-left">
+                    <div className="lad-greeting-row">
+                        <h2 className="lad-greeting-heading">
+                            {getTimeGreeting()}, <span className="lad-greeting-user">{userName}!</span>
+                            <span className="lad-wave-emoji" role="img" aria-label="wave">👋</span>
+                        </h2>
+                        <span className="lad-role-pill">Laboratory Administrator</span>
+                    </div>
+                    <p className="lad-welcome-sub">
+                        Welcome back to <strong>{actualHospitalName}</strong>. Here is your live laboratory overview and operational summary today.
+                    </p>
+                </div>
 
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#fffbeb', color: '#d97706' }}>
+                <div className="lad-welcome-right">
+                    <div className="lad-date-pill">
+                        <FiCalendar size={13} />
+                        <span>{formatBannerDate(currentDate)}</span>
+                    </div>
+                    <button
+                        type="button"
+                        className="lad-refresh-btn"
+                        onClick={() => loadStandaloneSummary(true)}
+                        disabled={loading || refreshing}
+                    >
+                        <FiRefreshCw size={14} className={(loading || refreshing) ? 'lad-spin' : ''} />
+                        <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+                    </button>
+                </div>
+            </section>
+
+            {/* 2. Today's Lab Orders Summary (4 Live Cards) */}
+            <section className="lad-summary-section">
+                <div className="lad-section-heading-row">
+                    <span className="lad-section-heading-icon">
+                        <FiClipboard />
+                    </span>
+                    <h3 className="lad-section-heading">Today&apos;s Lab Orders Summary</h3>
+                </div>
+
+                <div className="lad-kpi-grid">
+                    {/* Card 1: Today's Total Orders */}
+                    <div className="lad-kpi-card">
+                        <div className="lad-kpi-top">
+                            <span className="lad-kpi-title">Today&apos;s Total Orders</span>
+                            <span className="lad-kpi-icon-badge lad-kpi-icon-blue">
+                                <FiClipboard />
+                            </span>
+                        </div>
+                        <div className="lad-kpi-value lad-val-blue">
+                            {loading ? <span className="lad-skeleton-val" /> : todayTotalOrders}
+                        </div>
+                        <div className="lad-kpi-desc">Requisitions logged today</div>
+                    </div>
+
+                    {/* Card 2: Pending Orders */}
+                    <div className="lad-kpi-card">
+                        <div className="lad-kpi-top">
+                            <span className="lad-kpi-title">Pending Orders</span>
+                            <span className="lad-kpi-icon-badge lad-kpi-icon-amber">
                                 <FiClock />
-                            </div>
-                            <div className="lab-stat-val">{pendingOrders}</div>
-                            <div className="lab-stat-lbl">Active Lab Orders</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-                                {metrics.awaitingVerification || metrics.pendingVerification || 0} awaiting sign-off
-                            </div>
+                            </span>
                         </div>
+                        <div className="lad-kpi-value lad-val-amber">
+                            {loading ? <span className="lad-skeleton-val" /> : todayPendingOrders}
+                        </div>
+                        <div className="lad-kpi-desc">Ordered / in progress today</div>
+                    </div>
 
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#faf5ff', color: '#9333ea' }}>
+                    {/* Card 3: Samples Collected */}
+                    <div className="lad-kpi-card">
+                        <div className="lad-kpi-top">
+                            <span className="lad-kpi-title">Samples Collected</span>
+                            <span className="lad-kpi-icon-badge lad-kpi-icon-teal">
+                                <ConicalFlaskIcon size={17} />
+                            </span>
+                        </div>
+                        <div className="lad-kpi-value lad-val-teal">
+                            {loading ? <span className="lad-skeleton-val" /> : todaySamplesCollected}
+                        </div>
+                        <div className="lad-kpi-desc">Specimens drawn today</div>
+                    </div>
+
+                    {/* Card 4: Reports Released */}
+                    <div className="lad-kpi-card">
+                        <div className="lad-kpi-top">
+                            <span className="lad-kpi-title">Reports Released</span>
+                            <span className="lad-kpi-icon-badge lad-kpi-icon-green">
                                 <FiCheckCircle />
-                            </div>
-                            <div className="lab-stat-val">{completedReports}</div>
-                            <div className="lab-stat-lbl">Completed Reports</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-                                Total verified records
-                            </div>
+                            </span>
                         </div>
-
-                        <div className="lab-stat-card">
-                            <div className="lab-stat-icon" style={{ background: '#ecfdf5', color: '#059669' }}>
-                                <FiDollarSign />
-                            </div>
-                            <div className="lab-stat-val">₹{(totalRevenue || 0).toLocaleString()}</div>
-                            <div className="lab-stat-lbl">Laboratory Revenue</div>
-                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-                                Billed tests &amp; packages
-                            </div>
+                        <div className="lad-kpi-value lad-val-green">
+                            {loading ? <span className="lad-skeleton-val" /> : todayReportsReleased}
                         </div>
+                        <div className="lad-kpi-desc">Diagnostic releases today</div>
                     </div>
+                </div>
+            </section>
 
-                    {/* 2. Workstations & Operational Portals (Open Grid of Cards) */}
-                    <div className="lab-card">
-                        <div className="lab-card-header">
-                            <div>
-                                <h3 className="lab-card-title">Workstations &amp; Department Portals</h3>
-                                <p className="lab-card-subtitle">One-click jump into any clinical station or specialized department</p>
-                            </div>
+            {/* 3. View All Overview — Pull-Down Section */}
+            <section className="lad-overview-panel">
+                <button
+                    type="button"
+                    className="lad-overview-trigger"
+                    onClick={() => setOverviewExpanded((prev) => !prev)}
+                    aria-expanded={overviewExpanded}
+                >
+                    <div className="lad-overview-left">
+                        <div className="lad-overview-grid-badge">
+                            <FiGrid />
                         </div>
-                        <div className="lab-station-grid">
-                            <div
-                                onClick={() => navigate('/lab/manager')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#eff6ff', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiActivity />
-                                    </div>
-                                    Manager Desk
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>TAT &amp; Quality monitoring</div>
-                            </div>
-
-                            <div
-                                onClick={() => navigate('/lab/reception')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiUsers />
-                                    </div>
-                                    Reception Intake
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Patient registration &amp; orders</div>
-                            </div>
-
-                            <div
-                                onClick={() => navigate('/lab/collection')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiLayers />
-                                    </div>
-                                    Phlebotomy
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Sample drawing &amp; barcoding</div>
-                            </div>
-
-                            <div
-                                onClick={() => navigate('/lab/bench')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#f0fdfa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiCpu />
-                                    </div>
-                                    Tech Bench
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Analyzer test execution</div>
-                            </div>
-
-                            <div
-                                onClick={() => navigate('/lab/verification')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#faf5ff', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiCheckCircle />
-                                    </div>
-                                    Pathologist Review
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Result sign-off &amp; approvals</div>
-                            </div>
-
-                            <div
-                                onClick={() => navigate('/lab/billing')}
-                                className="lab-station-card"
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                                    <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#f0fdf4', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
-                                        <FiDollarSign />
-                                    </div>
-                                    Lab Billing
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>Invoicing &amp; collections</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 3. Laboratory Locations & Role Matrix Split (Side by Side) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                        {/* Locations Summary Card */}
-                        <div className="lab-card" style={{ marginBottom: 0 }}>
-                            <div className="lab-card-header">
-                                <div>
-                                    <h3 className="lab-card-title">Laboratory Locations</h3>
-                                    <p className="lab-card-subtitle">Hubs &amp; collection centres for this tenant</p>
-                                </div>
-                                <button
-                                    className="lab-btn lab-btn-secondary"
-                                    onClick={() => navigate('/lab/locations')}
-                                    style={{ fontSize: '12px', padding: '6px 12px' }}
-                                >
-                                    Manage <FiArrowRight style={{ marginLeft: '4px' }} />
-                                </button>
-                            </div>
-
-                            {locations.length === 0 ? (
-                                <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-                                    <FiMapPin style={{ fontSize: '26px', color: '#94a3b8', marginBottom: '8px' }} />
-                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 10px' }}>No laboratory locations active yet.</p>
-                                    <button className="lab-btn lab-btn-secondary" onClick={() => navigate('/lab/locations')}>
-                                        <FiPlus style={{ marginRight: '4px' }} /> Configure Location
-                                    </button>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    {locations.slice(0, 5).map(loc => (
-                                        <div
-                                            key={loc._id}
-                                            style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                padding: '12px 14px',
-                                                background: '#f8fafc',
-                                                borderRadius: '8px',
-                                                border: '1px solid #e2e8f0'
-                                            }}
-                                        >
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#0f172a' }}>
-                                                    {loc.locationName}
-                                                </div>
-                                                <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
-                                                    Code: <strong>{loc.locationCode}</strong> • {typeof loc.address === 'string' ? (loc.address || 'Main Campus') : (loc.address?.city || 'Main Campus')}
-                                                </div>
-                                            </div>
-                                            <span className={`lab-badge ${loc.isProcessingLab ? 'badge-primary' : 'badge-neutral'}`}>
-                                                {loc.locationType}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Governance & Compliance Overview Card */}
-                        <div className="lab-card" style={{ marginBottom: 0 }}>
-                            <div className="lab-card-header">
-                                <div>
-                                    <h3 className="lab-card-title">Role &amp; Access Matrix</h3>
-                                    <p className="lab-card-subtitle">RBAC configuration across 7 clinical tiers</p>
-                                </div>
-                                <span className="lab-badge badge-success">
-                                    <FiShield style={{ marginRight: '4px' }} /> Active
+                        <div>
+                            <div className="lad-overview-title-row">
+                                <span className="lad-overview-title">View All Overview</span>
+                                <span className="lad-overview-hint-pill">
+                                    {overviewExpanded ? 'Expanded View' : 'Pull Down to View'}
                                 </span>
                             </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                    <span>🔬 <strong>Pathologist</strong> (Result Sign-off)</span>
-                                    <span style={{ color: '#6d28d9', fontWeight: 600, background: '#f5f3ff', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>results:verify</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                    <span>🧪 <strong>Lab Technician</strong> (Analyzer Worklist)</span>
-                                    <span style={{ color: '#0f766e', fontWeight: 600, background: '#f0fdfa', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>results:entry</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                    <span>🩸 <strong>Phlebotomist</strong> (Sample Collection)</span>
-                                    <span style={{ color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>samples:collect</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                    <span>💁 <strong>Lab Receptionist</strong> (Registration)</span>
-                                    <span style={{ color: '#0284c7', fontWeight: 600, background: '#f0f9ff', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>orders:create</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                                    <span>💳 <strong>Lab Accountant</strong> (Invoicing &amp; Fees)</span>
-                                    <span style={{ color: '#16a34a', fontWeight: 600, background: '#f0fdf4', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>billing:collect</span>
-                                </div>
+                            <div className="lad-overview-sub">
+                                Click to pull down and inspect full patient, specimen &amp; laboratory metrics
                             </div>
                         </div>
                     </div>
 
-                    {/* 4. Recent Clinical Orders & Reports Table */}
-                    <div className="lab-card">
-                        <div className="lab-card-header">
-                            <div>
-                                <h3 className="lab-card-title">Recent Laboratory Activity</h3>
-                                <p className="lab-card-subtitle">Orders, specimen status and reports in this hospital</p>
-                            </div>
-                            <button
-                                className="lab-btn lab-btn-secondary"
-                                onClick={() => navigate('/lab/orders')}
-                                style={{ fontSize: '12px', padding: '6px 12px' }}
-                            >
-                                All Orders <FiArrowRight style={{ marginLeft: '4px' }} />
-                            </button>
-                        </div>
+                    <span className="lad-pulldown-btn">
+                        <span>{overviewExpanded ? 'Collapse' : 'Pull Down'}</span>
+                        <FiChevronDown size={15} className={`lad-chevron ${overviewExpanded ? 'expanded' : ''}`} />
+                    </span>
+                </button>
 
-                        <div className="lab-table-container">
-                            <table className="lab-table">
-                                <thead>
-                                    <tr>
-                                        <th>Patient</th>
-                                        <th>Referring Doctor</th>
-                                        <th>Tests / Panel</th>
-                                        <th>Report Status</th>
-                                        <th>Payment</th>
-                                        <th>Amount</th>
-                                        <th>Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {summary?.recentActivity && summary.recentActivity.length > 0 ? (
-                                        summary.recentActivity.map(act => (
-                                            <tr key={act.id}>
-                                                <td>
-                                                    <strong>{act.patientName}</strong>
-                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>MRN: {act.patientId}</div>
-                                                </td>
-                                                <td>{act.doctorName}</td>
-                                                <td>
-                                                    {act.testNames?.length > 0
-                                                        ? act.testNames.join(', ')
-                                                        : 'General Lab Investigation'}
-                                                </td>
-                                                <td>
-                                                    <span className={`lab-badge ${act.reportStatus === 'Completed' || act.reportStatus === 'RELEASED' ? 'badge-success' : 'badge-warning'}`}>
-                                                        {act.reportStatus}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className={`lab-badge ${act.paymentStatus === 'Paid' || act.paymentStatus === 'PAID' ? 'badge-success' : 'badge-danger'}`}>
-                                                        {act.paymentStatus}
-                                                    </span>
-                                                </td>
-                                                <td>₹{(act.amount || 0).toLocaleString()}</td>
-                                                <td style={{ fontSize: '12px', color: '#64748b' }}>
-                                                    {act.createdAt ? new Date(act.createdAt).toLocaleDateString() : 'Today'}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
-                                                No active orders found for this laboratory.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                <div className={`lad-overview-collapse ${overviewExpanded ? 'open' : ''}`}>
+                    <div className="lad-overview-collapse-inner">
+                        <div className="lad-overview-body">
+                            {/* 1. Total Orders Overview */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiClipboard color="#2563eb" /> Total Orders Overview
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/orders')}>
+                                        Orders <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{ordersOv.total ?? metrics.totalOrders ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Total Requisitions</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{(ordersOv.confirmed ?? 0) + (ordersOv.inProgress ?? 0)}</div>
+                                        <div className="lad-ov-metric-lbl">Active / In Progress</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{ordersOv.completed ?? metrics.completedReports ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Completed Orders</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{ordersOv.statUrgent ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">STAT / Urgent Active</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Patient Overview */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiUsers color="#0284c7" /> Patient Overview
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/orders')}>
+                                        Orders <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{patientsOv.totalServed ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Total Patients Served</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{patientsOv.registeredToday ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Patients Seen Today</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{patientsOv.walkInOrders ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Walk-in Requisitions</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{patientsOv.homeAndCentreOrders ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Home / Centre Intake</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. Sample Collection Overview */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <ConicalFlaskIcon size={15} /> Sample Collection
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/collection')}>
+                                        Phlebotomy <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{collectionOv.pendingCollection ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Pending Draw</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{collectionOv.collectedTotal ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Total Specimens Drawn</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{collectionOv.rejectedSamples ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Rejected Specimens</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{collectionOv.recollectionPending ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Recollection Queue</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4. Sample Processing Overview */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiCpu color="#0d9488" /> Sample Processing
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/bench')}>
+                                        Bench <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{processingOv.accessionPending ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Awaiting Accession</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{processingOv.acceptedReady ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Accepted for Bench</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{processingOv.inAnalyzer ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">In Analyzer Run</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{processingOv.processingCompleted ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Bench Completed</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 5. Pending Verification & Results */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiCheckCircle color="#7c3aed" /> Verification Queue
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/results/verification')}>
+                                        Review <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{verificationOv.pendingEntry ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Pending Result Entry</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{verificationOv.awaitingVerification ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Pending Sign-Off</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{verificationOv.verifiedResults ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Verified Test Results</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{verificationOv.criticalAlertsOpen ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Open Critical Alerts</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 6. Completed Reports & Test Catalogue */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiFileText color="#16a34a" /> Reports &amp; Catalogue
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/reports')}>
+                                        Reports <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{reportsOv.releasedTotal ?? metrics.completedReports ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Completed Reports</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{reportsOv.pendingReviewReports ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Awaiting Release</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{reportsOv.activeTests ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Active Lab Tests</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{reportsOv.activePackages ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Diagnostic Packages</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 7. Daily Operational Statistics */}
+                            <div className="lad-ov-card">
+                                <div className="lad-ov-card-head">
+                                    <span className="lad-ov-card-title">
+                                        <FiActivity color="#0284c7" /> Daily Operational Stats
+                                    </span>
+                                    <button type="button" className="lad-ov-link-btn" onClick={() => navigate('/lab/billing')}>
+                                        Ledger <FiArrowRight size={12} />
+                                    </button>
+                                </div>
+                                <div className="lad-ov-metrics-list">
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{formatCurrencyINR(dailyOv.todayBilledAmount ?? 0)}</div>
+                                        <div className="lad-ov-metric-lbl">Billed Today</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{formatCurrencyINR(dailyOv.todayCollectedAmount ?? 0)}</div>
+                                        <div className="lad-ov-metric-lbl">Collected Today</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{formatCurrencyINR(dailyOv.totalCollectedRevenue ?? metrics.totalRevenue ?? 0)}</div>
+                                        <div className="lad-ov-metric-lbl">Cumulative Collections</div>
+                                    </div>
+                                    <div className="lad-ov-metric-box">
+                                        <div className="lad-ov-metric-val">{dailyOv.activeLocations ?? metrics.totalLocations ?? 0}</div>
+                                        <div className="lad-ov-metric-lbl">Active Lab Centres</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </>
-            )}
-        </LabLayout>
+                </div>
+            </section>
+
+            {/* 4. Laboratory Specimen Pipeline (Live Stage Flow) */}
+            <section className="lad-pipeline-card">
+                <div className="lad-pipeline-header">
+                    <div className="lad-pipeline-title-wrap">
+                        <span className="lad-section-heading-icon">
+                            <ConicalFlaskIcon size={17} />
+                        </span>
+                        <h3 className="lad-section-heading">Laboratory Specimen Pipeline</h3>
+                    </div>
+                    <span className="lad-pipeline-sub">Real-time specimen progression across clinical stages</span>
+                </div>
+
+                <div className="lad-pipeline-grid">
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (collectionOv.pendingCollection ?? 0)}</span>
+                        <span className="lad-stage-label">Pending Collection</span>
+                        <span className="lad-stage-desc">Awaiting tube draw</span>
+                    </div>
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (processingOv.accessionPending ?? 0)}</span>
+                        <span className="lad-stage-label">Accession Queue</span>
+                        <span className="lad-stage-desc">Drawn &amp; barcoded</span>
+                    </div>
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (processingOv.acceptedReady ?? 0)}</span>
+                        <span className="lad-stage-label">Accepted at Hub</span>
+                        <span className="lad-stage-desc">Ready for bench</span>
+                    </div>
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (processingOv.inAnalyzer ?? 0)}</span>
+                        <span className="lad-stage-label">In Processing</span>
+                        <span className="lad-stage-desc">Active analyzer run</span>
+                    </div>
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (verificationOv.awaitingVerification ?? 0)}</span>
+                        <span className="lad-stage-label">Pending Verification</span>
+                        <span className="lad-stage-desc">Pathologist review</span>
+                    </div>
+                    <div className="lad-stage-item">
+                        <span className="lad-stage-count">{loading ? '—' : (reportsOv.releasedTotal ?? metrics.completedReports ?? 0)}</span>
+                        <span className="lad-stage-label">Reports Released</span>
+                        <span className="lad-stage-desc">Finalized &amp; delivered</span>
+                    </div>
+                </div>
+            </section>
+        </div>
     );
 };
 

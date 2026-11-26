@@ -52,6 +52,7 @@ export default function LocalSync() {
     const [rebuildingDb, setRebuildingDb] = useState(false);
     const [showRebuildModal, setShowRebuildModal] = useState(false);
     const [rebuildConfirmText, setRebuildConfirmText] = useState('');
+    const [syncActionAlert, setSyncActionAlert] = useState(null);
 
     const loadStatus = async (silent = false) => {
         if (!silent) setLoading(true);
@@ -59,10 +60,13 @@ export default function LocalSync() {
             const res = await localAgentAPI.getStatus();
             if (res.success) {
                 setStatusData(res);
+                if (!silent) setSyncActionAlert(null);
             }
         } catch (err) {
+            const errMsg = err.response?.data?.message || 'Failed to load local agent status. Verify server connectivity.';
             if (!silent) {
-                toast.error(err.response?.data?.message || 'Failed to load local agent status.');
+                setSyncActionAlert({ type: 'error', title: 'Sync Status Unavailable', message: errMsg });
+                toast.error(errMsg);
             }
         } finally {
             if (!silent) setLoading(false);
@@ -295,13 +299,19 @@ export default function LocalSync() {
         try {
             const res = await localAgentAPI.testConnection();
             if (res.success) {
-                toast.success(`Local Database is ${res.dbStatus}! Latency: ${res.latencyMs || 0}ms`);
+                const msg = `Local Database is ${res.dbStatus}! Latency: ${res.latencyMs || 0}ms`;
+                setSyncActionAlert({ type: 'success', title: 'Local Database Test Passed', message: msg });
+                toast.success(msg);
             } else {
-                toast.error(res.message || 'Local Database test failed.');
+                const msg = res.message || 'Local Database test failed. Ensure Hospital Local MongoDB is running on port 27017 and the Local Agent is paired.';
+                setSyncActionAlert({ type: 'error', title: 'Local Database Disconnected', message: msg });
+                toast.error(msg);
             }
             loadStatus(true);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to test local database.');
+            const msg = err.response?.data?.message || 'Failed to test local database. Local Agent may be unconfigured or offline.';
+            setSyncActionAlert({ type: 'error', title: 'Local Database Test Failed', message: msg });
+            toast.error(msg);
         } finally {
             setTestingDb(false);
         }
@@ -312,13 +322,19 @@ export default function LocalSync() {
         try {
             const res = await localAgentAPI.testConnection();
             if (res.success) {
-                toast.success(`Cloud Connection is active! Status: ${res.status}`);
+                const msg = `Cloud Connection is active! Status: ${res.status}`;
+                setSyncActionAlert({ type: 'success', title: 'Cloud Telemetry Active', message: msg });
+                toast.success(msg);
             } else {
-                toast.error(res.message || 'Cloud Connection test failed.');
+                const msg = res.message || 'Cloud Connection test failed. Verify outbound HTTPS connectivity and Local Agent pairing.';
+                setSyncActionAlert({ type: 'error', title: 'Cloud Connection Unavailable', message: msg });
+                toast.error(msg);
             }
             loadStatus(true);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to test cloud connection.');
+            const msg = err.response?.data?.message || 'Failed to test cloud connection. Local Agent is not connected.';
+            setSyncActionAlert({ type: 'error', title: 'Cloud Connection Test Failed', message: msg });
+            toast.error(msg);
         } finally {
             setTestingCloud(false);
         }
@@ -330,11 +346,16 @@ export default function LocalSync() {
             if (res.success) {
                 setProvisionData(res);
                 setShowPairModal(true);
+                setSyncActionAlert(null);
             } else {
-                toast.error(res.message || 'Failed to generate pairing token.');
+                const msg = res.message || 'Failed to generate pairing token.';
+                setSyncActionAlert({ type: 'error', title: 'Pairing Token Error', message: msg });
+                toast.error(msg);
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Error provisioning agent.');
+            const msg = err.response?.data?.message || 'Error provisioning agent.';
+            setSyncActionAlert({ type: 'error', title: 'Pairing Provision Error', message: msg });
+            toast.error(msg);
         }
     };
 
@@ -448,7 +469,7 @@ export default function LocalSync() {
                         Manage your hospital-local server infrastructure for high-availability offline capability.
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div className="local-sync-header-actions" style={{ display: 'flex', gap: '10px' }}>
                     <button className="btn-secondary" onClick={() => loadStatus()} disabled={loading}>
                         <FiRefreshCw className={loading ? 'spin' : ''} /> Refresh
                     </button>
@@ -463,6 +484,34 @@ export default function LocalSync() {
                     )}
                 </div>
             </div>
+
+            {syncActionAlert && (
+                <div className={`local-sync-diagnostic-banner ${syncActionAlert.type}`} role="alert">
+                    <div className="local-sync-diagnostic-body">
+                        {syncActionAlert.type === 'success' ? <FiCheckCircle /> : <FiAlertCircle />}
+                        <div>
+                            <strong>{syncActionAlert.title}:</strong> {syncActionAlert.message}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="local-sync-diagnostic-close"
+                        onClick={() => setSyncActionAlert(null)}
+                        aria-label="Dismiss diagnostic message"
+                    >
+                        <FiX />
+                    </button>
+                </div>
+            )}
+
+            {!loading && statusData && !statusData.configured && (
+                <div className="local-sync-unconfigured-banner" role="status">
+                    <FiInfo className="local-sync-unconfigured-icon" />
+                    <div>
+                        <strong>Local Agent Not Configured:</strong> No hospital-local sync daemon is paired yet. Click <strong>Pair Local Agent</strong> above to provision your local server when ready.
+                    </div>
+                </div>
+            )}
 
             {/* Phase 4 Offline Warning Banner (Non-Blocking) */}
             {statusData?.cloudConnection !== 'CONNECTED' && (

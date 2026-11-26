@@ -5,7 +5,7 @@ import { useAuth } from '../../store/hooks';
 export const getWorkstationPathForRole = (role) => {
     const r = String(role || '').toLowerCase();
     if (r.includes('pathologist')) return '/lab/verification';
-    if (r.includes('phlebotomist') || r.includes('sample collector')) return '/lab/collection';
+    if (r.includes('phlebotomist') || r.includes('sample collector') || r === 'sample collection') return '/lab/collection';
     if (r.includes('technician') || r.includes('tech')) return '/lab/bench';
     if (r.includes('receptionist') || r.includes('reception')) return '/lab/reception';
     if (r.includes('accountant')) return '/lab/billing';

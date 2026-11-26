@@ -2062,5 +2062,105 @@
 .ipd-pill-tag.stat { background: #e0e7ff; color: #3730a3; }
 .ipd-pill-tag.iv { background: #e0f2fe; color: #0369a1; }
 
+/* ============================================================
+   TABLET-ONLY RESPONSIVE FIXES (768px–1366px)
+   Bugs 05 (Discharge Follow-Up), 06 (Observation Date/Time), 08 (IPD Status Card)
+   ============================================================ */
+@media (min-width: 768px) and (max-width: 1366px) {
+    .ipd-orders-panel {
+        padding: 18px 20px;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+    }
+
+    /* Bug 08: Keep IPD header banner & right-side Admission Status Card 100% visible */
+    .ipd-header-banner {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        overflow: visible;
+    }
+
+    .ipd-banner-right {
+        width: 100%;
+        max-width: 100%;
+        flex: 1 1 100%;
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    .ipd-banner-actions-wrap {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px !important;
+    }
+
+    .ipd-status-card {
+        max-width: 100%;
+        box-sizing: border-box;
+        flex-wrap: wrap;
+        margin-left: auto;
+    }
+
+    .ipd-status-location-row {
+        flex-wrap: wrap;
+    }
+
+    /* Bug 06: Clear, readable, touch-friendly Observation Date & Time layout */
+    .ipd-progress-form-grid {
+        grid-template-columns: minmax(220px, 1.3fr) minmax(95px, 130px);
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .ipd-progress-form-grid > div:nth-child(3) {
+        grid-column: 1 / -1;
+    }
+
+    .ipd-progress-form-grid > .ipd-btn-save-note {
+        grid-column: 1 / -1;
+        justify-self: flex-end;
+        min-height: 42px;
+    }
+
+    .ipd-obs-datetime-input {
+        background-color: #ffffff;
+        color: #0f172a;
+        font-weight: 600;
+        min-height: 42px;
+        opacity: 1;
+        -webkit-text-fill-color: #0f172a;
+    }
+
+    /* Bug 05: Full-width readable Follow-Up & Dietary Instructions on tablet */
+    .ipd-discharge-followup-grid {
+        grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+    }
+
+    .ipd-followup-instructions-input {
+        width: 100%;
+        min-height: 58px;
+        line-height: 1.45;
+        resize: vertical;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        box-sizing: border-box;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 960px) {
+    .ipd-discharge-followup-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
 
 

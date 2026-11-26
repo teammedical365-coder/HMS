@@ -11,7 +11,7 @@ export const getLabRoleDashboardPath = (roleName) => {
     if (raw.includes('admin')) return '/lab/dashboard';
     if (raw.includes('manager')) return '/lab/manager';
     if (raw.includes('reception')) return '/lab/reception';
-    if (raw.includes('phlebotomist') || raw.includes('sample collector')) return '/lab/collection';
+    if (raw.includes('phlebotomist') || raw.includes('sample collector') || raw === 'sample collection') return '/lab/collection';
     if (raw.includes('technician') || raw.includes('tech')) return '/lab/bench';
     if (raw.includes('pathologist')) return '/lab/verification';
     if (raw.includes('accountant')) return '/lab/billing';
@@ -46,7 +46,9 @@ const LabProtectedRoute = ({ children, allowedRoles = [], requiredPermissions = 
         roleName.includes('lab') ||
         roleName.includes('pathologist') ||
         roleName.includes('phlebotomist') ||
-        roleName.includes('sample collector')
+        roleName.includes('sample collector') ||
+        roleName === 'sample collection' ||
+        roleName === 'technician'
     );
 
     // If not a lab staff or hospital/central admin, redirect to general home

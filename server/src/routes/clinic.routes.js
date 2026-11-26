@@ -978,8 +978,27 @@ router.put('/appointments/:id/complete', verifyClinicStaff, async (req, res) => 
             );
         }
 
-        // Note: clinic module does not manage pharmacy orders or billing.
-        // Prescribed medicines are stored on the appointment for prescription records only.
+        // Sync prescribed lab investigations to LMS Sample Collection Queue if any tests were prescribed
+        if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
+            try {
+                const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                await syncPrescribedTestsToLmsOrder({
+                    hospitalId: appt.hospitalId || hid(req),
+                    appointmentId: appt._id,
+                    userId: appt.userId,
+                    patientId: appt.patientId,
+                    clinicPatientId: appt.clinicPatientId || null,
+                    doctorId: appt.doctorId || req.user?._id,
+                    doctorName: appt.doctorName || req.user?.name || '',
+                    labTests: appt.labTests,
+                    sourceModule: 'HMS_DOCTOR',
+                    notes: appt.diagnosis ? `Diagnosis: ${appt.diagnosis}` : '',
+                    actorId: req.user?._id || req.user?.id
+                });
+            } catch (syncErr) {
+                console.error('[clinic complete -> LMS sync error]:', syncErr.message);
+            }
+        }
 
         res.json({ success: true, appointment: appt, message: 'Appointment completed' });
     } catch (err) {
@@ -1013,6 +1032,27 @@ router.put('/appointments/:id/update-consultation', verifyClinicStaff, async (re
         if (amount !== undefined) appt.amount = amount;
 
         await appt.save();
+
+        if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
+            try {
+                const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                await syncPrescribedTestsToLmsOrder({
+                    hospitalId: appt.hospitalId || hid(req),
+                    appointmentId: appt._id,
+                    userId: appt.userId,
+                    patientId: appt.patientId,
+                    clinicPatientId: appt.clinicPatientId || null,
+                    doctorId: appt.doctorId || req.user?._id,
+                    doctorName: appt.doctorName || req.user?.name || '',
+                    labTests: appt.labTests,
+                    sourceModule: 'HMS_DOCTOR',
+                    notes: appt.diagnosis ? `Diagnosis: ${appt.diagnosis}` : '',
+                    actorId: req.user?._id || req.user?.id
+                });
+            } catch (syncErr) {
+                console.error('[clinic update-consultation -> LMS sync error]:', syncErr.message);
+            }
+        }
 
         // Sync vitals to ClinicPatient document if clinicPatientId is set
         if (vitals && typeof vitals === 'object' && appt.clinicPatientId) {

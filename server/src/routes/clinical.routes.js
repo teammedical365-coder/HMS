@@ -160,6 +160,27 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
                 });
                 await labReport.save();
 
+                // Synchronize prescribed investigations into Phase 4 LMS LabOrder + Sample Collection Queue
+                try {
+                    const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                    await syncPrescribedTestsToLmsOrder({
+                        hospitalId: req.user.hospitalId || visit.hospitalId,
+                        appointmentId: visit.appointmentId || null,
+                        clinicalVisitId: visit._id,
+                        legacyLabReportId: labReport._id,
+                        userId: visit.patientId,
+                        patientId: visit.patientId ? visit.patientId.toString() : null,
+                        doctorId: req.user.id || req.user._id,
+                        doctorName: req.user.name || '',
+                        labTests,
+                        sourceModule: 'HMS_DOCTOR',
+                        notes: diagnosis ? `Diagnosis: ${diagnosis}` : '',
+                        actorId: req.user.id || req.user._id
+                    });
+                } catch (lmsSyncErr) {
+                    console.error('[clinical diagnose -> LMS sync error]:', lmsSyncErr.message);
+                }
+
                 const notif = new Notification({
                     senderId: req.user.id,
                     recipientRole: 'lab',

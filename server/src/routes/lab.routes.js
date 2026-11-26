@@ -559,84 +559,387 @@ router.post('/users/:userId/location', verifyToken, verifyLab, async (req, res) 
 });
 
 // ============================================================================
-// 7. COMPREHENSIVE ROLE-SCOPED DASHBOARD SUMMARY API
+// 7. COMPREHENSIVE ROLE-SCOPED DASHBOARD SUMMARY & LIVE SEARCH API
 // ============================================================================
+
+const LabOrder = require('../models/labOrder.model');
+const LabSample = require('../models/labSample.model');
+const LabTestResult = require('../models/labTestResult.model');
+const LabInvoice = require('../models/labInvoice.model');
+const LabPayment = require('../models/labPayment.model');
+const LabCriticalAlert = require('../models/labCriticalAlert.model');
+const LabTest = require('../models/labTest.model');
+const TestPackage = require('../models/testPackage.model');
 
 router.get('/dashboard/summary', verifyToken, verifyLab, async (req, res) => {
     try {
         const hid = req.user.hospitalId || req.headers['x-hospital-id'] || req.user.hospital || (req.tenant ? req.tenant._id : null);
-        const hospitalFilter = hid ? { hospitalId: hid } : {};
+        const hospitalObjectId = (hid && mongoose.Types.ObjectId.isValid(hid)) ? new mongoose.Types.ObjectId(hid) : null;
+        const hospitalFilter = hospitalObjectId ? { hospitalId: hospitalObjectId } : (hid ? { hospitalId: hid } : {});
         const roleData = req.user._roleData;
         const roleName = roleData ? roleData.name : String(req.user.role || 'Staff');
         const userPermissions = roleData?.permissions || [];
 
-        // Lab Profile
-        const labProfile = await Lab.findOne({
-            $or: [{ email: req.user.email }, { userId: req.user.id }, { hospitalId: hid }]
-        }).lean();
+        // Today window (local server calendar day)
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        const todayRange = { $gte: startOfToday, $lte: endOfToday };
 
-        // Hospital Info
-        let hospitalName = 'Medical365 Hospital';
-        if (hid) {
-            const hosp = await Hospital.findById(hid).select('name').lean();
-            if (hosp) hospitalName = hosp.name;
-        }
+        // Lab Profile & Hospital Identity
+        const [labProfile, hosp, assignedLocation, activeProcessingLab] = await Promise.all([
+            Lab.findOne({
+                $or: [
+                    ...(req.user.email ? [{ email: req.user.email }] : []),
+                    ...(req.user.id ? [{ userId: req.user.id }] : []),
+                    ...(hid ? [{ hospitalId: hid }] : [])
+                ]
+            }).lean(),
+            hid ? Hospital.findById(hid).select('name slug logo branding').lean() : Promise.resolve(null),
+            req.user.locationId
+                ? LabLocation.findById(req.user.locationId).select('locationName locationCode locationType isProcessingLab address instruments').lean()
+                : Promise.resolve(null),
+            hid
+                ? LabLocation.findOne({ hospitalId: hid, isActive: true }).sort({ isProcessingLab: -1, createdAt: 1 }).select('locationName locationCode locationType isProcessingLab instruments').lean()
+                : Promise.resolve(null)
+        ]);
 
-        // Assigned Location for staff
-        let assignedLocation = null;
-        if (req.user.locationId) {
-            assignedLocation = await LabLocation.findById(req.user.locationId)
-                .select('locationName locationCode locationType isProcessingLab address')
-                .lean();
-        }
+        const hospitalName = hosp?.branding?.appName || hosp?.name || 'Medical 365';
+        const resolvedLogoUrl = hosp?.branding?.logoUrl || hosp?.branding?.logo || hosp?.logo || '';
 
-        // Parallel count queries scoped strictly to hospital
+        // Parallel real-time counts across Phase 3–8 LMS models + legacy LabReport
         const [
-            pendingReportsCount,
-            completedReportsCount,
+            // Today's 4 KPI metrics
+            todayLabOrdersCount,
+            todayStandaloneReportsCount,
+            todayPendingLabOrdersCount,
+            todayPendingStandaloneReportsCount,
+            todaySamplesCollectedCount,
+            todayReportsReleasedCount,
+
+            // Orders breakdown (all-time)
+            confirmedOrdersCount,
+            inProgressOrdersCount,
+            completedOrdersCount,
+            cancelledOrdersCount,
+            statUrgentOrdersCount,
+            walkInOrdersCount,
+            homeCentreOrdersCount,
+
+            // Patient reach
+            totalRegisteredPatientsCount,
+            distinctOrderPatients,
+            distinctReportPatients,
+            todayDistinctOrderPatients,
+            todayDistinctReportPatients,
+
+            // Samples collection & processing breakdown
+            pendingCollectionSamplesCount,
+            collectedSamplesTotalCount,
+            samplesReceivedInLabCount,
+            rejectedSamplesCount,
+            recollectionPendingCount,
+            accessionPendingCount,
+            acceptedReadySamplesCount,
+            inAnalyzerProcessingCount,
+            processingCompletedCount,
+            onHoldOrTransitCount,
+            activeOrdersForPlaceholders,
+            activeLabLocationsWithInstruments,
+
+            // Results & Pathologist verification
+            pendingResultEntryCount,
+            awaitingVerificationResultsCount,
+            verifiedResultsCount,
+            openCriticalAlertsCount,
+
+            // Reports & Master Catalogue
+            pendingReportsLegacyCount,
+            completedReportsLegacyCount,
+            pendingReviewReportsCount,
+            activeCatalogTestsCount,
+            activeTestPackagesCount,
             totalLocationsCount,
             totalStaffCount,
-            activeProcessingLab
+
+            // Financials
+            todayInvoicesAgg,
+            labPaymentsAgg,
+            legacyPaidReportsAgg,
+
+            // Recent activity
+            recentOrders,
+            recentReports
         ] = await Promise.all([
+            LabOrder.countDocuments({ ...hospitalFilter, createdAt: todayRange, 'cancellation.isCancelled': { $ne: true }, status: { $ne: 'Cancelled' } }),
+            LabReport.countDocuments({ ...hospitalFilter, orderId: null, createdAt: todayRange, reportStatus: { $ne: 'CANCELLED' } }),
+            LabOrder.countDocuments({ ...hospitalFilter, createdAt: todayRange, status: { $in: ['Confirmed', 'In Progress'] } }),
+            LabReport.countDocuments({ ...hospitalFilter, orderId: null, createdAt: todayRange, reportStatus: { $in: ['PENDING', 'GENERATED', 'UNDER_REVIEW'] } }),
+            LabSample.countDocuments({
+                ...hospitalFilter,
+                $or: [
+                    { collectedAt: todayRange },
+                    { createdAt: todayRange, status: { $nin: ['PENDING_COLLECTION', 'BARCODE_GENERATED', 'CANCELLED', 'REJECTED'] } }
+                ]
+            }),
+            LabReport.countDocuments({
+                ...hospitalFilter,
+                $or: [
+                    { releasedAt: todayRange, reportStatus: 'RELEASED' },
+                    { updatedAt: todayRange, reportStatus: { $in: ['RELEASED', 'UPLOADED'] } }
+                ]
+            }),
+
+            // Orders breakdown
+            LabOrder.countDocuments({ ...hospitalFilter, status: 'Confirmed' }),
+            LabOrder.countDocuments({ ...hospitalFilter, status: 'In Progress' }),
+            LabOrder.countDocuments({ ...hospitalFilter, status: 'Completed' }),
+            LabOrder.countDocuments({ ...hospitalFilter, status: 'Cancelled' }),
+            LabOrder.countDocuments({ ...hospitalFilter, priority: { $in: ['Urgent', 'STAT'] }, status: { $in: ['Confirmed', 'In Progress'] } }),
+            LabOrder.countDocuments({ ...hospitalFilter, collectionType: 'Walk-in', status: { $ne: 'Cancelled' } }),
+            LabOrder.countDocuments({ ...hospitalFilter, collectionType: { $in: ['Home Collection', 'Collection Centre'] }, status: { $ne: 'Cancelled' } }),
+
+            // Registered & distinct patients
+            hid ? User.countDocuments({ hospitalId: hid, role: 'patient', isActive: { $ne: false } }) : Promise.resolve(0),
+            LabOrder.distinct('patient', { ...hospitalFilter, status: { $ne: 'Cancelled' } }),
+            LabReport.distinct('patientId', { ...hospitalFilter, reportStatus: { $ne: 'CANCELLED' } }),
+            LabOrder.distinct('patient', { ...hospitalFilter, createdAt: todayRange, status: { $ne: 'Cancelled' } }),
+            LabReport.distinct('patientId', { ...hospitalFilter, createdAt: todayRange, reportStatus: { $ne: 'CANCELLED' } }),
+
+            // Sample pipeline
+            LabSample.countDocuments({ ...hospitalFilter, status: { $in: ['PENDING_COLLECTION', 'BARCODE_GENERATED'] } }),
+            LabSample.countDocuments({ ...hospitalFilter, status: { $nin: ['PENDING_COLLECTION', 'BARCODE_GENERATED', 'CANCELLED', 'REJECTED'] } }),
+            LabSample.countDocuments({
+                ...hospitalFilter,
+                status: { $in: ['RECEIVED_AT_PROCESSING_LAB', 'ACCEPTED', 'PROCESSING_PENDING', 'PROCESSING', 'ON_HOLD', 'PROCESSING_COMPLETED'] }
+            }),
+            LabSample.countDocuments({ ...hospitalFilter, status: 'REJECTED' }),
+            LabSample.countDocuments({ ...hospitalFilter, status: { $in: ['RECOLLECTION_REQUESTED', 'RECOLLECTION_PENDING'] } }),
+            LabSample.countDocuments({ ...hospitalFilter, status: { $in: ['COLLECTED', 'DISPATCHED', 'IN_TRANSIT', 'ACCESSION_PENDING', 'RECEIVED_AT_PROCESSING_LAB'] } }),
+            LabSample.countDocuments({ ...hospitalFilter, status: { $in: ['ACCEPTED', 'PROCESSING_PENDING'] } }),
+            LabSample.countDocuments({ ...hospitalFilter, status: 'PROCESSING' }),
+            LabSample.countDocuments({ ...hospitalFilter, status: 'PROCESSING_COMPLETED' }),
+            LabSample.countDocuments({ ...hospitalFilter, status: { $in: ['ON_HOLD', 'DISPATCHED', 'IN_TRANSIT'] } }),
+            LabOrder.find({ ...hospitalFilter, status: { $in: ['Confirmed', 'In Progress'] } }).select('_id samplePlaceholders').lean(),
+            hid ? LabLocation.find({ hospitalId: hid, isActive: true }).select('locationName locationCode isProcessingLab instruments').lean() : Promise.resolve([]),
+
+            // Results & verification
+            LabTestResult.countDocuments({ ...hospitalFilter, resultStatus: { $in: ['PENDING', 'DRAFT', 'CORRECTION_REQUESTED'] } }),
+            LabTestResult.countDocuments({ ...hospitalFilter, resultStatus: { $in: ['SUBMITTED', 'UNDER_REVIEW'] } }),
+            LabTestResult.countDocuments({ ...hospitalFilter, resultStatus: 'VERIFIED' }),
+            LabCriticalAlert.countDocuments({ ...hospitalFilter, status: { $nin: ['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'] } }).catch(() => 0),
+
+            // Reports & Catalogue
             LabReport.countDocuments({ ...hospitalFilter, reportStatus: { $in: ['PENDING', 'GENERATED', 'UNDER_REVIEW'] } }),
             LabReport.countDocuments({ ...hospitalFilter, reportStatus: { $in: ['UPLOADED', 'RELEASED', 'APPROVED', 'DONE'] } }),
-            hid ? LabLocation.countDocuments({ hospitalId: hid, isActive: true }) : 0,
-            hid ? User.countDocuments({ hospitalId: hid, role: { $nin: ['patient', 'centraladmin', 'superadmin', 'hospitaladmin'] } }) : 0,
-            hid ? LabLocation.findOne({ hospitalId: hid, isProcessingLab: true, isActive: true }).select('locationName locationCode').lean() : null
+            LabReport.countDocuments({ ...hospitalFilter, reportStatus: { $in: ['GENERATED', 'UNDER_REVIEW', 'APPROVED'] } }),
+            LabTest.countDocuments({ ...(hid ? { $or: [{ hospitalId: hid }, { hospitalId: null }, { hospitalId: { $exists: false } }] } : {}), isActive: { $ne: false } }).catch(() => 0),
+            TestPackage.countDocuments({ ...(hid ? { $or: [{ hospitalId: hid }, { hospitalId: null }, { hospitalId: { $exists: false } }] } : {}), isActive: { $ne: false } }).catch(() => 0),
+            hid ? LabLocation.countDocuments({ hospitalId: hid, isActive: true }) : Promise.resolve(0),
+            hid ? User.countDocuments({ hospitalId: hid, role: { $nin: ['patient', 'centraladmin', 'superadmin', 'hospitaladmin'] } }) : Promise.resolve(0),
+
+            // Financial aggregations
+            LabInvoice.aggregate([
+                { $match: { ...(hospitalObjectId ? { hospitalId: hospitalObjectId } : {}), status: 'ACTIVE', createdAt: todayRange } },
+                { $group: { _id: null, netToday: { $sum: '$pricing.netAmount' }, paidToday: { $sum: '$pricing.paidAmount' } } }
+            ]).catch(() => []),
+            LabPayment.aggregate([
+                { $match: { ...(hospitalObjectId ? { hospitalId: hospitalObjectId } : {}), paymentStatus: 'SUCCESS' } },
+                { $group: { _id: null, totalPaid: { $sum: { $subtract: ['$amount', { $ifNull: ['$refundedAmount', 0] }] } } } }
+            ]).catch(() => []),
+            LabReport.aggregate([
+                { $match: { ...(hospitalObjectId ? { hospitalId: hospitalObjectId } : {}), orderId: null, paymentStatus: 'PAID' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } }
+            ]).catch(() => []),
+
+            // Recent orders & reports
+            LabOrder.find(hospitalFilter).sort({ createdAt: -1 }).limit(6).lean(),
+            LabReport.find({ ...hospitalFilter, orderId: null }).sort({ createdAt: -1 }).limit(6).populate('doctorId', 'name').lean()
         ]);
 
-        // Revenue calculation based on existing reports
-        const revenueMatch = { paymentStatus: 'PAID' };
-        if (hid) {
-            revenueMatch.hospitalId = new mongoose.Types.ObjectId(hid);
+        const todayTotalOrders = todayLabOrdersCount + todayStandaloneReportsCount;
+        const todayPendingOrders = todayPendingLabOrdersCount + todayPendingStandaloneReportsCount;
+
+        const allActiveOrdersTotal = confirmedOrdersCount + inProgressOrdersCount + completedOrdersCount + pendingReportsLegacyCount + completedReportsLegacyCount;
+        const activePendingTotal = confirmedOrdersCount + inProgressOrdersCount + pendingReportsLegacyCount;
+
+        const uniquePatientsSet = new Set([
+            ...(distinctOrderPatients || []).filter(Boolean).map(String),
+            ...(distinctReportPatients || []).filter(Boolean).map(String)
+        ]);
+        const todayPatientsSet = new Set([
+            ...(todayDistinctOrderPatients || []).filter(Boolean).map(String),
+            ...(todayDistinctReportPatients || []).filter(Boolean).map(String)
+        ]);
+
+        const todayBilledAmount = todayInvoicesAgg?.[0]?.netToday || 0;
+        const todayCollectedAmount = todayInvoicesAgg?.[0]?.paidToday || 0;
+        const lmsPaidRevenue = labPaymentsAgg?.[0]?.totalPaid || 0;
+        const legacyPaidRevenue = legacyPaidReportsAgg?.[0]?.total || 0;
+        const totalRevenue = lmsPaidRevenue + legacyPaidRevenue;
+
+        const todaySummary = {
+            todayTotalOrders,
+            todayPendingOrders,
+            todaySamplesCollected: todaySamplesCollectedCount,
+            todayReportsReleased: todayReportsReleasedCount
+        };
+
+        // Count unbarcoded pending specimen placeholders across active orders
+        let unbarcodedPlaceholdersCount = 0;
+        if (Array.isArray(activeOrdersForPlaceholders) && activeOrdersForPlaceholders.length > 0) {
+            const activeOrdIds = activeOrdersForPlaceholders.map((o) => o._id);
+            const existingSamplesForActive = await LabSample.find({
+                ...hospitalFilter,
+                orderId: { $in: activeOrdIds },
+                status: { $ne: 'CANCELLED' }
+            }).select('orderId specimenPlaceholderId').lean();
+
+            const sampleKeySet = new Set(
+                existingSamplesForActive.map((s) => `${String(s.orderId)}_${String(s.specimenPlaceholderId)}`)
+            );
+
+            activeOrdersForPlaceholders.forEach((ord) => {
+                (ord.samplePlaceholders || []).forEach((ph) => {
+                    const k1 = `${String(ord._id)}_${String(ph.samplePlaceholderId)}`;
+                    const k2 = `${String(ord._id)}_${String(ph._id)}`;
+                    if (ph.status === 'Pending Collection' && !sampleKeySet.has(k1) && !sampleKeySet.has(k2)) {
+                        unbarcodedPlaceholdersCount += 1;
+                    }
+                });
+            });
         }
-        const revenueAgg = await LabReport.aggregate([
-            { $match: revenueMatch },
-            { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]);
-        const totalRevenue = (revenueAgg.length > 0 && revenueAgg[0].total) ? revenueAgg[0].total : 0;
 
-        // Recent work items (latest 6 requests)
-        const recentReports = await LabReport.find(hospitalFilter)
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .populate('doctorId', 'name')
-            .lean();
+        const totalAwaitingCollection = pendingCollectionSamplesCount + unbarcodedPlaceholdersCount;
 
-        // Build role-scoped metrics
+        // Collect actual DB-configured instruments across active locations (never hardcoded)
+        const configuredInstruments = [];
+        (activeLabLocationsWithInstruments || []).forEach((loc) => {
+            (loc.instruments || []).forEach((inst) => {
+                if (inst && inst.isActive !== false && inst.name) {
+                    configuredInstruments.push({
+                        id: String(inst._id || `${loc._id}_${inst.name}`),
+                        name: inst.name,
+                        instrumentCode: inst.instrumentCode || '',
+                        instrumentType: inst.instrumentType || 'Laboratory Analyzer',
+                        department: inst.department || '',
+                        locationName: loc.locationName || '',
+                        operationalStatus: inst.operationalStatus || 'UNVERIFIED',
+                        availability: inst.availability || 'AVAILABLE',
+                        integrationVerified: Boolean(inst.integrationVerified)
+                    });
+                }
+            });
+        });
+
+        const overview = {
+            orders: {
+                total: confirmedOrdersCount + inProgressOrdersCount + completedOrdersCount + (pendingReportsLegacyCount + completedReportsLegacyCount),
+                confirmed: confirmedOrdersCount,
+                inProgress: inProgressOrdersCount,
+                completed: completedOrdersCount + completedReportsLegacyCount,
+                cancelled: cancelledOrdersCount,
+                statUrgent: statUrgentOrdersCount
+            },
+            patients: {
+                totalRegistered: totalRegisteredPatientsCount,
+                totalServed: uniquePatientsSet.size,
+                registeredToday: todayPatientsSet.size,
+                walkInOrders: walkInOrdersCount,
+                homeAndCentreOrders: homeCentreOrdersCount
+            },
+            sampleCollection: {
+                pendingCollection: totalAwaitingCollection,
+                awaitingCollection: totalAwaitingCollection,
+                unbarcodedPlaceholders: unbarcodedPlaceholdersCount,
+                collectedTotal: collectedSamplesTotalCount,
+                collectedToday: todaySamplesCollectedCount,
+                receivedInLab: samplesReceivedInLabCount,
+                rejectedSamples: rejectedSamplesCount,
+                recollectionPending: recollectionPendingCount
+            },
+            sampleProcessing: {
+                accessionPending: accessionPendingCount,
+                acceptedReady: acceptedReadySamplesCount,
+                inAnalyzer: inAnalyzerProcessingCount,
+                processingCompleted: processingCompletedCount,
+                onHoldOrTransit: onHoldOrTransitCount
+            },
+            verification: {
+                pendingEntry: pendingResultEntryCount,
+                awaitingVerification: awaitingVerificationResultsCount,
+                verifiedResults: verifiedResultsCount,
+                criticalAlertsOpen: openCriticalAlertsCount
+            },
+            reportsAndCatalog: {
+                releasedTotal: completedReportsLegacyCount,
+                pendingReviewReports: pendingReviewReportsCount,
+                activeTests: activeCatalogTestsCount,
+                activePackages: activeTestPackagesCount
+            },
+            dailyOperations: {
+                todayOrders: todayTotalOrders,
+                todaySamples: todaySamplesCollectedCount,
+                todayReleased: todayReportsReleasedCount,
+                todayBilledAmount,
+                todayCollectedAmount,
+                totalCollectedRevenue: totalRevenue,
+                activeLocations: totalLocationsCount
+            }
+        };
+
+        // Preserve backward-compatible metrics object for Manager / Verification dashboards
         const metrics = {
-            totalOrders: pendingReportsCount + completedReportsCount,
-            pendingOrders: pendingReportsCount,
-            completedReports: completedReportsCount,
-            pendingCollections: Math.max(0, pendingReportsCount),
-            inProcessing: 0,
-            awaitingVerification: pendingReportsCount > 0 ? Math.ceil(pendingReportsCount / 2) : 0,
-            recollectionTasks: 0,
+            totalOrders: allActiveOrdersTotal,
+            pendingOrders: activePendingTotal,
+            completedReports: completedReportsLegacyCount,
+            pendingCollections: pendingCollectionSamplesCount || Math.max(0, pendingReportsLegacyCount),
+            inProcessing: inAnalyzerProcessingCount + acceptedReadySamplesCount,
+            awaitingVerification: awaitingVerificationResultsCount,
+            recollectionTasks: recollectionPendingCount,
             totalLocations: totalLocationsCount,
             totalStaff: totalStaffCount,
-            totalRevenue: totalRevenue,
+            totalRevenue,
+            todayTotalOrders,
+            todayPendingOrders,
+            todaySamplesCollected: todaySamplesCollectedCount,
+            todayReportsReleased: todayReportsReleasedCount,
             primaryProcessingLab: activeProcessingLab ? `${activeProcessingLab.locationName} (${activeProcessingLab.locationCode})` : 'Central Processing Lab'
         };
+
+        const mappedRecentOrders = (recentOrders || []).map(o => ({
+            id: o._id,
+            orderNumber: o.orderNumber,
+            patientId: o.patientSnapshot?.mrn || o.patientSnapshot?.uhid || String(o.patient || '').slice(-6).toUpperCase(),
+            patientName: o.patientSnapshot?.name || 'Registered Patient',
+            doctorName: o.referringDoctorName || 'Self / Walk-in',
+            testNames: [
+                ...(o.tests || []).map(t => t.testName),
+                ...(o.packages || []).map(p => p.packageName)
+            ],
+            reportStatus: o.status,
+            paymentStatus: 'Recorded',
+            amount: o.pricing?.netAmount || 0,
+            createdAt: o.createdAt
+        }));
+
+        const mappedRecentReports = (recentReports || []).map(r => ({
+            id: r._id,
+            orderNumber: r.orderNumber || r.reportNumber || '',
+            patientId: r.uhid || r.patientId,
+            patientName: r.patientSnapshot?.name || r.userId?.name || `Patient ${r.patientId || ''}`,
+            doctorName: r.doctorId?.name ? `Dr. ${r.doctorId.name}` : (r.referringDoctorName || 'Attending Physician'),
+            testNames: r.testNames || (r.tests || []).map(t => t.testName),
+            reportStatus: r.reportStatus,
+            paymentStatus: r.paymentStatus,
+            amount: r.amount || 0,
+            createdAt: r.createdAt
+        }));
+
+        const combinedRecent = [...mappedRecentOrders, ...mappedRecentReports]
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+            .slice(0, 8);
 
         res.json({
             success: true,
@@ -645,25 +948,121 @@ router.get('/dashboard/summary', verifyToken, verifyLab, async (req, res) => {
                 permissions: userPermissions,
                 hospitalId: hid,
                 hospitalName,
-                labName: labProfile ? labProfile.name : `${hospitalName} Laboratory`,
+                labName: hospitalName,
+                logoUrl: resolvedLogoUrl,
                 assignedLocation,
+                todaySummary,
+                overview,
                 metrics,
-                recentActivity: recentReports.map(r => ({
-                    id: r._id,
-                    patientId: r.patientId,
-                    patientName: r.userId?.name || `Patient ${r.patientId}`,
-                    doctorName: r.doctorId?.name ? `Dr. ${r.doctorId.name}` : 'Attending Physician',
-                    testNames: r.testNames || [],
-                    reportStatus: r.reportStatus,
-                    paymentStatus: r.paymentStatus,
-                    amount: r.amount,
-                    createdAt: r.createdAt
-                }))
+                instruments: configuredInstruments,
+                recentActivity: combinedRecent
             }
         });
     } catch (error) {
         console.error('[lab] dashboard summary error:', error);
         res.status(500).json({ success: false, message: 'Failed to generate laboratory dashboard summary' });
+    }
+});
+
+// Quick Search across Orders, Patient MRN/UHID, and Sample Barcodes for LMS Portal Header
+router.get('/dashboard/search', verifyToken, verifyLab, async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim();
+        if (!q) {
+            return res.json({ success: true, results: [] });
+        }
+
+        const roleData = req.user._roleData;
+        const roleLower = String(roleData?.name || req.user.role || '').toLowerCase();
+        const isCentral = roleLower === 'centraladmin' || roleLower === 'superadmin';
+        const hid = isCentral
+            ? (req.user.hospitalId || req.headers['x-hospital-id'] || (req.tenant ? req.tenant._id : null))
+            : (req.user.hospitalId || (req.tenant ? req.tenant._id : null));
+        const hospitalFilter = hid ? { hospitalId: hid } : {};
+        const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'i');
+
+        const isCollectionRole = roleLower.includes('phlebotomist') || roleLower.includes('sample collector') || roleLower === 'sample collection';
+        const isTechnicianRole = (roleLower.includes('technician') || roleLower.includes('lab tech')) && !roleLower.includes('admin');
+
+        const resolveOrderPath = (orderNo) => {
+            const enc = encodeURIComponent(orderNo || '');
+            if (isCollectionRole) return `/lab/collection/samples?search=${enc}`;
+            if (isTechnicianRole) return `/lab/bench?search=${enc}`;
+            return `/lab/orders?search=${enc}`;
+        };
+
+        const resolveSamplePath = (sample) => {
+            const enc = encodeURIComponent(sample.barcode || sample.orderNumber || '');
+            if (isCollectionRole) return `/lab/collection/samples?search=${enc}`;
+            if (isTechnicianRole) return `/lab/bench?search=${enc}`;
+            return `/lab/samples/${sample._id}`;
+        };
+
+        const [orders, samples, reports] = await Promise.all([
+            LabOrder.find({
+                ...hospitalFilter,
+                $or: [
+                    { orderNumber: regex },
+                    { 'patientSnapshot.name': regex },
+                    { 'patientSnapshot.mrn': regex },
+                    { 'patientSnapshot.uhid': regex },
+                    { 'patientSnapshot.phone': regex }
+                ]
+            }).sort({ createdAt: -1 }).limit(5).select('orderNumber patientSnapshot status priority createdAt').lean(),
+
+            LabSample.find({
+                ...hospitalFilter,
+                $or: [
+                    { barcode: regex },
+                    { orderNumber: regex },
+                    { 'patientSnapshot.name': regex },
+                    { 'patientSnapshot.mrn': regex },
+                    { 'patientSnapshot.uhid': regex }
+                ]
+            }).sort({ createdAt: -1 }).limit(5).select('barcode specimenType status orderNumber patientSnapshot').lean(),
+
+            (isCollectionRole || isTechnicianRole)
+                ? Promise.resolve([])
+                : LabReport.find({
+                    ...hospitalFilter,
+                    $or: [
+                        { reportNumber: regex },
+                        { orderNumber: regex },
+                        { uhid: regex },
+                        { 'patientSnapshot.name': regex }
+                    ]
+                }).sort({ createdAt: -1 }).limit(4).select('reportNumber orderNumber reportStatus patientSnapshot uhid').lean()
+        ]);
+
+        const results = [
+            ...(orders || []).map(o => ({
+                id: String(o._id),
+                category: 'Order',
+                title: `${o.orderNumber} — ${o.patientSnapshot?.name || 'Patient'}`,
+                subtitle: `MRN: ${o.patientSnapshot?.mrn || o.patientSnapshot?.uhid || 'N/A'} • ${o.status}`,
+                path: resolveOrderPath(o.orderNumber)
+            })),
+            ...(samples || []).map(s => ({
+                id: String(s._id),
+                category: 'Sample',
+                title: `Barcode ${s.barcode} (${s.specimenType})`,
+                subtitle: `${s.patientSnapshot?.name || 'Patient'} • ${s.status.replace(/_/g, ' ')}`,
+                path: resolveSamplePath(s)
+            })),
+            ...(reports || []).map(r => ({
+                id: String(r._id),
+                category: 'Report',
+                title: `${r.reportNumber || r.orderNumber || 'Diagnostic Report'} — ${r.patientSnapshot?.name || r.uhid || 'Patient'}`,
+                subtitle: `Status: ${r.reportStatus}`,
+                path: `/lab/reports`
+            }))
+        ].slice(0, 8);
+
+        res.json({ success: true, results });
+    } catch (error) {
+        console.error('[lab] dashboard quick search error:', error);
+        res.status(500).json({ success: false, message: 'Search failed' });
     }
 });
 

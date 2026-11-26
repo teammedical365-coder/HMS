@@ -255,9 +255,6 @@ const LabPatientsPage = () => {
                     <button className="btn-refresh" onClick={() => loadPatients(page, search)} title="Refresh">
                         <FiRefreshCw className={loading ? 'spin' : ''} />
                     </button>
-                    <button className="btn-register" onClick={handleOpenRegister}>
-                        <FiUserPlus /> Register New Patient
-                    </button>
                 </div>
             </div>
 
@@ -265,8 +262,8 @@ const LabPatientsPage = () => {
             <div className="lmd-patient-card">
                 <div className="lmd-patient-table-hdr">
                     <div>
-                        <h3>Registered Patients Directory</h3>
-                        <p className="sub">Total: {totalPatients} patient profile(s)</p>
+                        <h3>Hospital Registered Patients</h3>
+                        <p className="sub">Total: {totalPatients} patient profile(s) • Registered centrally via Medical365 Reception</p>
                     </div>
                 </div>
 
@@ -277,8 +274,7 @@ const LabPatientsPage = () => {
                 ) : patients.length === 0 ? (
                     <div className="lmd-empty-box">
                         <FiUsers style={{ fontSize: '36px', color: '#94a3b8' }} />
-                        <p>No matching patient records found.</p>
-                        <button className="btn-register" onClick={handleOpenRegister}>Register First Patient</button>
+                        <p>No matching patient records found. New patients are registered through Medical365 Reception.</p>
                     </div>
                 ) : (
                     <div className="lmd-table-wrapper">

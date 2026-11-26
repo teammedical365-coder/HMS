@@ -102,6 +102,7 @@ const AIAssistant = () => {
     ]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
+    const [isChatCollapsed, setIsChatCollapsed] = useState(false);
     const chatEndRef = useRef(null);
 
     // Fetch initial data
@@ -1096,8 +1097,8 @@ const AIAssistant = () => {
                 </div>
 
                 {/* ════════ RIGHT COLUMN: AI ASSISTANT CHAT PANEL (MATCHING EXACT SCREENSHOT) ════════ */}
-                <div className="cca-exact-right-chat-col">
-                    <div className="cca-exact-chat-card">
+                <div className={`cca-exact-right-chat-col ${isChatCollapsed ? 'is-collapsed' : ''}`}>
+                    <div className={`cca-exact-chat-card ${isChatCollapsed ? 'collapsed' : ''}`}>
                         
                         {/* Chat Header */}
                         <div className="cca-exact-chat-header">
@@ -1112,9 +1113,22 @@ const AIAssistant = () => {
                                 </div>
                             </div>
 
-                            <button className="cca-exact-btn-clear-chat" onClick={handleClearChat}>
-                                <FiTrash2 size={13} /> Clear Chat
-                            </button>
+                            <div className="cca-chat-header-actions">
+                                {!isChatCollapsed && (
+                                    <button className="cca-exact-btn-clear-chat" onClick={handleClearChat}>
+                                        <FiTrash2 size={13} /> Clear Chat
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    className="cca-tablet-chat-toggle-btn"
+                                    onClick={() => setIsChatCollapsed(prev => !prev)}
+                                    aria-expanded={!isChatCollapsed}
+                                    title={isChatCollapsed ? 'Expand AI Chat panel' : 'Minimize AI Chat panel'}
+                                >
+                                    {isChatCollapsed ? <><FiChevronDown size={14} /> Expand Chat</> : <><FiChevronUp size={14} /> Minimize</>}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Chat Messages Stream */}

@@ -245,13 +245,7 @@ const LabOrderBookingPage = () => {
                     {/* 1. Patient Identification Section */}
                     <div className="lmd-card">
                         <div className="lmd-card-hdr">
-                            <h3>1. Patient Identification</h3>
-                            <button
-                                className="lmd-btn-sm-outline"
-                                onClick={() => navigate('/lab/patients')}
-                            >
-                                <FiUserCheck /> Register New Patient
-                            </button>
+                            <h3>1. Patient Identification (Medical365 Registered Patients)</h3>
                         </div>
 
                         {selectedPatient ? (

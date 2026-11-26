@@ -202,6 +202,42 @@
   opacity: 1;
 }
 
+.had-input-password {
+  padding-right: 48px !important;
+}
+
+.had-password-toggle {
+  position: absolute;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.had-password-toggle:hover,
+.had-password-toggle:focus-visible {
+  background-color: #e0f2fe;
+  color: #0284c7;
+  outline: none;
+}
+
+.had-field-hint {
+  font-size: 0.74rem;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.35;
+  padding-left: 2px;
+}
+
 /* Bottom Row */
 .had-bottom-grid {
   display: grid;
@@ -572,5 +608,39 @@
   .had-submit-btn {
     padding: 13px 18px;
     font-size: 0.92rem;
+  }
+}
+
+/* Tablet Portrait & Landscape Refinement (768px – 1366px): Bug 12 */
+@media (min-width: 768px) and (max-width: 1366px) {
+  .had-unified-card {
+    padding: 26px 24px;
+    gap: 24px;
+  }
+
+  .had-form-grid,
+  .had-bottom-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 18px;
+  }
+
+  .had-field-group {
+    min-width: 0;
+  }
+
+  .had-input,
+  .had-select {
+    min-height: 46px;
+  }
+
+  .had-password-toggle {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1366px) {
+  .had-unified-card {
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.9fr);
   }
 }

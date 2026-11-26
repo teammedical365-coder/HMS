@@ -680,6 +680,53 @@
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
 }
 
+.doc-stat-clickable {
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.doc-stat-clickable:focus-visible {
+    outline: 2px solid #0284c7;
+    outline-offset: 2px;
+}
+
+.doc-stat-clickable:active {
+    transform: scale(0.985);
+}
+
+.doc-stat-clickable.stat-blue.is-selected-card {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.16), 0 6px 16px rgba(2, 132, 199, 0.08);
+}
+
+.doc-stat-clickable.stat-orange.is-selected-card {
+    border-color: #fb923c;
+    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.16), 0 6px 16px rgba(234, 88, 12, 0.08);
+}
+
+.doc-stat-clickable.stat-green.is-selected-card {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.16), 0 6px 16px rgba(22, 163, 74, 0.08);
+}
+
+@media (min-width: 768px) and (max-width: 1366px) {
+    .doc-stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .doc-stat-box {
+        padding: 16px 18px;
+        gap: 12px;
+        min-height: 76px;
+    }
+
+    .doc-stat-number {
+        font-size: 1.55rem;
+    }
+}
+
 .stat-blue {
     background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
     border: 1px solid #e0f2fe;

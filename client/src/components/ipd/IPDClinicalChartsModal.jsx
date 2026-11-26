@@ -66,18 +66,39 @@ import './IPDClinicalChartsModal.css';
 
 
 
-function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom }) {
+function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom, activeTool = 'type' }) {
     const [internalZoom, setInternalZoom] = useState(1);
     const zoom = propZoom !== undefined ? propZoom : internalZoom;
     const setZoom = propSetZoom || setInternalZoom;
     const touchRef = useRef({ distance: 0, startZoom: 1 });
+    const innerContentRef = useRef(null);
+    const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+
+    const isInkActive = activeTool === 'pen' || activeTool === 'eraser';
 
     const clampZoom = (v) => Math.min(2, Math.max(0.6, Number(v.toFixed(2))));
     const zoomIn = () => setZoom(v => clampZoom(v + 0.1));
     const zoomOut = () => setZoom(v => clampZoom(v - 0.1));
     const fit = () => setZoom(1);
 
+    useEffect(() => {
+        const el = innerContentRef.current;
+        if (!el) return;
+        const measure = () => {
+            setNaturalSize({
+                width: el.offsetWidth || 0,
+                height: el.offsetHeight || 0
+            });
+        };
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [children]);
+
     const handleTouchStart = (e) => {
+        // Prevent palm + stylus from triggering accidental pinch-zoom while writing
+        if (isInkActive) return;
         if (e.touches.length === 2) {
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -89,6 +110,7 @@ function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom }) {
     };
 
     const handleTouchMove = (e) => {
+        if (isInkActive) return;
         if (e.touches.length !== 2 || !touchRef.current.distance) return;
 
         const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -103,9 +125,12 @@ function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom }) {
         if (e.touches.length < 2) touchRef.current.distance = 0;
     };
 
+    const scaledWidth = naturalSize.width > 0 ? Math.round(naturalSize.width * zoom) : undefined;
+    const scaledHeight = naturalSize.height > 0 ? Math.round(naturalSize.height * zoom) : undefined;
+
     return (
         <div
-            className="tablet-sheet-zoom-area"
+            className={`tablet-sheet-zoom-area ${isInkActive ? 'is-ink-mode' : ''}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -119,16 +144,26 @@ function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom }) {
                 <button type="button" onClick={fit}>Fit</button>
             </div>
             <div
-                className="tablet-sheet-zoom-content"
+                className="tablet-sheet-zoom-sizer"
                 style={{
-                    zoom,
-                    width: "fit-content",
-                    minWidth: "100%",
-                    margin: "0 auto",
-                    transformOrigin: "top center"
+                    width: scaledWidth ? `${scaledWidth}px` : '100%',
+                    height: scaledHeight ? `${scaledHeight}px` : 'auto',
+                    margin: '0 auto',
+                    position: 'relative',
+                    flexShrink: 0
                 }}
             >
-                {children}
+                <div
+                    ref={innerContentRef}
+                    className="tablet-sheet-zoom-content"
+                    style={{
+                        transform: zoom === 1 ? 'none' : `scale(${zoom})`,
+                        transformOrigin: 'top left',
+                        width: 'max-content'
+                    }}
+                >
+                    {children}
+                </div>
             </div>
         </div>
     );
@@ -181,6 +216,9 @@ const IPDClinicalChartsModal = ({
     // Progress Notes State
     const [progressNotes, setProgressNotes] = useState([]);
     const [manualExtraPages, setManualExtraPages] = useState(0);
+    const [sheetZoom, setSheetZoom] = useState(1);
+    const [selectedSheetIdx, setSelectedSheetIdx] = useState(0);
+    const [sheetToDelete, setSheetToDelete] = useState(null);
 
     // Master Inline Editor Toolbar state
     const [activeTool, setActiveTool] = useState('type'); // 'type' | 'pen' | 'eraser'
@@ -1498,6 +1536,77 @@ const IPDClinicalChartsModal = ({
         ? paginateProgressNotes([], PROGRESS_ROWS_PER_PAGE, manualExtraPages)
         : paginateProgressNotes(progressNotes, PROGRESS_ROWS_PER_PAGE, manualExtraPages);
 
+    const requestDeleteProgressSheet = (targetPageIdx) => {
+        if (progressPages.length <= 1) {
+            toast.error('At least one Progress Notes sheet must remain.');
+            return;
+        }
+        const sheetNumStr = String(targetPageIdx + 1);
+        const targetPage = progressPages[targetPageIdx];
+        const hasPersistedNotes = (targetPage?.rows || []).some((r) => r.noteId && !String(r.noteId).startsWith('draft_')) ||
+            progressNotes.some((n) => !n.isNew && String(n.sheetNo || '1') === sheetNumStr);
+
+        if (hasPersistedNotes) {
+            toast.error(`Sheet #${sheetNumStr} contains saved clinical progress records and cannot be deleted.`);
+            return;
+        }
+        setSheetToDelete(targetPageIdx);
+    };
+
+    const handleConfirmDeleteSheet = async () => {
+        if (sheetToDelete === null) return;
+        const delIdx = sheetToDelete;
+        const delSheetNo = delIdx + 1;
+
+        // 1. Remove unsaved draft notes on the deleted sheet and shift subsequent draft sheet numbers down
+        setProgressNotes((prev) =>
+            prev
+                .filter((n) => !(n.isNew && Number(n.sheetNo || 1) === delSheetNo))
+                .map((n) => {
+                    if (n.isNew && Number(n.sheetNo || 1) > delSheetNo) {
+                        return { ...n, sheetNo: String(Number(n.sheetNo) - 1) };
+                    }
+                    return n;
+                })
+        );
+
+        // 2. Remove handwriting strokes for deleted sheet and shift subsequent pn_page_* keys down cleanly
+        const currentStrokes = { ...(penStrokesRef.current || penStrokes || {}) };
+        const nextStrokes = {};
+        let hadStrokesChange = false;
+
+        Object.entries(currentStrokes).forEach(([k, val]) => {
+            const match = /^pn_page_(\d+)$/.exec(k);
+            if (!match) {
+                nextStrokes[k] = val;
+                return;
+            }
+            const pIdx = Number(match[1]);
+            if (pIdx === delIdx) {
+                hadStrokesChange = true;
+                return;
+            }
+            if (pIdx > delIdx) {
+                nextStrokes[`pn_page_${pIdx - 1}`] = val;
+                hadStrokesChange = true;
+            } else {
+                nextStrokes[k] = val;
+            }
+        });
+
+        setPenStrokes(nextStrokes);
+        penStrokesRef.current = nextStrokes;
+
+        if (hadStrokesChange && effectiveAdmissionId && !isBlank) {
+            ipdClinicalAPI.saveHandwriting(effectiveAdmissionId, { strokes: nextStrokes }).catch(() => {});
+        }
+
+        setManualExtraPages((p) => Math.max(0, p - 1));
+        setSelectedSheetIdx((prev) => Math.max(0, Math.min(prev, progressPages.length - 2)));
+        setSheetToDelete(null);
+        toast.success(`Sheet #${delSheetNo} deleted`);
+    };
+
     const isAccredited = hospitalObj.accreditation?.enabled === true;
     const rawCert = isAccredited && hospitalObj.accreditation?.certNo ? String(hospitalObj.accreditation.certNo).trim() : '';
     const certText = rawCert ? (/^cert\.?\s*no/i.test(rawCert) ? rawCert : `Cert. No. : ${rawCert}`) : '';
@@ -1766,18 +1875,37 @@ const IPDClinicalChartsModal = ({
                             </button>
 
                             {activeTab === 'progress_notes' && (
-                                <button
-                                    type="button"
-                                    className="ipdc-tool-btn"
-                                    onClick={() => {
-                                        setManualExtraPages(p => p + 1);
-                                        toast.success(`Continuation Sheet ${progressPages.length + 1} added`);
-                                    }}
-                                    title="Add Continuation Sheet"
-                                >
-                                    <FiPlus size={12} />
-                                    <span>Add Sheet</span>
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        className="ipdc-tool-btn"
+                                        onClick={() => {
+                                            const nextIdx = progressPages.length;
+                                            setManualExtraPages(p => p + 1);
+                                            setSelectedSheetIdx(nextIdx);
+                                            toast.success(`Continuation Sheet ${nextIdx + 1} added`);
+                                        }}
+                                        title="Add Continuation Sheet"
+                                    >
+                                        <FiPlus size={12} />
+                                        <span>Add Sheet</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ipdc-tool-btn ipdc-tool-btn-danger"
+                                        onClick={() => {
+                                            const targetIdx = selectedSheetIdx > 0 && selectedSheetIdx < progressPages.length
+                                                ? selectedSheetIdx
+                                                : progressPages.length - 1;
+                                            requestDeleteProgressSheet(targetIdx);
+                                        }}
+                                        disabled={progressPages.length <= 1}
+                                        title={progressPages.length <= 1 ? 'Cannot delete the only remaining sheet' : `Delete Sheet #${(selectedSheetIdx > 0 && selectedSheetIdx < progressPages.length ? selectedSheetIdx : progressPages.length - 1) + 1}`}
+                                    >
+                                        <FiTrash2 size={12} />
+                                        <span>Delete Sheet</span>
+                                    </button>
+                                </>
                             )}
 
                             {activeTab === 'drug_chart' && (
@@ -1847,10 +1975,35 @@ const IPDClinicalChartsModal = ({
                         TAB 1: PROGRESS NOTES (MASTER INLINE RULED EDITOR)
                        ========================================================= */}
                     {!loading && activeTab === 'progress_notes' && (
-                        <TabletSheetZoom>
-<div className="ipdc-sheets-stack">
+                        <TabletSheetZoom
+                            zoom={sheetZoom}
+                            setZoom={setSheetZoom}
+                            activeTool={canUsePenTool ? activeTool : 'type'}
+                        >
+                            <div className="ipdc-sheets-stack">
                             {progressPages.map((pg, idx) => (
-                                <div key={idx} className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
+                                <div
+                                    key={idx}
+                                    className={`ipdc-a4-sheet ipdc-sheet-canvas-wrapper ${selectedSheetIdx === idx ? 'is-active-sheet' : ''}`}
+                                    onPointerDownCapture={() => setSelectedSheetIdx(idx)}
+                                >
+                                    {!isBlank && progressPages.length > 1 && (
+                                        <div className="ipdc-sheet-floating-bar">
+                                            <span className="ipdc-sheet-pill">Sheet #{pg.sheetNo || idx + 1}</span>
+                                            <button
+                                                type="button"
+                                                className="ipdc-sheet-delete-pill"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    requestDeleteProgressSheet(idx);
+                                                }}
+                                                title={`Delete Sheet #${pg.sheetNo || idx + 1}`}
+                                            >
+                                                <FiTrash2 size={12} />
+                                                <span>Delete Sheet</span>
+                                            </button>
+                                        </div>
+                                    )}
                                     {/* Tablet Stylus Pen & Eraser Overlay */}
                                     <TabletPenCanvas
                                         pageKey={`pn_page_${idx}`}
@@ -1858,6 +2011,7 @@ const IPDClinicalChartsModal = ({
                                         activeTool={canUsePenTool ? activeTool : 'type'}
                                         penColor={penColor}
                                         penWidth={penWidth}
+                                        zoom={sheetZoom}
                                         onSaveStrokes={(newStrokes) => handleSaveStrokes(`pn_page_${idx}`, newStrokes)}
                                     />
 
@@ -1948,6 +2102,29 @@ const IPDClinicalChartsModal = ({
                             ))}
                         </div>
                     </TabletSheetZoom>
+                    )}
+
+                    {/* Confirmation Modal for Deleting an Unwanted Progress Notes Sheet */}
+                    {sheetToDelete !== null && (
+                        <div className="ipdc-confirm-delete-backdrop" onClick={() => setSheetToDelete(null)}>
+                            <div className="ipdc-confirm-delete-dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+                                <div className="ipdc-confirm-delete-hdr">
+                                    <FiAlertTriangle size={20} color="#dc2626" />
+                                    <h4>Delete Sheet #{sheetToDelete + 1}?</h4>
+                                </div>
+                                <p>
+                                    Are you sure you want to remove Continuation Sheet #{sheetToDelete + 1}? Any unsaved notes or handwriting strokes on this sheet will be permanently cleared. Other sheets and saved clinical records will remain untouched.
+                                </p>
+                                <div className="ipdc-confirm-delete-actions">
+                                    <button type="button" className="ipdc-confirm-cancel-btn" onClick={() => setSheetToDelete(null)}>
+                                        Cancel
+                                    </button>
+                                    <button type="button" className="ipdc-confirm-danger-btn" onClick={handleConfirmDeleteSheet}>
+                                        <FiTrash2 size={14} /> Delete Sheet #{sheetToDelete + 1}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     {/* =========================================================

@@ -7,6 +7,7 @@ const TabletPenCanvas = ({
     activeTool = 'type', // 'type' | 'pen' | 'eraser'
     penColor = '#1d4ed8', // Default Medical Blue
     penWidth = 2,
+    zoom = 1,
     onSaveStrokes
 }) => {
     const canvasRef = useRef(null);
@@ -120,23 +121,53 @@ const TabletPenCanvas = ({
         renderAllStrokes(strokes);
     }, [strokes, renderAllStrokes]);
 
-    // Logical CSS pixel coordinates extraction with scale normalization for all zoom levels
+    // Logical sheet coordinates extraction normalized across all CSS transform scale / zoom levels
     const getCanvasCoordinates = (e, customRect = null) => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
+
         const rect = customRect || canvas.getBoundingClientRect();
-        const logicalWidth = container?.offsetWidth || 794;
-        const logicalHeight = container?.offsetHeight || 1123;
-        const scaleX = rect.width > 0 ? (logicalWidth / rect.width) : 1;
-        const scaleY = rect.height > 0 ? (logicalHeight / rect.height) : 1;
+        const logicalWidth = container?.offsetWidth || canvas.offsetWidth || 794;
+        const logicalHeight = container?.offsetHeight || canvas.offsetHeight || 1123;
+
+        // Under CSS transform: scale(zoom), getBoundingClientRect() returns viewport dimensions (logical * zoom)
+        // matching e.clientX / e.clientY across Safari/iPadOS, Chrome, and Edge.
+        const effectiveWidth = rect.width > 0 ? rect.width : logicalWidth * (zoom || 1);
+        const effectiveHeight = rect.height > 0 ? rect.height : logicalHeight * (zoom || 1);
+        const scaleX = effectiveWidth > 0 ? (logicalWidth / effectiveWidth) : 1;
+        const scaleY = effectiveHeight > 0 ? (logicalHeight / effectiveHeight) : 1;
+
+        const rawX = (e.clientX - rect.left) * scaleX;
+        const rawY = (e.clientY - rect.top) * scaleY;
+        const clampedX = Math.max(0, Math.min(logicalWidth, rawX));
+        const clampedY = Math.max(0, Math.min(logicalHeight, rawY));
         const pressure = typeof e.pressure === 'number' && e.pressure > 0 ? e.pressure : 0.5;
+
         return {
-            x: Math.round((e.clientX - rect.left) * scaleX * 10) / 10,
-            y: Math.round((e.clientY - rect.top) * scaleY * 10) / 10,
+            x: Math.round(clampedX * 10) / 10,
+            y: Math.round(clampedY * 10) / 10,
             pressure
         };
     };
+
+    // Block multi-touch browser scroll/zoom gestures on canvas when pen or eraser is active
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const preventTouchScroll = (ev) => {
+            if (activeTool === 'pen' || activeTool === 'eraser') {
+                if (ev.cancelable) ev.preventDefault();
+                ev.stopPropagation();
+            }
+        };
+        canvas.addEventListener('touchstart', preventTouchScroll, { passive: false });
+        canvas.addEventListener('touchmove', preventTouchScroll, { passive: false });
+        return () => {
+            canvas.removeEventListener('touchstart', preventTouchScroll);
+            canvas.removeEventListener('touchmove', preventTouchScroll);
+        };
+    }, [activeTool]);
 
     // POINTER DOWN: Start new independent stroke or eraser session
     const handlePointerDown = (e) => {

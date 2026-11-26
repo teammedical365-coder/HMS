@@ -655,9 +655,9 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 { _id: { $in: appointmentIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
             
             labReportIds.length > 0 && LabReport.updateMany(
-                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', status: 'Completed', paymentMethod: actualPaymentMode, splitPayments } }),
+                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
             labReportIds.length > 0 && MasterLabReport !== LabReport && MasterLabReport.updateMany(
-                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'PAID', testStatus: 'DONE', paymentMethod: actualPaymentMode, splitPayments } }),
+                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'PAID', paymentMethod: actualPaymentMode, splitPayments } }),
 
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
                 { _id: { $in: pharmacyOrderIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
@@ -669,6 +669,51 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
             facilityChargeIds.length > 0 && MasterFacilityCharge !== FacilityCharge && MasterFacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));
+
+        // Ensure any paid HMS lab prescriptions or appointments with labTests are synced to LMS Sample Collection
+        if (effectiveHospitalId && (labReportIds.length > 0 || appointmentIds.length > 0)) {
+            try {
+                const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                if (labReportIds.length > 0) {
+                    const paidReports = await MasterLabReport.find({ _id: { $in: labReportIds }, ...hospitalFilter }).lean();
+                    for (const rep of paidReports) {
+                        if (Array.isArray(rep.testNames) && rep.testNames.length > 0) {
+                            await syncPrescribedTestsToLmsOrder({
+                                hospitalId: rep.hospitalId || effectiveHospitalId,
+                                appointmentId: rep.appointmentId || null,
+                                legacyLabReportId: rep._id,
+                                userId: rep.userId,
+                                patientId: rep.patientId,
+                                doctorId: rep.doctorId,
+                                labTests: rep.testNames,
+                                sourceModule: 'HMS_RECEPTION',
+                                actorId: req.user?._id
+                            });
+                        }
+                    }
+                }
+                if (appointmentIds.length > 0) {
+                    const paidAppts = await MasterAppointment.find({ _id: { $in: appointmentIds }, ...hospitalFilter }).lean();
+                    for (const appt of paidAppts) {
+                        if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
+                            await syncPrescribedTestsToLmsOrder({
+                                hospitalId: appt.hospitalId || effectiveHospitalId,
+                                appointmentId: appt._id,
+                                userId: appt.userId,
+                                patientId: appt.patientId,
+                                doctorId: appt.doctorId,
+                                doctorName: appt.doctorName || '',
+                                labTests: appt.labTests,
+                                sourceModule: 'HMS_RECEPTION',
+                                actorId: req.user?._id
+                            });
+                        }
+                    }
+                }
+            } catch (syncErr) {
+                console.error('[billing pay-selected -> LMS sync error]:', syncErr.message);
+            }
+        }
 
         if (patientId) {
             // Build dynamic description

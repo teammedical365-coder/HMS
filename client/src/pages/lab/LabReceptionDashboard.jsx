@@ -191,27 +191,15 @@ const LabReceptionDashboard = () => {
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
                             <button
                                 className="lab-btn lab-btn-primary"
-                                onClick={() => navigate('/lab/orders/create')}
+                                onClick={() => navigate('/lab/collection')}
                             >
-                                <FiPlusCircle style={{ marginRight: '6px' }} /> Book New Investigation Order
-                            </button>
-                            <button
-                                className="lab-btn lab-btn-secondary"
-                                onClick={() => navigate('/lab/patients')}
-                            >
-                                <FiUserCheck style={{ marginRight: '6px' }} /> Patient Directory &amp; Register
+                                <FiLayers style={{ marginRight: '6px' }} /> Sample Collection Queue
                             </button>
                             <button
                                 className="lab-btn lab-btn-secondary"
                                 onClick={() => navigate('/lab/orders')}
                             >
                                 <FiInbox style={{ marginRight: '6px' }} /> All Requisitions &amp; History
-                            </button>
-                            <button
-                                className="lab-btn lab-btn-secondary"
-                                onClick={() => navigate('/lab/collection')}
-                            >
-                                <FiLayers style={{ marginRight: '6px' }} /> Phlebotomy Queue
                             </button>
                         </div>
 

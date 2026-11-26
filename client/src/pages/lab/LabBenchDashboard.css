@@ -1,0 +1,774 @@
+/* ============================================================================
+   Medical365 LMS — Lab Technician Dashboard & Analyzer Bench Workstation
+   ============================================================================ */
+
+.ltd-page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ltd-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.ltd-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #334155;
+    margin: 0;
+}
+
+/* ── Blue Hero Card: Laboratory Testing & Analyzer Bench Workstation ──────── */
+.ltd-hero-card {
+    background: linear-gradient(135deg, #172554 0%, #1e3a8a 48%, #1d4ed8 100%);
+    border-radius: 18px;
+    padding: 26px 28px;
+    color: #ffffff;
+    box-shadow: 0 12px 28px rgba(30, 58, 138, 0.22);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.ltd-hero-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.ltd-hero-heading-group {
+    max-width: 620px;
+}
+
+.ltd-hero-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.02em;
+}
+
+.ltd-hero-sub {
+    margin: 7px 0 0;
+    font-size: 13.5px;
+    color: rgba(226, 232, 240, 0.9);
+    line-height: 1.5;
+}
+
+/* Integrated Barcode Scan Input */
+.ltd-hero-scan-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.36);
+    border: 1px solid rgba(147, 197, 253, 0.35);
+    border-radius: 11px;
+    padding: 5px 6px 5px 12px;
+    min-width: 280px;
+    max-width: 390px;
+    flex: 1;
+}
+
+.ltd-hero-scan-form:focus-within {
+    border-color: #93c5fd;
+    background: rgba(15, 23, 42, 0.55);
+}
+
+.ltd-hero-scan-icon {
+    color: #93c5fd;
+    flex-shrink: 0;
+    font-size: 15px;
+}
+
+.ltd-hero-scan-input {
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #ffffff;
+    font-size: 12.8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    width: 100%;
+    min-width: 0;
+}
+
+.ltd-hero-scan-input::placeholder {
+    color: rgba(203, 213, 225, 0.78);
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+
+.ltd-hero-scan-btn {
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: none;
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ltd-hero-scan-btn:hover {
+    background: #2563eb;
+}
+
+/* 3 Glass KPI Boxes */
+.ltd-hero-kpis {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.ltd-hero-kpi-box {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    padding: 13px 22px;
+    min-width: 138px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+
+.ltd-hero-kpi-val {
+    font-size: 22px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.15;
+}
+
+.ltd-hero-kpi-lbl {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(226, 232, 240, 0.88);
+}
+
+/* Configured Instrument Status Pills Strip */
+.ltd-instruments-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ltd-instrument-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 13px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    font-size: 12px;
+    color: #e2e8f0;
+    font-weight: 600;
+}
+
+.ltd-inst-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ltd-inst-dot.operational { background: #22c55e; }
+.ltd-inst-dot.ready { background: #38bdf8; }
+.ltd-inst-dot.warning { background: #f59e0b; }
+.ltd-inst-dot.offline { background: #94a3b8; }
+
+.ltd-inst-status-strong {
+    color: #ffffff;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+/* ── Specimen Tubes & Analyzer Run Queue Card ─────────────────────────────── */
+.ltd-queue-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 20px 22px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ltd-queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.ltd-queue-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ltd-queue-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ltd-active-bench-pill {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #2563eb;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.ltd-loaded-count {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.ltd-queue-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ltd-segmented-tabs {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+}
+
+.ltd-seg-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.14s ease;
+}
+
+.ltd-seg-btn.active {
+    background: #ffffff;
+    color: #2563eb;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.ltd-open-bench-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 9px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.14s ease;
+}
+
+.ltd-open-bench-btn:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+/* Expanded Full Bench Filter Toolbar */
+.ltd-full-bench-bar {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.ltd-bench-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 7px 12px;
+    flex: 1 1 220px;
+    min-width: 200px;
+}
+
+.ltd-bench-search input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 13px;
+    color: #0f172a;
+}
+
+.ltd-bench-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ltd-bench-select {
+    padding: 7px 11px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #334155;
+    outline: none;
+}
+
+/* Run Queue Table */
+.ltd-table-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.ltd-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 820px;
+}
+
+.ltd-table thead th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 13px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.ltd-table thead th:last-child,
+.ltd-table tbody td:last-child {
+    text-align: right;
+}
+
+.ltd-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.ltd-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ltd-table tbody tr:hover {
+    background: #fafcff;
+}
+
+.ltd-barcode-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 800;
+    font-size: 13px;
+    color: #2563eb;
+}
+
+.ltd-tube-cap-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.ltd-priority-pill {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ltd-prio-stat {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.ltd-prio-urgent {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.ltd-prio-routine {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+/* Bench Stage Pills */
+.ltd-stage-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ltd-stage-pending { background: #fef3c7; color: #b45309; }
+.ltd-stage-received { background: #e0f2fe; color: #0369a1; }
+.ltd-stage-accepted { background: #dbeafe; color: #1d4ed8; }
+.ltd-stage-processing { background: #ede9fe; color: #6d28d9; }
+.ltd-stage-hold { background: #ffedd5; color: #c2410c; }
+.ltd-stage-completed { background: #dcfce7; color: #15803d; }
+.ltd-stage-rejected { background: #fee2e2; color: #b91c1c; }
+
+/* Bench Action Buttons (Exact Match to Screenshot 4) */
+.ltd-btn-receive {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #93c5fd;
+    background: #ffffff;
+    color: #1d4ed8;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.14s ease;
+}
+
+.ltd-btn-receive:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+}
+
+.ltd-btn-load {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.14s ease;
+}
+
+.ltd-btn-load:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+.ltd-btn-results {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #059669;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ltd-btn-results:hover {
+    background: #d1fae5;
+}
+
+.ltd-btn-awaiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: not-allowed;
+    white-space: nowrap;
+}
+
+.ltd-queue-footer {
+    font-size: 12px;
+    color: #64748b;
+    padding-top: 2px;
+}
+
+/* ── Analyzer Bench Run Modal (Exact Match to Screenshot 5) ───────────────── */
+.ltd-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 2500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.ltd-modal-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 24px 50px rgba(15, 23, 42, 0.22);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ltd-modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ltd-modal-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.015em;
+}
+
+.ltd-modal-close {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: inline-flex;
+    font-size: 19px;
+}
+
+.ltd-modal-close:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.ltd-modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.ltd-specimen-box {
+    background: #f4f8ff;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ltd-specimen-box-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.ltd-specimen-barcode {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #1d4ed8;
+}
+
+.ltd-specimen-line {
+    font-size: 13px;
+    color: #334155;
+    line-height: 1.4;
+}
+
+.ltd-specimen-line strong {
+    color: #1e3a8a;
+    font-weight: 700;
+}
+
+.ltd-modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ltd-modal-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.ltd-modal-select,
+.ltd-modal-input,
+.ltd-modal-textarea {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 13.5px;
+    color: #0f172a;
+    font-family: inherit;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.ltd-modal-select:focus,
+.ltd-modal-input:focus,
+.ltd-modal-textarea:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.ltd-reject-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 4px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.ltd-reject-link-btn {
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.ltd-modal-footer {
+    padding: 16px 24px 20px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.ltd-btn-cancel {
+    padding: 9px 18px;
+    border-radius: 9px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ltd-btn-cancel:hover {
+    background: #f8fafc;
+}
+
+.ltd-btn-submit {
+    padding: 9px 20px;
+    border-radius: 9px;
+    border: none;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ltd-btn-submit:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+
+.ltd-btn-submit:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .ltd-hero-card {
+        padding: 20px;
+    }
+
+    .ltd-hero-scan-form {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .ltd-hero-kpi-box {
+        flex: 1 1 110px;
+        padding: 11px 14px;
+    }
+}

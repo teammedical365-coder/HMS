@@ -14,19 +14,145 @@
 .tablet-sheet-zoom-content {
     width: max-content;
     max-width: none;
-    min-width: 100%;
     flex: 0 0 auto;
-    transform-origin: top center;
+    transform-origin: top left;
+}
+
+.tablet-sheet-zoom-area.is-ink-mode {
+    touch-action: none;
 }
 
 .tablet-sheet-zoom-controls {
     display: none;
 }
 
-@media (min-width: 600px) and (max-width: 1100px) {
+.ipdc-tool-btn-danger {
+    color: #dc2626 !important;
+    border-color: #fecaca !important;
+    background: #fef2f2 !important;
+}
+
+.ipdc-tool-btn-danger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.ipdc-sheet-floating-bar {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 35;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 3px 6px 3px 10px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.ipdc-sheet-pill {
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.ipdc-sheet-delete-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #dc2626;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ipdc-sheet-delete-pill:hover {
+    background: #fee2e2;
+}
+
+.ipdc-confirm-delete-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100020;
+    padding: 16px;
+}
+
+.ipdc-confirm-delete-dialog {
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    max-width: 420px;
+    width: 100%;
+    padding: 20px 22px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+}
+
+.ipdc-confirm-delete-hdr {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.ipdc-confirm-delete-hdr h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.ipdc-confirm-delete-dialog p {
+    margin: 0 0 18px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #475569;
+}
+
+.ipdc-confirm-delete-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.ipdc-confirm-cancel-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ipdc-confirm-danger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@media (min-width: 768px) and (max-width: 1366px) {
     .tablet-sheet-zoom-area {
         overflow: auto;
-        align-items: center;
+        align-items: stretch;
         padding: 12px 8px 24px;
     }
 
@@ -34,8 +160,10 @@
         display: flex;
         position: sticky;
         top: 5px;
-        z-index: 20;
+        left: 0;
+        z-index: 30;
         align-self: flex-end;
+        margin-left: auto;
         align-items: center;
         gap: 6px;
         margin: 0 8px 10px 0;

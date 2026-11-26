@@ -1035,6 +1035,28 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             hospitalPhone: hospital?.phone || ''
         }).catch(err => console.error('[book-appointment] Email send background error:', err.message));
 
+        // If prescribed lab tests were attached to this Reception-confirmed booking, sync to LMS Sample Collection
+        if (Array.isArray(req.body.labTests) && req.body.labTests.length > 0) {
+            try {
+                const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                newAppointment.labTests = req.body.labTests;
+                await newAppointment.save();
+                await syncPrescribedTestsToLmsOrder({
+                    hospitalId,
+                    appointmentId: newAppointment._id,
+                    userId: patient._id,
+                    patientId: patient.patientId || patient.mrn,
+                    doctorId: doctor._id,
+                    doctorName: doctor.name,
+                    labTests: req.body.labTests,
+                    sourceModule: 'HMS_RECEPTION',
+                    actorId: req.user._id
+                });
+            } catch (lmsErr) {
+                console.error('[book-appointment -> LMS sync error]:', lmsErr.message);
+            }
+        }
+
         res.json({ success: true, message: 'Appointment booked successfully!', appointment: newAppointment, tokenNumber });
 
     } catch (error) {
@@ -1053,10 +1075,31 @@ router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, 
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
         
         appt.paymentStatus = 'Paid';
+        if (appt.status === 'pending') appt.status = 'confirmed';
         appt.paymentMethod = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : (paymentMethod || appt.paymentMethod || 'Cash');
         appt.splitPayments = splitPayments;
         if (amount !== undefined) appt.amount = amount;
         await appt.save();
+
+        // If appointment has prescribed lab tests, ensure LMS Sample Collection order is synced upon Reception confirmation
+        if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
+            try {
+                const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                await syncPrescribedTestsToLmsOrder({
+                    hospitalId: req.user.hospitalId || appt.hospitalId,
+                    appointmentId: appt._id,
+                    userId: appt.userId,
+                    patientId: appt.patientId,
+                    doctorId: appt.doctorId?._id || appt.doctorId,
+                    doctorName: appt.doctorId?.name || appt.doctorName || '',
+                    labTests: appt.labTests,
+                    sourceModule: 'HMS_RECEPTION',
+                    actorId: req.user._id || req.user.userId
+                });
+            } catch (lmsErr) {
+                console.error('[confirm-payment -> LMS sync error]:', lmsErr.message);
+            }
+        }
 
         const PaymentTransaction = require('../models/paymentTransaction.model');
         const pt = new PaymentTransaction({
@@ -1108,8 +1151,27 @@ router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
         await visit.save();
 
         if (appointmentId) {
-            // Update appointment status
-            await Appointment.findByIdAndUpdate(appointmentId, { status: 'completed' }); // Or maybe a new status like 'in_progress'
+            // Update appointment status and sync any prescribed lab tests to LMS Sample Collection
+            const checkedInAppt = await Appointment.findByIdAndUpdate(appointmentId, { status: 'completed' }, { new: true });
+            if (checkedInAppt && Array.isArray(checkedInAppt.labTests) && checkedInAppt.labTests.length > 0) {
+                try {
+                    const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
+                    await syncPrescribedTestsToLmsOrder({
+                        hospitalId: req.user.hospitalId || checkedInAppt.hospitalId,
+                        appointmentId: checkedInAppt._id,
+                        clinicalVisitId: visit._id,
+                        userId: checkedInAppt.userId || patientId,
+                        patientId: checkedInAppt.patientId,
+                        doctorId: checkedInAppt.doctorId,
+                        doctorName: checkedInAppt.doctorName || '',
+                        labTests: checkedInAppt.labTests,
+                        sourceModule: 'HMS_RECEPTION',
+                        actorId: req.user._id
+                    });
+                } catch (lmsErr) {
+                    console.error('[check-in -> LMS sync error]:', lmsErr.message);
+                }
+            }
         }
 
         // Emit socket event to update Reception/Doctor grids

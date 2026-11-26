@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { labAPI } from '../../utils/api';
 import LabLayout from '../../components/lab/LabLayout';
 import LabResultModal from './LabResultModal';
@@ -8,12 +9,13 @@ import {
 } from 'react-icons/fi';
 
 const LabResultEntryPage = () => {
+    const location = useLocation();
     const [queue, setQueue] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Filters
-    const [search, setSearch] = useState('');
+    // Filters (pre-populates barcode query when navigating from Technical Bench)
+    const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('barcode') || '');
     const [department, setDepartment] = useState('');
     const [priority, setPriority] = useState('');
     const [statusFilter, setStatusFilter] = useState('');

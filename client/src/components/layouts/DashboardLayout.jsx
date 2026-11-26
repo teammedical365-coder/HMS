@@ -12,6 +12,7 @@ import {
     FiChevronDown, FiChevronRight, FiCpu, FiScissors, FiDollarSign, FiServer
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
+import LabAdminShell from '../lab/LabAdminShell';
 import './DashboardLayout.css';
 
 const DashboardSidebar = memo(({ isOpen, setOpen }) => {
@@ -40,7 +41,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         }
 
         const isLabRoute = location.pathname.startsWith('/lab');
-        const isLabRole = roleClean.includes('lab') || roleClean.includes('pathologist') || roleClean.includes('phlebotomist');
+        const isLabRole = roleClean.includes('lab') || roleClean.includes('pathologist') || roleClean.includes('phlebotomist') || roleClean.includes('samplecollector') || roleClean.includes('samplecollection');
 
         if (isLabRole || (isLabRoute && (role === 'centraladmin' || role === 'superadmin' || role === 'doctor' || role === 'lab admin'))) {
             const labNav = [];
@@ -50,8 +51,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             labNav.push(
                 { label: 'Lab Admin Desk', path: '/lab/dashboard', icon: <FiHome />, prefetchKey: 'lab_dash', prefetchFn: () => import('../../pages/lab/LabAdminDashboard') },
                 { label: 'Manager Desk', path: '/lab/manager', icon: <FiActivity />, prefetchKey: 'lab_mgr', prefetchFn: () => import('../../pages/lab/LabManagerDashboard') },
-                { label: 'Reception Intake', path: '/lab/reception', icon: <FiUsers />, prefetchKey: 'lab_rec', prefetchFn: () => import('../../pages/lab/LabReceptionDashboard') },
-                { label: 'Phlebotomy Queue', path: '/lab/collection', icon: <FiPackage />, prefetchKey: 'lab_col', prefetchFn: () => import('../../pages/lab/LabCollectionDashboard') },
+                { label: 'Sample Collection', path: '/lab/collection', icon: <FiPackage />, prefetchKey: 'lab_col', prefetchFn: () => import('../../pages/lab/LabCollectionDashboard') },
                 { label: 'Accessioning Station', path: '/lab/accessioning', icon: <FiCheckCircle />, prefetchKey: 'lab_acc', prefetchFn: () => import('../../pages/lab/LabAccessioningPage') },
                 { label: 'Technical Bench', path: '/lab/bench', icon: <FiCpu />, prefetchKey: 'lab_bench', prefetchFn: () => import('../../pages/lab/LabBenchDashboard') },
                 { label: 'Result Entry', path: '/lab/results/entry', icon: <FiFileText />, prefetchKey: 'lab_res_entry', prefetchFn: () => import('../../pages/lab/LabResultEntryPage') },
@@ -59,9 +59,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Panic Alerts', path: '/lab/results/critical-alerts', icon: <FiHeart />, prefetchKey: 'lab_alerts', prefetchFn: () => import('../../pages/lab/LabCriticalAlertsPage') },
                 { label: 'Lab Billing & Ledger', path: '/lab/billing', icon: <FiDollarSign />, prefetchKey: 'lab_bill', prefetchFn: () => import('../../pages/lab/LabBillingDashboard') },
                 { label: 'Diagnostic Reports', path: '/lab/reports', icon: <FiFileText />, prefetchKey: 'lab_reps', prefetchFn: () => import('../../pages/lab/LabReportDashboard') },
-                { label: 'Master Data Catalog', path: '/lab/catalog', icon: <FiGrid />, prefetchKey: 'lab_cat', prefetchFn: () => import('../../pages/lab/LabMasterCatalogPage') },
+                { label: 'Test Catalogue', path: '/lab/catalog', icon: <FiGrid />, prefetchKey: 'lab_cat', prefetchFn: () => import('../../pages/lab/LabMasterCatalogPage') },
                 { label: 'Laboratory Locations', path: '/lab/locations', icon: <FiBox />, prefetchKey: 'lab_locs', prefetchFn: () => import('../../pages/lab/LabLocationsPage') },
-                { label: 'Patient Directory', path: '/lab/patients', icon: <FiUsers />, prefetchKey: 'lab_pats', prefetchFn: () => import('../../pages/lab/LabPatientsPage') },
                 { label: 'Clinical Orders', path: '/lab/orders', icon: <FiClipboard />, prefetchKey: 'lab_ords', prefetchFn: () => import('../../pages/lab/LabOrdersPage') }
             );
             return labNav;
@@ -613,7 +612,18 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 };
 
 const DashboardLayout = ({ children }) => {
+    const { user } = useAuth();
     const location = useLocation();
+    const roleRaw = (user?.roleName || user?._roleData?.name || user?.role || '').toLowerCase().trim();
+    const roleClean = roleRaw.replace(/\s+/g, '');
+    const isLabAdminRole = roleClean === 'labadmin' || roleClean === 'lab' || roleRaw === 'laboratory administrator';
+    const isSampleCollectionRole = roleRaw.includes('phlebotomist') || roleRaw.includes('sample collector') || roleRaw === 'sample collection';
+    const isLabTechnicianRole = (roleRaw.includes('lab technician') || roleClean === 'labtechnician' || roleClean === 'technician') && !isLabAdminRole;
+    const useDedicatedLabAdminShell = (
+        ((isLabAdminRole || isSampleCollectionRole || isLabTechnicianRole) && location.pathname.startsWith('/lab')) ||
+        location.pathname === '/lab/dashboard'
+    );
+
     const isFullBleed = location.pathname.includes('/patient') || 
                         location.pathname.includes('/patients') || 
                         location.pathname.includes('/real-time-monitoring') || 
@@ -632,6 +642,10 @@ const DashboardLayout = ({ children }) => {
         handleResize();
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    if (useDedicatedLabAdminShell) {
+        return <LabAdminShell>{children}</LabAdminShell>;
+    }
 
     return (
         <div className="erp-layout">

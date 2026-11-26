@@ -2,15 +2,17 @@ import React, { useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
+import { useBranding } from '../../context/BrandingContext';
 import {
-    FiHome, FiUsers, FiMapPin, FiActivity, FiLayers,
-    FiCheckCircle, FiFileText, FiDollarSign, FiClock,
-    FiClipboard, FiLogOut, FiInbox, FiCpu, FiGrid,
-    FiCheckSquare, FiRefreshCw, FiTruck, FiEdit3, FiAlertOctagon, FiSend, FiSliders, FiPlus
+    FiHome, FiMapPin, FiActivity, FiLayers,
+    FiCheckCircle, FiFileText, FiDollarSign,
+    FiClipboard, FiLogOut, FiCpu, FiGrid,
+    FiCheckSquare, FiRefreshCw, FiTruck, FiEdit3, FiAlertOctagon, FiSend, FiPlus
 } from 'react-icons/fi';
 
 const LabSidebar = ({ isOpen, onClose }) => {
     const { user } = useAuth();
+    const { branding, hospitalName } = useBranding();
     const location = useLocation();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
@@ -37,10 +39,8 @@ const LabSidebar = ({ isOpen, onClose }) => {
             primaryItems.push({ label: 'Manager Operations', path: '/lab/manager', icon: <FiActivity /> });
         } else if (isManager) {
             primaryItems.push({ label: 'Operations Dashboard', path: '/lab/manager', icon: <FiActivity /> });
-        } else if (isReception) {
-            primaryItems.push({ label: 'Reception Intake', path: '/lab/reception', icon: <FiInbox /> });
         } else if (isPhleb) {
-            primaryItems.push({ label: 'Phlebotomy Station', path: '/lab/collection', icon: <FiLayers /> });
+            primaryItems.push({ label: 'Sample Collection', path: '/lab/collection', icon: <FiLayers /> });
         } else if (isTech) {
             primaryItems.push({ label: 'Technical Bench', path: '/lab/bench', icon: <FiCpu /> });
         } else if (isPathologist) {
@@ -57,8 +57,7 @@ const LabSidebar = ({ isOpen, onClose }) => {
         // Workstation Switcher for Admin & Manager
         if (isAdmin || isManager) {
             const stations = [];
-            stations.push({ label: 'Reception Queue', path: '/lab/reception', icon: <FiInbox /> });
-            stations.push({ label: 'Phlebotomy Queue', path: '/lab/collection', icon: <FiLayers /> });
+            stations.push({ label: 'Sample Collection', path: '/lab/collection', icon: <FiLayers /> });
             stations.push({ label: 'Accessioning Station', path: '/lab/accessioning', icon: <FiCheckSquare /> });
             stations.push({ label: 'Bench Testing', path: '/lab/bench', icon: <FiCpu /> });
             stations.push({ label: 'Result Entry', path: '/lab/results/entry', icon: <FiEdit3 /> });
@@ -89,11 +88,9 @@ const LabSidebar = ({ isOpen, onClose }) => {
             opItems.push({ label: 'Lab Locations', path: '/lab/locations', icon: <FiMapPin /> });
         }
         if (isAdmin || isManager || isPathologist) {
-            opItems.push({ label: 'Master Data Catalog', path: '/lab/catalog', icon: <FiGrid /> });
+            opItems.push({ label: 'Test Catalogue', path: '/lab/catalog', icon: <FiGrid /> });
         }
         if (isAdmin || isManager || isReception) {
-            opItems.push({ label: 'Patient Directory', path: '/lab/patients', icon: <FiUsers /> });
-            opItems.push({ label: 'Book Requisition', path: '/lab/orders/create', icon: <FiInbox /> });
             opItems.push({ label: 'Lab Orders', path: '/lab/orders', icon: <FiClipboard /> });
         }
         if (isReception) {
@@ -103,7 +100,7 @@ const LabSidebar = ({ isOpen, onClose }) => {
             opItems.push({ label: 'Assigned Tests', path: '/lab/tests', icon: <FiClipboard /> });
         }
         opItems.push({ label: 'Completed Reports', path: '/lab/completed', icon: <FiFileText /> });
-                // Phase 8: Diagnostic Reports Workstation
+        // Phase 8: Diagnostic Reports Workstation
         const reportItems = [
             { label: 'Reports Console', path: '/lab/reports', icon: <FiFileText /> },
             { label: 'Released Reports', path: '/lab/reports/released', icon: <FiCheckCircle /> }
@@ -113,7 +110,6 @@ const LabSidebar = ({ isOpen, onClose }) => {
         }
         if (isAdmin || isManager || isPathologist) {
             reportItems.splice(2, 0, { label: 'Review & Sign-off', path: '/lab/reports/review', icon: <FiCheckSquare /> });
-            reportItems.push({ label: 'Report Templates', path: '/lab/reports/templates', icon: <FiSliders /> });
         }
         reportItems.push({ label: 'Report Delivery', path: '/lab/reports/delivery', icon: <FiSend /> });
         sections.push({ title: 'Diagnostic Reports', items: reportItems });
@@ -128,13 +124,23 @@ const LabSidebar = ({ isOpen, onClose }) => {
         navigate('/login');
     };
 
+    const resolvedHospitalName = hospitalName || 'Medical 365';
+    const resolvedLogoUrl = branding?.logoUrl || branding?.logo || '/assets/logo.png';
+
     return (
         <aside className={`lab-sidebar ${isOpen ? 'open' : ''}`}>
             <div className="lab-sidebar-brand">
-                <div className="lab-brand-icon">🔬</div>
+                <img
+                    src={resolvedLogoUrl}
+                    alt={resolvedHospitalName}
+                    onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/logo.png';
+                    }}
+                    style={{ height: '34px', maxWidth: '44px', width: 'auto', objectFit: 'contain' }}
+                />
                 <div className="lab-brand-text">
-                    <h2>Medical365</h2>
-                    <span>Laboratory LMS</span>
+                    <h2>{resolvedHospitalName}</h2>
                 </div>
             </div>
 

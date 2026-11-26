@@ -1,116 +1,242 @@
-/* ============================================================
-   LMS Phase 3 — Lab Master Data Catalog Styling
-   ============================================================ */
+/* ============================================================================
+   Medical365 LMS — Complete Test Catalogue & Master Data Design System
+   Responsive across 1920x1080, 1440x900, 1366x768, 1024x768, 768x1024 & Mobile
+   ============================================================================ */
 
+.lmd-module-root,
+.lmd-module-root *,
+.lmd-modal-overlay,
+.lmd-modal-overlay * {
+    box-sizing: border-box;
+}
+
+.lmd-module-root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ── Top Navigation Tabs ──────────────────────────────────────────────────── */
 .lmd-tab-nav {
     display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    border-bottom: 2px solid #e2e8f0;
-    padding-bottom: 12px;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 6px;
     overflow-x: auto;
+    scrollbar-width: thin;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
 
 .lmd-tab-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 18px;
+    padding: 10px 16px;
     border-radius: 10px;
     border: 1px solid transparent;
-    background: #f8fafc;
+    background: transparent;
     color: #475569;
-    font-size: 0.92rem;
+    font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .lmd-tab-btn:hover {
-    background: #f1f5f9;
-    color: #1e293b;
+    background: #f8fafc;
+    color: #0f172a;
 }
 
 .lmd-tab-btn.active {
-    background: #3b82f6;
+    background: #2563eb;
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+    font-weight: 700;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.24);
 }
 
+/* ── Content Panes & Section Cards ────────────────────────────────────────── */
 .lmd-content-pane {
     background: #ffffff;
     border-radius: 16px;
     border: 1px solid #e2e8f0;
-    padding: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    padding: 22px 24px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+    width: 100%;
+    max-width: 100%;
 }
 
-/* Action Bar */
+.lmd-stack-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: 100%;
+}
+
+.lmd-section-card {
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    padding: 22px 24px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+    width: 100%;
+}
+
+.lmd-section-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+}
+
+.lmd-section-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.lmd-section-icon-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.lmd-section-icon-badge.teal {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #059669;
+}
+
+.lmd-section-heading {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+}
+
+.lmd-section-subtitle {
+    margin: 3px 0 0;
+    font-size: 12.5px;
+    color: #64748b;
+}
+
+/* ── Action Bar & Filters ─────────────────────────────────────────────────── */
 .lmd-action-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 14px;
     margin-bottom: 20px;
+}
+
+.lmd-action-bar-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
 }
 
 .lmd-search-group {
     display: flex;
     align-items: center;
     position: relative;
-    flex: 1;
-    min-width: 280px;
-    max-width: 480px;
+    flex: 1 1 280px;
+    max-width: 440px;
+    min-width: 0;
 }
 
 .lmd-search-icon {
     position: absolute;
-    left: 14px;
+    left: 13px;
     color: #94a3b8;
+    font-size: 15px;
+    pointer-events: none;
 }
 
 .lmd-search-group input {
     width: 100%;
-    padding: 10px 14px 10px 40px;
+    height: 40px;
+    padding: 0 84px 0 38px;
     border-radius: 10px;
     border: 1px solid #cbd5e1;
-    font-size: 0.9rem;
+    background: #f8fafc;
+    font-size: 13.5px;
+    color: #0f172a;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .lmd-search-group input:focus {
-    border-color: #3b82f6;
+    background: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .lmd-btn-filter {
     position: absolute;
-    right: 4px;
-    background: #3b82f6;
-    color: #fff;
+    right: 5px;
+    height: 30px;
+    background: #2563eb;
+    color: #ffffff;
     border: none;
-    padding: 6px 14px;
-    border-radius: 8px;
+    padding: 0 13px;
+    border-radius: 7px;
     cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 700;
+    transition: background-color 0.15s ease;
+}
+
+.lmd-btn-filter:hover {
+    background: #1d4ed8;
 }
 
 .lmd-filter-selects {
     display: flex;
+    align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .lmd-filter-selects select {
-    padding: 9px 14px;
+    height: 40px;
+    padding: 0 12px;
     border-radius: 10px;
     border: 1px solid #cbd5e1;
-    font-size: 0.88rem;
+    font-size: 13px;
+    font-weight: 500;
     background: #ffffff;
     color: #334155;
     outline: none;
+    cursor: pointer;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.lmd-filter-selects select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .lmd-actions-right {
@@ -120,126 +246,333 @@
     flex-wrap: wrap;
 }
 
+/* ── Unified Button System ────────────────────────────────────────────────── */
 .lmd-btn-primary {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    justify-content: center;
+    gap: 7px;
+    height: 40px;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: #ffffff;
-    padding: 10px 18px;
+    padding: 0 18px;
     border-radius: 10px;
     border: none;
-    font-weight: 600;
-    font-size: 0.9rem;
+    font-weight: 700;
+    font-size: 13.5px;
     cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    white-space: nowrap;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.22);
 }
 
 .lmd-btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.3);
 }
 
 .lmd-btn-primary:disabled {
-    opacity: 0.6;
+    opacity: 0.58;
     cursor: not-allowed;
+    box-shadow: none;
 }
 
-.lmd-btn-outline {
+.lmd-btn-outline,
+.lmd-btn-cancel {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 7px;
+    height: 40px;
     background: #ffffff;
     color: #334155;
     border: 1px solid #cbd5e1;
-    padding: 9px 16px;
+    padding: 0 16px;
     border-radius: 10px;
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: 13.5px;
     cursor: pointer;
-    transition: background 0.2s;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.lmd-btn-outline:hover {
+.lmd-btn-outline:hover:not(:disabled),
+.lmd-btn-cancel:hover:not(:disabled) {
     background: #f8fafc;
     border-color: #94a3b8;
+    color: #0f172a;
 }
 
-/* Tables */
+.lmd-btn-secondary-blue {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 9px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-size: 12.8px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lmd-btn-secondary-blue:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.lmd-btn-danger-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lmd-btn-danger-ghost:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+/* ── Data Tables ──────────────────────────────────────────────────────────── */
 .lmd-table-wrapper {
+    width: 100%;
+    max-width: 100%;
     overflow-x: auto;
     border-radius: 12px;
     border: 1px solid #e2e8f0;
+    background: #ffffff;
 }
 
 .lmd-table {
     width: 100%;
+    min-width: 640px;
     border-collapse: collapse;
     text-align: left;
-    font-size: 0.9rem;
+    font-size: 13.5px;
 }
 
 .lmd-table th {
     background: #f8fafc;
     color: #475569;
+    font-size: 12px;
     font-weight: 700;
-    padding: 12px 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 13px 16px;
     border-bottom: 1px solid #e2e8f0;
     white-space: nowrap;
 }
 
 .lmd-table td {
-    padding: 12px 16px;
+    padding: 13px 16px;
     border-bottom: 1px solid #f1f5f9;
     color: #1e293b;
     vertical-align: middle;
+    line-height: 1.45;
 }
 
-.lmd-table tr:hover td {
-    background: #fafafa;
+.lmd-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.lmd-table tbody tr:hover td {
+    background: #f8fbff;
+}
+
+.lmd-table th.col-right,
+.lmd-table td.col-right {
+    text-align: right;
+}
+
+.lmd-code-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #1d4ed8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.lmd-code-badge.teal {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #047857;
+}
+
+.lmd-code-badge.purple {
+    background: #f5f3ff;
+    border-color: #ddd6fe;
+    color: #6d28d9;
+}
+
+.lmd-tube-color-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+}
+
+.lmd-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    flex-shrink: 0;
 }
 
 .lmd-table .bold {
-    font-weight: 600;
+    font-weight: 700;
+    color: #0f172a;
 }
 
-.lmd-table .subtext {
-    font-size: 0.8rem;
+.lmd-table .subtext,
+.subtext {
+    font-size: 12px;
     color: #64748b;
     margin-top: 2px;
+    line-height: 1.4;
 }
 
-.lmd-table .text-blue {
+.text-blue {
     color: #2563eb;
+}
+
+.text-purple {
+    color: #6d28d9;
+}
+
+.text-emerald {
+    color: #059669;
+}
+
+.lmd-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-width: 340px;
 }
 
 .lmd-tag {
     display: inline-block;
-    padding: 3px 8px;
+    padding: 3px 9px;
     border-radius: 6px;
-    background: #e0f2fe;
+    background: #eff6ff;
     color: #0369a1;
-    font-size: 0.78rem;
+    font-size: 11.8px;
     font-weight: 600;
 }
 
 .lmd-pill {
     display: inline-block;
-    padding: 3px 10px;
-    border-radius: 9999px;
+    padding: 4px 10px;
+    border-radius: 999px;
     background: #f1f5f9;
     color: #334155;
-    font-size: 0.78rem;
+    font-size: 12px;
     font-weight: 600;
+    white-space: nowrap;
+}
+
+.lmd-savings-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 11.8px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.lmd-badge-test {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.lmd-badge-pkg {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #f5f3ff;
+    color: #6d28d9;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.lmd-price-input-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0 10px;
+    height: 36px;
+    width: 140px;
+}
+
+.lmd-price-input-wrap:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.lmd-price-input-wrap span {
+    color: #64748b;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.lmd-price-input-wrap input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    background: transparent;
 }
 
 .lmd-status-dot {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .lmd-status-dot.active {
@@ -248,8 +581,8 @@
 
 .lmd-status-dot.active::before {
     content: '';
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: #16a34a;
 }
@@ -260,117 +593,222 @@
 
 .lmd-status-dot.inactive::before {
     content: '';
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: #cbd5e1;
 }
 
 .lmd-table-actions {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: flex-end;
+    gap: 6px;
 }
 
 .lmd-icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     border: 1px solid #e2e8f0;
     background: #ffffff;
     color: #475569;
     cursor: pointer;
-    transition: all 0.2s;
+    font-size: 14px;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .lmd-icon-btn:hover {
-    background: #f1f5f9;
-    color: #1e293b;
-    border-color: #cbd5e1;
+    background: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
 }
 
+.lmd-icon-btn.btn-deactivate:hover,
 .lmd-icon-btn.danger:hover {
-    background: #fee2e2;
+    background: #fef2f2;
     color: #dc2626;
-    border-color: #fca5a5;
+    border-color: #fecaca;
 }
 
-/* Modals */
+.lmd-icon-btn.btn-activate:hover {
+    background: #f0fdf4;
+    color: #16a34a;
+    border-color: #bbf7d0;
+}
+
+/* ============================================================================
+   GLOBAL MODAL DESIGN SYSTEM (Section 4)
+   Fixed Header + Scrollable Body + Sticky Footer — Zero Clipping / Overlap
+   ============================================================================ */
+
 .lmd-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.55);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 1300;
     padding: 20px;
 }
 
 .lmd-modal-card {
     background: #ffffff;
-    border-radius: 20px;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
     width: 100%;
-    max-width: 600px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    max-width: 660px;
+    max-height: min(90vh, 900px);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.28);
+}
+
+.lmd-modal-card.compact {
+    max-width: 520px;
+}
+
+.lmd-modal-card.pkg {
+    max-width: 740px;
 }
 
 .lmd-modal-card.wide {
-    max-width: 900px;
+    max-width: 980px;
 }
 
 .lmd-modal-hdr {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 28px;
+    gap: 16px;
+    padding: 18px 24px;
     border-bottom: 1px solid #e2e8f0;
-    position: sticky;
-    top: 0;
     background: #ffffff;
-    z-index: 10;
+    flex-shrink: 0;
+}
+
+.lmd-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.lmd-modal-hdr-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
 }
 
 .lmd-modal-hdr h3 {
     margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
+    font-size: 17.5px;
+    font-weight: 800;
     color: #0f172a;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+}
+
+.lmd-modal-hdr-sub {
+    margin: 2px 0 0;
+    font-size: 12.2px;
+    color: #64748b;
 }
 
 .lmd-close-btn {
-    border: none;
-    background: none;
-    font-size: 1.2rem;
-    color: #94a3b8;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    padding: 4px;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.lmd-modal-form {
-    padding: 24px 28px;
+.lmd-close-btn:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+
+/* Form wrapper inside modal spans body + sticky footer */
+.lmd-modal-form-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.lmd-modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
     gap: 20px;
 }
 
+.lmd-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 15px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    flex-shrink: 0;
+}
+
+/* ── Structured Form Grids & Controls ─────────────────────────────────────── */
+.lmd-form-section-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.lmd-form-section-label {
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+    margin: 0;
+}
+
 .lmd-form-grid-3 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
 }
 
 .lmd-form-grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
 }
 
@@ -378,63 +816,100 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
 }
 
 .lmd-form-group label {
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: 12.5px;
+    font-weight: 700;
     color: #334155;
+    line-height: 1.35;
+}
+
+.lmd-req {
+    color: #dc2626;
+    margin-left: 2px;
 }
 
 .lmd-form-group input,
 .lmd-form-group select,
 .lmd-form-group textarea {
-    padding: 9px 12px;
-    border-radius: 8px;
+    width: 100%;
+    min-width: 0;
+    border-radius: 9px;
     border: 1px solid #cbd5e1;
-    font-size: 0.88rem;
+    background: #ffffff;
+    font-size: 13.5px;
+    color: #0f172a;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.lmd-form-group input,
+.lmd-form-group select {
+    height: 40px;
+    padding: 0 12px;
+}
+
+.lmd-form-group textarea {
+    padding: 10px 12px;
+    resize: vertical;
+    min-height: 74px;
+    line-height: 1.45;
 }
 
 .lmd-form-group input:focus,
 .lmd-form-group select:focus,
 .lmd-form-group textarea:focus {
-    border-color: #3b82f6;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
-.lmd-form-row {
+.lmd-form-group input:disabled,
+.lmd-form-group select:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+}
+
+/* Fasting Toggle Strip */
+.lmd-fasting-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 14px;
     display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .lmd-chk-label {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.88rem;
-    font-weight: 500;
+    gap: 9px;
+    font-size: 13.5px;
+    font-weight: 600;
     cursor: pointer;
-    color: #334155;
+    color: #1e293b;
 }
 
-.lmd-inline-input {
-    flex: 1;
-    min-width: 250px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #cbd5e1;
-    font-size: 0.85rem;
+.lmd-chk-label input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: #2563eb;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
-/* Parameters & Ranges */
+/* ============================================================================
+   MODAL 1: TEST PARAMETERS & BIOLOGICAL REFERENCE RANGES (Section 1C & 1D)
+   ============================================================================ */
+
 .lmd-sub-section {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: 14px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -444,20 +919,163 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 10px;
+    padding-bottom: 14px;
+    flex-wrap: wrap;
 }
 
 .lmd-sub-section-hdr h4 {
     margin: 0;
-    font-size: 0.98rem;
-    font-weight: 700;
-    color: #1e293b;
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.lmd-param-empty {
+    background: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 11px;
+    padding: 26px 20px;
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.lmd-param-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .lmd-param-card {
     background: #ffffff;
     border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.lmd-param-card-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 16px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+
+.lmd-param-badge-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lmd-param-num {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 11.5px;
+    font-weight: 800;
+}
+
+.lmd-param-code-lbl {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.lmd-param-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.lmd-param-fields-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 14px;
+    align-items: end;
+}
+
+/* Biological Reference Ranges Container */
+.lmd-ranges-block {
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+    border-radius: 11px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lmd-ranges-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.lmd-ranges-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lmd-ranges-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1e3a8a;
+}
+
+.lmd-ranges-count {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.lmd-btn-add-interval {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lmd-btn-add-interval:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+}
+
+.lmd-intervals-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lmd-interval-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 10px;
     padding: 14px;
     display: flex;
@@ -465,70 +1083,395 @@
     gap: 12px;
 }
 
-.lmd-range-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) 40px;
-    gap: 8px;
+.lmd-interval-topbar {
+    display: flex;
     align-items: center;
-    background: #f1f5f9;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 0.85rem;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.lmd-btn-sm {
-    padding: 6px 12px;
-    border-radius: 6px;
-    background: #3b82f6;
-    color: #ffffff;
-    border: none;
-    font-size: 0.8rem;
-    font-weight: 600;
+.lmd-interval-tag {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.lmd-range-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px 14px;
+}
+
+.lmd-range-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.lmd-range-cell label {
+    font-size: 11.8px;
+    font-weight: 700;
+    color: #475569;
+    line-height: 1.3;
+    word-wrap: break-word;
+}
+
+.lmd-range-cell.critical label {
+    color: #b91c1c;
+}
+
+.lmd-range-cell input,
+.lmd-range-cell select {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    font-size: 13px;
+    color: #0f172a;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lmd-range-cell input:focus,
+.lmd-range-cell select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.lmd-range-cell.critical input {
+    border-color: #fecaca;
+    background: #fffafa;
+}
+
+.lmd-range-cell.critical input:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+/* ============================================================================
+   MODAL 2: PACKAGE TEST CHECKLIST & PRICING SUMMARY (Section 2C & 2D)
+   ============================================================================ */
+
+.lmd-select-tests-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.lmd-pkg-filter-input {
+    height: 34px !important;
+    max-width: 240px;
+    font-size: 12.5px !important;
+    background: #f8fafc !important;
+}
+
+.lmd-tests-checklist {
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 8px;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lmd-chk-item {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.lmd-chk-item:hover {
+    border-color: #cbd5e1;
+    background: #fcfdff;
+}
+
+.lmd-chk-item.selected {
+    background: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.lmd-chk-item input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    accent-color: #2563eb;
     cursor: pointer;
 }
 
-.lmd-modal-actions {
+.lmd-chk-info {
+    min-width: 0;
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
-    padding-top: 16px;
-    border-top: 1px solid #e2e8f0;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.lmd-pricing-summary-card {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 10px;
-    padding: 14px;
-    display: flex;
-    justify-content: space-around;
-    text-align: center;
-    margin: 10px 0;
-}
-
-.lmd-pricing-summary-card .val {
-    font-size: 1.25rem;
+.chk-title {
+    font-size: 13.5px;
     font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.chk-meta {
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+.chk-price {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #0f172a;
+    text-align: right;
+    white-space: nowrap;
+    padding-left: 8px;
+}
+
+.lmd-chk-item.selected .chk-price {
     color: #1d4ed8;
 }
 
+/* Package Pricing Summary Card */
+.lmd-pricing-summary-card {
+    background: #f8fbff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lmd-psc-title {
+    margin: 0 0 2px;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #1e40af;
+}
+
+.lmd-psc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13.5px;
+    color: #334155;
+    font-weight: 600;
+}
+
+.lmd-psc-row strong {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    white-space: nowrap;
+}
+
+.lmd-psc-input-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1.5px solid #93c5fd;
+    border-radius: 9px;
+    padding: 0 12px;
+    height: 38px;
+    width: 155px;
+    flex-shrink: 0;
+}
+
+.lmd-psc-input-box:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.lmd-psc-input-box span {
+    font-weight: 700;
+    color: #475569;
+}
+
+.lmd-psc-input-box input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+    text-align: right;
+    background: transparent;
+}
+
+.lmd-psc-row.highlight {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 9px;
+    padding: 10px 14px;
+    color: #065f46;
+    font-weight: 700;
+}
+
+.lmd-psc-row.highlight strong {
+    color: #059669;
+    font-size: 16px;
+}
+
+/* CSV Textarea */
+.lmd-csv-textarea {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    padding: 12px 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #0f172a;
+    outline: none;
+    resize: vertical;
+}
+
+.lmd-csv-textarea:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* ── Loading & Empty States ───────────────────────────────────────────────── */
 .lmd-loading-box,
 .lmd-empty-box {
-    padding: 48px;
+    padding: 44px 20px;
     text-align: center;
     color: #64748b;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
+    font-size: 13.5px;
 }
 
 .spin {
-    animation: spin 1s linear infinite;
+    animation: lmdSpin 1s linear infinite;
 }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+@keyframes lmdSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE BREAKPOINTS (1920px -> 1440px -> 1366px -> 1024px -> 768px -> 360px)
+   ============================================================================ */
+
+@media (max-width: 1024px) {
+    .lmd-form-grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lmd-param-fields-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lmd-range-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .lmd-content-pane,
+    .lmd-section-card {
+        padding: 16px;
+    }
+
+    .lmd-search-group {
+        max-width: 100%;
+        flex: 1 1 100%;
+    }
+
+    .lmd-actions-right {
+        width: 100%;
+    }
+
+    .lmd-modal-overlay {
+        padding: 12px;
+    }
+
+    .lmd-modal-card {
+        max-height: 92vh;
+        border-radius: 14px;
+    }
+
+    .lmd-modal-hdr,
+    .lmd-modal-body,
+    .lmd-modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .lmd-form-grid-3,
+    .lmd-form-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .lmd-param-fields-grid,
+    .lmd-range-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lmd-sub-section,
+    .lmd-form-section-box {
+        padding: 14px;
+    }
+
+    .lmd-psc-row {
+        flex-wrap: wrap;
+    }
+
+    .lmd-psc-input-box {
+        width: 100%;
+    }
+
+    .lmd-modal-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .lmd-modal-footer button {
+        width: 100%;
+    }
+
+    .lmd-chk-item {
+        grid-template-columns: 20px minmax(0, 1fr);
+    }
+
+    .chk-price {
+        grid-column: 2;
+        text-align: left;
+        padding-left: 0;
+        margin-top: 2px;
+    }
 }

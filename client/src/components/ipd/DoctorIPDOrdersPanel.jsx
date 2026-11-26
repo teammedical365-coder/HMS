@@ -192,13 +192,20 @@ const DoctorIPDOrdersPanel = ({
     const [loadingVitals, setLoadingVitals] = useState(false);
 
     // ── Progress Notes State ──
+    const toLocalDateTimeInput = (dt = new Date()) => {
+        const d = dt ? new Date(dt) : new Date();
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
     const [progressNotes, setProgressNotes] = useState([]);
     const [loadingProgressNotes, setLoadingProgressNotes] = useState(false);
-    const [newProgressNote, setNewProgressNote] = useState({
+    const [newProgressNote, setNewProgressNote] = useState(() => ({
         note: '',
         sheetNo: '1',
-        recordedAt: ''
-    });
+        recordedAt: toLocalDateTimeInput()
+    }));
     const [savingProgressNote, setSavingProgressNote] = useState(false);
 
     // ── Drug Chart State ──
@@ -454,8 +461,8 @@ const DoctorIPDOrdersPanel = ({
                 setSuccessMsg('Clinical Progress Note saved successfully!');
                 setNewProgressNote({
                     note: '',
-                    sheetNo: '1',
-                    recordedAt: ''
+                    sheetNo: newProgressNote.sheetNo || '1',
+                    recordedAt: toLocalDateTimeInput()
                 });
                 fetchProgressNotes();
                 setTimeout(() => setSuccessMsg(''), 4000);
@@ -1086,7 +1093,7 @@ const DoctorIPDOrdersPanel = ({
                             </div>
                         </div>
                     ) : activeAdmission ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <div className="ipd-banner-actions-wrap" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={() => setTprModalOpen(true)}
@@ -1649,17 +1656,17 @@ const DoctorIPDOrdersPanel = ({
                         </h5>
                         <form onSubmit={handleAddProgressNote}>
                             <div className="ipd-progress-form-grid">
-                                <div>
-                                    <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
-                                        Observation Date &amp; Time
-                                    </label>
-                                    <input
-                                        type="datetime-local"
-                                        className="ipd-progress-input"
-                                        value={newProgressNote.recordedAt || ''}
-                                        onChange={(e) => setNewProgressNote(prev => ({ ...prev, recordedAt: e.target.value }))}
-                                    />
-                                </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                                            Observation Date &amp; Time
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            className="ipd-progress-input ipd-obs-datetime-input"
+                                            value={newProgressNote.recordedAt || toLocalDateTimeInput()}
+                                            onChange={(e) => setNewProgressNote(prev => ({ ...prev, recordedAt: e.target.value || toLocalDateTimeInput() }))}
+                                        />
+                                    </div>
                                 <div>
                                     <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>
                                         Sheet No.
@@ -2863,7 +2870,7 @@ const DoctorIPDOrdersPanel = ({
                             {/* Section C: Follow-up & Red Flags */}
                             <div className="ipd-section">
                                 <h4 className="ipd-section-title">📅 Follow-Up & Emergency Return Precautions</h4>
-                                <div className="ipd-form-grid-2">
+                                <div className="ipd-form-grid-2 ipd-discharge-followup-grid">
                                     <div className="ipd-field-group">
                                         <label>Follow-Up Review Date</label>
                                         <input
@@ -2876,9 +2883,9 @@ const DoctorIPDOrdersPanel = ({
 
                                     <div className="ipd-field-group">
                                         <label>Follow-Up & Dietary Instructions</label>
-                                        <input
-                                            type="text"
-                                            className="ipd-input"
+                                        <textarea
+                                            rows={2}
+                                            className="ipd-textarea ipd-followup-instructions-input"
                                             placeholder="e.g. Suture removal after 7 days, low salt diet"
                                             value={dischargeSummary.followUpInstructions}
                                             onChange={(e) => setDischargeSummary(p => ({ ...p, followUpInstructions: e.target.value }))}

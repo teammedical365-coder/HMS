@@ -100,6 +100,35 @@ const labOrderSchema = new mongoose.Schema({
         default: '',
         trim: true
     },
+    // HMS Consultation & Reception Integration References (Idempotency & Traceability)
+    appointmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Appointment',
+        default: null,
+        index: true
+    },
+    clinicalVisitId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ClinicalVisit',
+        default: null,
+        index: true
+    },
+    legacyLabReportId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'LabReport',
+        default: null,
+        index: true
+    },
+    prescribingDoctorUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    sourceModule: {
+        type: String,
+        enum: ['HMS_DOCTOR', 'HMS_RECEPTION', 'LMS_DIRECT'],
+        default: 'LMS_DIRECT'
+    },
     priority: {
         type: String,
         enum: ['Routine', 'Urgent', 'STAT'],

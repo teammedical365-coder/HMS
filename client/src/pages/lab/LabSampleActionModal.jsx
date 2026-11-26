@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../store/hooks';
 import { labAPI } from '../../utils/api';
 import './LabBillingModal.css'; // Reuses modal layout styles
 import {
@@ -12,12 +13,15 @@ const LabSampleActionModal = ({
     onClose,
     onSuccess
 }) => {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     // Collection State
-    const [collectedVolume, setCollectedVolume] = useState('2-3 mL');
+    const [collectedVolume, setCollectedVolume] = useState(data?.requiredVolume || '2-3 mL');
     const [collectionNotes, setCollectionNotes] = useState('');
+    const [labelConfirmedAttached, setLabelConfirmedAttached] = useState(true);
+    const [dispatchToLab, setDispatchToLab] = useState(true);
 
     // Acceptance State
     const [sampleCondition, setSampleCondition] = useState('Normal');
@@ -61,9 +65,16 @@ const LabSampleActionModal = ({
 
         try {
             if (type === 'collect') {
+                if (!labelConfirmedAttached) {
+                    setError('Please confirm that the printed Code 128 barcode label is attached to the specimen container.');
+                    setLoading(false);
+                    return;
+                }
                 const res = await labAPI.samples.collectSample(data._id, {
                     collectedVolume,
-                    collectionNotes
+                    collectionNotes,
+                    labelConfirmedAttached,
+                    dispatchToLab
                 });
                 if (res.success) {
                     onSuccess(res);
@@ -190,6 +201,16 @@ const LabSampleActionModal = ({
                         {/* 1. COLLECT SAMPLE */}
                         {type === 'collect' && (
                             <>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px', marginBottom: '12px', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}>
+                                    <div>
+                                        <span style={{ color: '#64748b', display: 'block' }}>Collector Identity</span>
+                                        <strong style={{ color: '#0f172a' }}>{user?.name || 'Phlebotomist'}</strong>
+                                    </div>
+                                    <div>
+                                        <span style={{ color: '#64748b', display: 'block' }}>Collection Date &amp; Time</span>
+                                        <strong style={{ color: '#0f172a' }}>{new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+                                    </div>
+                                </div>
                                 <div className="lbm-form-group">
                                     <label className="lbm-label">Collected Volume (mL)*</label>
                                     <input
@@ -210,6 +231,24 @@ const LabSampleActionModal = ({
                                         rows="2"
                                         className="lbm-textarea"
                                     />
+                                </div>
+                                <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0f172a', cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={labelConfirmedAttached}
+                                            onChange={(e) => setLabelConfirmedAttached(e.target.checked)}
+                                        />
+                                        <span>Confirm Code 128 barcode label is printed and attached to specimen tube*</span>
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#0369a1', cursor: 'pointer' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={dispatchToLab}
+                                            onChange={(e) => setDispatchToLab(e.target.checked)}
+                                        />
+                                        <span>Hand over / dispatch sample immediately to Lab Technician workstation</span>
+                                    </label>
                                 </div>
                             </>
                         )}

@@ -123,6 +123,20 @@ export default function DataMigration() {
     const [failedTotal, setFailedTotal] = useState(0);
     const [failedPage, setFailedPage] = useState(1);
     const [showFailedDrawer, setShowFailedDrawer] = useState(false);
+    const [migrationErrorBanner, setMigrationErrorBanner] = useState(null);
+
+    const reportMigrationApiError = (err, fallbackMsg, title = 'Data Migration Error') => {
+        const rawMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || fallbackMsg;
+        const isCollectionLimit = /500\s*collections|cannot create a new collection|collection limit/i.test(String(rawMsg));
+        setMigrationErrorBanner({
+            title: isCollectionLimit ? 'Database Collection Limit Reached' : title,
+            message: rawMsg,
+            hint: isCollectionLimit
+                ? 'The connected MongoDB cluster has reached its maximum collection allowance (500/500). Existing hospital records remain untouched — ask your administrator to clean up unused staging collections or upgrade the database tier before creating a new migration.'
+                : 'Review the error details above and try again, or verify server connectivity if the problem persists.'
+        });
+        toast.error(rawMsg);
+    };
 
     const fileInputRef = useRef(null);
 
@@ -152,7 +166,7 @@ export default function DataMigration() {
             }
         } catch (err) {
             console.error('Failed to load migration dashboard data:', err);
-            toast.error(err.response?.data?.message || 'Failed to load migration dashboard data');
+            reportMigrationApiError(err, 'Failed to load migration dashboard data', 'Unable to Load Migration History');
         } finally {
             setLoadingList(false);
         }
@@ -167,6 +181,7 @@ export default function DataMigration() {
     // ─────────────────────────────────────────────────────────────────────────
 
     const handleStartNewMigration = async () => {
+        setMigrationErrorBanner(null);
         try {
             const res = await migrationAPI.createSession();
             if (res.success && res.session) {
@@ -177,7 +192,7 @@ export default function DataMigration() {
                 toast.success(`Migration session ${res.session.migrationId} initialized.`);
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to initialize migration session.');
+            reportMigrationApiError(err, 'Failed to initialize migration session.', 'Could Not Start New Migration');
         }
     };
 
@@ -656,6 +671,29 @@ export default function DataMigration() {
                     </div>
                 </div>
 
+                {migrationErrorBanner && (
+                    <div className="migration-inline-error-banner" role="alert">
+                        <div className="migration-inline-error-content">
+                            <FiAlertTriangle className="migration-inline-error-icon" />
+                            <div>
+                                <div className="migration-inline-error-title">{migrationErrorBanner.title}</div>
+                                <div className="migration-inline-error-msg">{migrationErrorBanner.message}</div>
+                                {migrationErrorBanner.hint && (
+                                    <div className="migration-inline-error-hint">{migrationErrorBanner.hint}</div>
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className="migration-inline-error-close"
+                            onClick={() => setMigrationErrorBanner(null)}
+                            aria-label="Dismiss migration error"
+                        >
+                            <FiX size={18} />
+                        </button>
+                    </div>
+                )}
+
                 {/* Summary Stat Cards */}
                 <div className="stat-cards-grid">
                     <div className="stat-card">
@@ -841,6 +879,29 @@ export default function DataMigration() {
                     </button>
                 </div>
             </div>
+
+            {migrationErrorBanner && (
+                <div className="migration-inline-error-banner" role="alert">
+                    <div className="migration-inline-error-content">
+                        <FiAlertTriangle className="migration-inline-error-icon" />
+                        <div>
+                            <div className="migration-inline-error-title">{migrationErrorBanner.title}</div>
+                            <div className="migration-inline-error-msg">{migrationErrorBanner.message}</div>
+                            {migrationErrorBanner.hint && (
+                                <div className="migration-inline-error-hint">{migrationErrorBanner.hint}</div>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="migration-inline-error-close"
+                        onClick={() => setMigrationErrorBanner(null)}
+                        aria-label="Dismiss migration error"
+                    >
+                        <FiX size={18} />
+                    </button>
+                </div>
+            )}
 
             {/* Stepper Navigation */}
             <div className="stepper-nav">

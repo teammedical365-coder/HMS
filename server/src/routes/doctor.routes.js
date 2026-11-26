@@ -6,6 +6,7 @@ const Doctor = require('../models/doctor.model');
 const User = require('../models/user.model'); // Need User model to update profile
 const Lab = require('../models/lab.model');
 const LabReport = require('../models/labReport.model');
+const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
 const Inventory = require('../models/inventory.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
 const Notification = require('../models/notification.model');
@@ -731,6 +732,26 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     reportId = existingReport._id;
                 }
 
+                // Synchronize prescribed investigations into Phase 4 LMS LabOrder + Sample Collection Queue
+                try {
+                    await syncPrescribedTestsToLmsOrder({
+                        hospitalId: req.user.hospitalId || appointment.hospitalId,
+                        appointmentId: appointment._id,
+                        legacyLabReportId: reportId,
+                        userId: appointment.userId?._id || appointment.userId,
+                        patientId: pId,
+                        clinicPatientId: appointment.clinicPatientId || null,
+                        doctorId: req.user.id || req.user._id || appointment.doctorId,
+                        doctorName: req.user.name || appointment.doctorName || '',
+                        labTests: appointment.labTests,
+                        sourceModule: 'HMS_DOCTOR',
+                        notes: appointment.diagnosis ? `Diagnosis: ${appointment.diagnosis}` : '',
+                        actorId: req.user.id || req.user._id
+                    });
+                } catch (lmsSyncErr) {
+                    console.error('[doctor -> LMS sync error]:', lmsSyncErr.message);
+                }
+
                 // --- Dispatch Lab Notification ---
                 await Notification.create({
                     senderId: req.user.id,
@@ -747,8 +768,14 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                 }
 
             } else {
-                // Remove pending reports if no tests prescribed anymore
+                // Remove pending reports & cancel uncollected LMS order if no tests prescribed anymore
                 await LabReport.deleteOne({ appointmentId: appointment._id, testStatus: 'PENDING' });
+                await syncPrescribedTestsToLmsOrder({
+                    hospitalId: req.user.hospitalId || appointment.hospitalId,
+                    appointmentId: appointment._id,
+                    labTests: [],
+                    actorId: req.user.id || req.user._id
+                }).catch(() => {});
             }
 
             // --- NEW: Create Pharmacy Order ---

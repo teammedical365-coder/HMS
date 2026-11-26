@@ -1,0 +1,665 @@
+/* ============================================================================
+   Medical365 LMS — Laboratory Administrator Dashboard Styles
+   Matches Reference Design: Welcome Hero + 4 Today Summary KPI Cards +
+   Smooth Pull-Down Overview + Live Specimen Pipeline
+   ============================================================================ */
+
+.lad-page {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ── Optional Conditional License Banner (Only when an active local license check reports unlicensed) ── */
+.lad-license-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #ef4444;
+    border-radius: 12px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.lad-license-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: #991b1b;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.lad-license-activate-btn {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* ── Welcome Card ─────────────────────────────────────────────────────────── */
+.lad-welcome-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px 28px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.lad-welcome-left {
+    min-width: 0;
+    flex: 1;
+}
+
+.lad-greeting-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.lad-greeting-heading {
+    margin: 0;
+    font-size: 25px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+    line-height: 1.25;
+}
+
+.lad-greeting-user {
+    color: #1d4ed8;
+}
+
+.lad-wave-emoji {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 24px;
+}
+
+.lad-role-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #0284c7;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.lad-welcome-sub {
+    margin: 8px 0 0;
+    font-size: 13.8px;
+    color: #64748b;
+    line-height: 1.55;
+    max-width: 680px;
+}
+
+.lad-welcome-sub strong {
+    color: #1e293b;
+    font-weight: 700;
+}
+
+.lad-welcome-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.lad-date-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.lad-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lad-refresh-btn:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.lad-refresh-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+@keyframes ladSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.lad-spin {
+    animation: ladSpin 0.85s linear infinite;
+}
+
+/* ── Today's Lab Orders Summary Section ───────────────────────────────────── */
+.lad-summary-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.lad-section-heading-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lad-section-heading-icon {
+    color: #2563eb;
+    font-size: 17px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.lad-section-heading {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+}
+
+.lad-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.lad-kpi-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.lad-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    border-color: #cbd5e1;
+}
+
+.lad-kpi-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.lad-kpi-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.35;
+}
+
+.lad-kpi-icon-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 17px;
+}
+
+.lad-kpi-icon-blue {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.lad-kpi-icon-amber {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.lad-kpi-icon-teal {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.lad-kpi-icon-green {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.lad-kpi-value {
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.lad-val-blue {
+    color: #0369a1;
+}
+
+.lad-val-amber {
+    color: #b45309;
+}
+
+.lad-val-teal {
+    color: #047857;
+}
+
+.lad-val-green {
+    color: #15803d;
+}
+
+.lad-kpi-desc {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* ── View All Overview — Smooth Pull-Down Panel ───────────────────────────── */
+.lad-overview-panel {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+    overflow: hidden;
+}
+
+.lad-overview-trigger {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s ease;
+}
+
+.lad-overview-trigger:hover {
+    background: #f8fafc;
+}
+
+.lad-overview-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.lad-overview-grid-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.lad-overview-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lad-overview-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.lad-overview-hint-pill {
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.lad-overview-sub {
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: #64748b;
+}
+
+.lad-pulldown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 9px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lad-overview-trigger:hover .lad-pulldown-btn {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+.lad-chevron {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lad-chevron.expanded {
+    transform: rotate(180deg);
+}
+
+/* Smooth CSS Grid Accordion */
+.lad-overview-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.24s ease;
+}
+
+.lad-overview-collapse.open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+.lad-overview-collapse-inner {
+    overflow: hidden;
+}
+
+.lad-overview-body {
+    padding: 20px 22px 24px;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fbff;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(275px, 1fr));
+    gap: 16px;
+}
+
+.lad-ov-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lad-ov-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.lad-ov-card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.lad-ov-link-btn {
+    background: transparent;
+    border: none;
+    color: #2563eb;
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+}
+
+.lad-ov-link-btn:hover {
+    text-decoration: underline;
+}
+
+.lad-ov-metrics-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.lad-ov-metric-box {
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    border-radius: 9px;
+    padding: 10px 12px;
+}
+
+.lad-ov-metric-val {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.lad-ov-metric-lbl {
+    font-size: 11.2px;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+/* ── Live Specimen Pipeline Card ──────────────────────────────────────────── */
+.lad-pipeline-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    padding: 20px 22px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+}
+
+.lad-pipeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.lad-pipeline-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.lad-pipeline-sub {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.lad-pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.lad-stage-item {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 11px;
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.lad-stage-item:hover {
+    background: #f0f7ff;
+    border-color: #bfdbfe;
+}
+
+.lad-stage-count {
+    font-size: 21px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+
+.lad-stage-label {
+    font-size: 11.8px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.lad-stage-desc {
+    font-size: 10.8px;
+    color: #64748b;
+}
+
+/* ── Error & Loading States ───────────────────────────────────────────────── */
+.lad-error-banner {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    padding: 14px 18px;
+    color: #b91c1c;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.lad-skeleton-val {
+    display: inline-block;
+    width: 48px;
+    height: 30px;
+    border-radius: 7px;
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: ladShimmer 1.3s infinite;
+}
+
+@keyframes ladShimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ── Responsive Breakpoints ───────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+    .lad-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lad-pipeline-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .lad-welcome-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 20px;
+    }
+
+    .lad-welcome-right {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .lad-greeting-heading {
+        font-size: 21px;
+    }
+
+    .lad-license-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 560px) {
+    .lad-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lad-pipeline-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .lad-overview-trigger {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .lad-pulldown-btn {
+        align-self: flex-end;
+    }
+}

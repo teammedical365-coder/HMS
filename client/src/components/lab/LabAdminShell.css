@@ -1,0 +1,609 @@
+/* ============================================================================
+   Medical365 LMS — Dedicated Laboratory Administrator Portal Shell
+   Matches Reference Design: Clean white sidebar + sticky portal header + soft blue canvas
+   ============================================================================ */
+
+.lms-admin-shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+    background: #eef6fc;
+    color: #0f172a;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-sizing: border-box;
+}
+
+/* ── Fixed Left Sidebar ───────────────────────────────────────────────────── */
+.lms-admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 248px;
+    background: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    z-index: 1050;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+.lms-sidebar-brand {
+    height: 68px;
+    padding: 0 18px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.lms-brand-identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    text-decoration: none;
+}
+
+.lms-brand-logo {
+    height: 36px;
+    max-width: 48px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+    border-radius: 6px;
+}
+
+.lms-brand-meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.lms-brand-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lms-brand-sub {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #0284c7;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    margin-top: 1px;
+}
+
+.lms-sidebar-close-mobile {
+    display: none;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* ── Sidebar Navigation Links ─────────────────────────────────────────────── */
+.lms-sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+}
+
+.lms-nav-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.lms-nav-link:hover {
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+.lms-nav-link.active {
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.lms-nav-link.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3.5px;
+    border-radius: 0 4px 4px 0;
+    background: #2563eb;
+}
+
+.lms-nav-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    color: #64748b;
+    flex-shrink: 0;
+    transition: color 0.16s ease;
+}
+
+.lms-nav-link:hover .lms-nav-icon {
+    color: #334155;
+}
+
+.lms-nav-link.active .lms-nav-icon {
+    color: #2563eb;
+}
+
+.lms-nav-link.active-emerald {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.lms-nav-link.active-emerald::before {
+    background: #10b981;
+}
+
+.lms-nav-link.active-emerald .lms-nav-icon {
+    color: #059669;
+}
+
+/* ── Sidebar Bottom Identity Card ─────────────────────────────────────────── */
+.lms-sidebar-footer {
+    padding: 12px 14px 16px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.lms-sidebar-tenant-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.lms-tenant-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+    flex-shrink: 0;
+}
+
+.lms-tenant-texts {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.lms-tenant-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lms-tenant-role {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-top: 1px;
+}
+
+/* ── Main Viewport Column ─────────────────────────────────────────────────── */
+.lms-admin-main {
+    flex: 1;
+    margin-left: 248px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ── Sticky Top Portal Header ─────────────────────────────────────────────── */
+.lms-admin-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 980;
+    height: 68px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.lms-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.lms-mobile-menu-btn {
+    display: none;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.lms-topbar-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.lms-topbar-title {
+    margin: 0;
+    font-size: 18.5px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.lms-portal-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #eff6ff;
+    border: 1px solid #dbeafe;
+    color: #2563eb;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.lms-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* ── Search Input & Instant Results Popover ───────────────────────────────── */
+.lms-search-wrap {
+    position: relative;
+    width: 315px;
+}
+
+.lms-search-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.lms-search-form:focus-within {
+    background: #ffffff;
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.lms-search-icon {
+    color: #94a3b8;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.lms-search-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 12.5px;
+    color: #0f172a;
+    min-width: 0;
+}
+
+.lms-search-input::placeholder {
+    color: #94a3b8;
+}
+
+.lms-search-clear {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    padding: 2px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+.lms-search-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+    padding: 6px;
+    z-index: 1100;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.lms-search-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 9px 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    transition: background-color 0.14s ease;
+}
+
+.lms-search-item:hover {
+    background: #f1f5f9;
+}
+
+.lms-search-item-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.lms-search-item-sub {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.lms-search-cat-tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #2563eb;
+    flex-shrink: 0;
+}
+
+.lms-search-empty {
+    padding: 14px 12px;
+    text-align: center;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* ── User Avatar & Profile Menu ───────────────────────────────────────────── */
+.lms-profile-wrap {
+    position: relative;
+}
+
+.lms-avatar-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid #dbeafe;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lms-avatar-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.32);
+}
+
+.lms-avatar-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.lms-profile-popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 248px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+    padding: 14px;
+    z-index: 1100;
+}
+
+.lms-profile-head {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 10px;
+}
+
+.lms-profile-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.lms-profile-email {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+    word-break: break-all;
+}
+
+.lms-profile-role-pill {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 10.5px;
+    font-weight: 700;
+}
+
+.lms-logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #dc2626;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.lms-logout-btn:hover {
+    background: #fee2e2;
+}
+
+/* ── Main Content Canvas ──────────────────────────────────────────────────── */
+.lms-admin-canvas {
+    flex: 1;
+    padding: 24px 28px 36px;
+    max-width: 1440px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.lms-mobile-backdrop {
+    display: none;
+}
+
+/* ── Responsive Breakpoints (Tablet & Mobile) ─────────────────────────────── */
+@media (max-width: 1024px) {
+    .lms-admin-sidebar {
+        transform: translateX(-100%);
+    }
+
+    .lms-admin-sidebar.open {
+        transform: translateX(0);
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
+    }
+
+    .lms-sidebar-close-mobile {
+        display: inline-flex;
+    }
+
+    .lms-mobile-backdrop.show {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.42);
+        backdrop-filter: blur(2px);
+        z-index: 1040;
+    }
+
+    .lms-admin-main {
+        margin-left: 0;
+    }
+
+    .lms-mobile-menu-btn {
+        display: inline-flex;
+    }
+
+    .lms-admin-topbar {
+        padding: 0 18px;
+    }
+
+    .lms-search-wrap {
+        width: 240px;
+    }
+
+    .lms-admin-canvas {
+        padding: 18px 18px 28px;
+    }
+}
+
+@media (max-width: 680px) {
+    .lms-admin-topbar {
+        height: auto;
+        min-height: 62px;
+        padding: 10px 14px;
+        flex-wrap: wrap;
+    }
+
+    .lms-topbar-right {
+        width: 100%;
+        justify-content: space-between;
+        order: 3;
+    }
+
+    .lms-search-wrap {
+        flex: 1;
+        width: auto;
+    }
+
+    .lms-topbar-right-avatar-slot {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+    }
+
+    .lms-admin-canvas {
+        padding: 14px 12px 24px;
+    }
+}

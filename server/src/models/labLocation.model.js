@@ -55,6 +55,27 @@ const labLocationSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    instruments: {
+        type: [{
+            name: { type: String, required: true, trim: true },
+            instrumentCode: { type: String, default: '', trim: true },
+            instrumentType: { type: String, default: 'General Analyzer', trim: true },
+            department: { type: String, default: '', trim: true },
+            operationalStatus: {
+                type: String,
+                enum: ['OPERATIONAL', 'READY', 'STANDBY', 'MAINTENANCE', 'OFFLINE', 'UNVERIFIED'],
+                default: 'UNVERIFIED'
+            },
+            availability: {
+                type: String,
+                enum: ['AVAILABLE', 'BUSY', 'UNAVAILABLE'],
+                default: 'AVAILABLE'
+            },
+            integrationVerified: { type: Boolean, default: false },
+            isActive: { type: Boolean, default: true }
+        }],
+        default: []
+    },
     isActive: {
         type: Boolean,
         default: true,
