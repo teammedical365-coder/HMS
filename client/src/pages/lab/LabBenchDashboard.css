@@ -575,9 +575,18 @@
     box-shadow: 0 24px 50px rgba(15, 23, 42, 0.22);
     width: 100%;
     max-width: 520px;
-    max-height: 90vh;
+    max-height: min(88vh, 740px);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    margin: auto;
+}
+
+.ltd-modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -616,7 +625,11 @@
 
 .ltd-modal-body {
     padding: 20px 24px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: 18px;

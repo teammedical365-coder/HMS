@@ -10,6 +10,7 @@ import {
     FaClock, FaChevronLeft, FaChevronRight, FaChevronDown, FaUsers, FaSortAmountDown, FaChartLine, FaFilter
 } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
+import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
@@ -281,18 +282,26 @@ const getPharmacyTotal = (p) => {
     }, 0);
 };
 
+const isDepartmentSeparatedTxn = (p) => {
+    if (!p) return false;
+    if (['PHARMACY', 'LABORATORY'].includes(p.department) || ['PHARMACY', 'LABORATORY'].includes(p.sourceCategory)) return true;
+    const bi = p.billedItems || {};
+    const hasHosp = (bi.appointments?.length > 0) || (bi.admissions?.length > 0) || (bi.facilityCharges?.length > 0) || (bi.surgeryPlans?.length > 0);
+    const hasOther = (bi.pharmacyOrders?.length > 0) || (bi.labReports?.length > 0);
+    return hasOther && !hasHosp;
+};
+
 const inspectPaidTotal = (b) => {
     if (!b) return 0;
     let t = 0;
     b.appointments?.filter(a => (a.paymentStatus && a.paymentStatus.toLowerCase() === 'paid') || a.isPaid).forEach(a => t += (Number(a.amount) || 0));
-    b.labReports?.filter(l => (l.paymentStatus && l.paymentStatus.toLowerCase() === 'paid') || (l.status && l.status.toLowerCase() === 'paid')).forEach(l => t += (Number(l.amount || l.price) || 0));
-    b.pharmacyOrders?.filter(p => (p.paymentStatus && p.paymentStatus.toLowerCase() === 'paid') || (p.status && p.status.toLowerCase() === 'paid') || (p.orderStatus && p.orderStatus.toLowerCase() === 'paid')).forEach(p => t += getPharmacyTotal(p));
     b.facilityCharges?.filter(f => f.paymentStatus && f.paymentStatus.toLowerCase() === 'paid').forEach(f => t += (Number(f.totalAmount) || 0));
-    b.admissions?.forEach(a => t += (Number(a.paidAmount) || (a.paymentStatus && a.paymentStatus.toLowerCase() === 'paid' ? Number(a.totalAmount) : 0) || 0));
+    b.admissions?.forEach(a => t += ((a.paymentStatus && a.paymentStatus.toLowerCase() === 'paid') ? (Number(a.totalAmount) || 0) : (Number(a.paidAmount) || 0)));
     b.surgeryPlans?.forEach(s => t += (Number(s.paidAmount) || (s.paymentStatus === 'PAID' ? Number(s.surgeryCost) : 0) || 0));
 
     let historyPaid = 0;
     b.paymentTransactions?.filter(p => {
+        if (isDepartmentSeparatedTxn(p)) return false;
         const st = (p.paymentStatus || p.status || 'Paid').toLowerCase();
         return st === 'paid';
     }).forEach(p => historyPaid += (Number(p.amount) || 0));
@@ -304,8 +313,6 @@ const inspectGrandTotal = (b) => {
     if (!b) return 0;
     let t = 0;
     b.appointments?.forEach(a => t += (Number(a.amount) || 0));
-    b.labReports?.forEach(l => t += (Number(l.amount || l.price) || 0));
-    b.pharmacyOrders?.forEach(p => t += getPharmacyTotal(p));
     b.facilityCharges?.forEach(f => t += (Number(f.totalAmount) || 0));
     b.admissions?.forEach(a => t += (Number(a.totalAmount) || 0));
     b.surgeryPlans?.forEach(s => t += (Number(s.surgeryCost) || 0));
@@ -331,6 +338,8 @@ const PatientBillingProfile = () => {
     const [patient, setPatient] = useState(null);
     const [billing, setBilling] = useState(null);
     const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
+    const [admissionPayAmounts, setAdmissionPayAmounts] = useState({});
+    const [wristbandModal, setWristbandModal] = useState({ open: false, admissionId: null, admission: null });
 
     // Hospital-wide payment history state & date range filters
     const [historyTransactions, setHistoryTransactions] = useState([]);
@@ -890,24 +899,42 @@ const PatientBillingProfile = () => {
     const [patientRefundData, setPatientRefundData] = useState(null);
     const [loadingRefundData, setLoadingRefundData] = useState(false);
 
-    // Calculate eligible refundable balance for the active patient from recorded payments & prior refunds
+    // Strictly exclude OPD Appointment, Pharmacy, and Laboratory payments from Hospital Refund workflow
+    const getTxnEligibleRefundPortion = (t) => {
+        if (!t || !['Paid', 'paid', 'PAID'].includes(t.paymentStatus)) return 0;
+        const idStr = String(t._id || '');
+        if (idStr.startsWith('appt_payment_') || t.isSyntheticAppointment) return 0;
+        if (t.sourceCategory === 'APPOINTMENT' || t.department === 'OPD_CONSULTATION') return 0;
+        if (['PHARMACY', 'LABORATORY'].includes(t.department) || ['PHARMACY', 'LABORATORY'].includes(t.sourceCategory)) return 0;
+        if (typeof t.nonAppointmentAmount === 'number') {
+            return Math.max(0, Number(t.nonAppointmentAmount) || 0);
+        }
+        const bi = t.billedItems || {};
+        const hasHospitalNonAppt = (bi.admissions?.length > 0) || (bi.facilityCharges?.length > 0) || (bi.surgeryPlans?.length > 0);
+        if ((bi.appointments?.length > 0) && !hasHospitalNonAppt) return 0;
+        if (((bi.pharmacyOrders?.length > 0) || (bi.labReports?.length > 0)) && !hasHospitalNonAppt) return 0;
+        const desc = String(t.description || '').toLowerCase();
+        if (!hasHospitalNonAppt && (desc.includes('consultation') || desc.includes('appointment'))) return 0;
+        return Math.max(0, Number(t.amount) || 0);
+    };
+
+    // Calculate eligible non-appointment refundable balance for the active patient
     const clientRefundableBalance = useMemo(() => {
         if (!billing) return 0;
-        const totalPaid = (billing.paymentTransactions || [])
-            .filter(t => ['Paid', 'paid', 'PAID'].includes(t.paymentStatus))
-            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        const eligiblePaid = (billing.paymentTransactions || [])
+            .reduce((sum, t) => sum + getTxnEligibleRefundPortion(t), 0);
         const priorRefunds = (billing.refundRequests || [])
             .filter(r => ['REFUNDED', 'APPROVED', 'PENDING_APPROVAL', 'PROCESSING'].includes(r.status))
             .reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0);
-        return Math.max(0, totalPaid - priorRefunds);
+        return Math.max(0, Math.round((eligiblePaid - priorRefunds) * 100) / 100);
     }, [billing]);
 
-    const isRefundEligible = clientRefundableBalance > 0 || (patientRefundData && patientRefundData.refundableAmount > 0);
+    const isRefundEligible = clientRefundableBalance > 0;
 
     const openCreateRefundModal = async () => {
         if (!patient?._id) return toast.error('No patient selected');
-        if (clientRefundableBalance <= 0 && (!patientRefundData || patientRefundData.refundableAmount <= 0)) {
-            toast.error('Refund unavailable: No eligible refundable balance for this patient');
+        if (clientRefundableBalance <= 0) {
+            toast.error('Refund unavailable: OPD Appointment fees are non-refundable and no eligible IPD/hospital service balance is available.');
             return;
         }
         setShowPatientRefundModal(true);
@@ -937,10 +964,12 @@ const PatientBillingProfile = () => {
             }
         } catch (e) {
             console.error('Failed to load patient refund data:', e);
-            // Fallback gracefully to client-computed refundable balance from billing records
             const fallbackRefundable = clientRefundableBalance;
-            const validPayments = (billing?.paymentTransactions || []).filter(t => ['Paid', 'paid', 'PAID'].includes(t.paymentStatus));
-            const totalPaid = validPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+            const validPayments = (billing?.paymentTransactions || [])
+                .map(t => ({ ...t, eligibleAmt: getTxnEligibleRefundPortion(t) }))
+                .filter(t => t.eligibleAmt > 0)
+                .map(t => ({ ...t, amount: t.eligibleAmt }));
+            const totalPaid = validPayments.reduce((s, t) => s + t.amount, 0);
             setPatientRefundData({
                 patient,
                 totalPaid,
@@ -950,7 +979,7 @@ const PatientBillingProfile = () => {
                 payments: validPayments
             });
             if (fallbackRefundable <= 0) {
-                toast.error('No eligible refundable balance available for this patient');
+                toast.error('No eligible hospital refundable balance available for this patient');
             } else {
                 setNewRefundForm({
                     originalPaymentId: validPayments[0]?._id || '',
@@ -968,6 +997,9 @@ const PatientBillingProfile = () => {
         if (!patient?._id) return toast.error('No patient selected');
         const amt = parseFloat(newRefundForm.refundAmount);
         if (isNaN(amt) || amt <= 0) return toast.error('Please enter a valid refund amount');
+        if (!newRefundForm.reason || !newRefundForm.reason.trim()) {
+            return toast.error('Please enter a valid reason for the refund');
+        }
         if (patientRefundData && amt > patientRefundData.refundableAmount) {
             return toast.error(`Refund amount cannot exceed ₹${patientRefundData.refundableAmount}`);
         }
@@ -978,7 +1010,7 @@ const PatientBillingProfile = () => {
                 patientId: patient._id,
                 refundAmount: amt,
                 refundMode: newRefundForm.refundMode,
-                reason: newRefundForm.reason,
+                reason: newRefundForm.reason.trim(),
                 originalPaymentId: newRefundForm.originalPaymentId || undefined
             });
             if (res.success) {
@@ -1658,6 +1690,7 @@ const PatientBillingProfile = () => {
         setBilling(null);
 
         setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
+        setAdmissionPayAmounts({});
         setSuccessMsg('');
         try {
             const res = await billingAPI.getPatientBills(identifier);
@@ -1719,19 +1752,83 @@ const PatientBillingProfile = () => {
         }, 300);
     };
 
+    const isPaid = (status) => status && (status.toLowerCase() === 'paid');
+
+    const getAdmissionPaid = (adm) => {
+        if (!adm) return 0;
+        const total = Math.max(0, Number(adm.totalAmount) || 0);
+        if (isPaid(adm.paymentStatus)) return total;
+        return Math.min(total, Math.max(0, Number(adm.paidAmount) || 0));
+    };
+
+    const getAdmissionDue = (adm) => {
+        if (!adm) return 0;
+        const total = Math.max(0, Number(adm.totalAmount) || 0);
+        return Math.max(0, Math.round((total - getAdmissionPaid(adm)) * 100) / 100);
+    };
+
+    const getSelectedAdmissionPay = (adm) => {
+        const due = getAdmissionDue(adm);
+        if (due <= 0) return 0;
+        const raw = admissionPayAmounts[adm._id];
+        if (raw === undefined) return due;
+        if (raw === '') return 0;
+        const parsed = Math.round((Number(raw) || 0) * 100) / 100;
+        return Math.max(0, Math.min(due, parsed));
+    };
+
+    const handleAdmissionAmountChange = (adm, rawVal) => {
+        const due = getAdmissionDue(adm);
+        if (rawVal === '') {
+            setAdmissionPayAmounts(prev => ({ ...prev, [adm._id]: '' }));
+            return;
+        }
+        const num = Number(rawVal);
+        if (Number.isNaN(num) || num < 0) return;
+        const clamped = num > due ? due : num;
+        setAdmissionPayAmounts(prev => ({ ...prev, [adm._id]: String(clamped) }));
+    };
+
     const toggle = (category, id) => {
-        setSelected(prev => ({
-            ...prev,
-            [category]: prev[category].includes(id)
-                ? prev[category].filter(x => x !== id)
-                : [...prev[category], id]
-        }));
+        setSelected(prev => {
+            const exists = prev[category].includes(id);
+            if (category === 'admissions') {
+                const targetAdm = billing?.admissions?.find(a => String(a._id) === String(id));
+                const due = getAdmissionDue(targetAdm);
+                setAdmissionPayAmounts(curr => {
+                    const next = { ...curr };
+                    if (exists) delete next[id];
+                    else next[id] = String(due);
+                    return next;
+                });
+            }
+            return {
+                ...prev,
+                [category]: exists
+                    ? prev[category].filter(x => x !== id)
+                    : [...prev[category], id]
+            };
+        });
     };
 
     const toggleAll = (category, items) => {
-        const pendingIds = items.filter(x => x.paymentStatus !== 'Paid' && x.paymentStatus !== 'PAID').map(x => x._id);
+        const pendingItems = items.filter(x => {
+            if (category === 'admissions') return getAdmissionDue(x) > 0;
+            return x.paymentStatus !== 'Paid' && x.paymentStatus !== 'PAID';
+        });
+        const pendingIds = pendingItems.map(x => x._id);
         setSelected(prev => {
             const allSelected = pendingIds.every(id => (prev[category] || []).includes(id));
+            if (category === 'admissions') {
+                setAdmissionPayAmounts(curr => {
+                    if (allSelected) return {};
+                    const next = { ...curr };
+                    pendingItems.forEach(a => {
+                        next[a._id] = String(getAdmissionDue(a));
+                    });
+                    return next;
+                });
+            }
             return { ...prev, [category]: allSelected ? [] : pendingIds };
         });
     };
@@ -1740,50 +1837,68 @@ const PatientBillingProfile = () => {
         if (!billing) return 0;
         let total = 0;
         billing.appointments?.filter(a => selected.appointments?.includes(a._id)).forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.filter(l => selected.labReports?.includes(l._id)).forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.filter(p => selected.pharmacyOrders?.includes(p._id)).forEach(p => total += getPharmacyTotal(p));
         billing.facilityCharges?.filter(f => selected.facilityCharges?.includes(f._id)).forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions?.filter(a => selected.admissions?.includes(a._id)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.admissions?.filter(a => selected.admissions?.includes(a._id)).forEach(a => total += getSelectedAdmissionPay(a));
         billing.surgeryPlans?.filter(s => selected.surgeryPlans?.includes(s._id)).forEach(s => {
             const cost = Number(s.surgeryCost) || 0;
             const paid = Number(s.paidAmount) || 0;
             total += Math.max(0, cost - paid);
         });
-        return total;
+        return Math.round(total * 100) / 100;
     };
 
-    const isPaid = (status) => status && (status.toLowerCase() === 'paid');
+    const selectedPayableTotal = totalSelected();
+
+    // Auto-synchronize split payment breakdown whenever selected payable total changes
+    useEffect(() => {
+        setSplitPayments(prev => {
+            if (!prev || prev.length <= 1) {
+                const method = prev?.[0]?.method || 'Cash';
+                const nextAmt = selectedPayableTotal > 0 ? String(selectedPayableTotal) : '';
+                if (prev?.length === 1 && prev[0].method === method && prev[0].amount === nextAmt) {
+                    return prev;
+                }
+                return [{ method, amount: nextAmt }];
+            }
+            if (prev.length === 2) {
+                const firstAmt = Math.min(selectedPayableTotal, Math.max(0, Number(prev[0]?.amount) || 0));
+                const secondAmt = Math.max(0, Math.round((selectedPayableTotal - firstAmt) * 100) / 100);
+                return [
+                    { ...prev[0], amount: String(firstAmt) },
+                    { ...prev[1], amount: String(secondAmt) }
+                ];
+            }
+            return prev;
+        });
+    }, [selectedPayableTotal]);
 
     const pendingTotal = () => {
         if (!billing) return 0;
         let total = 0;
         billing.appointments?.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.filter(l => !isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.filter(p => !isPaid(p.paymentStatus)).forEach(p => total += getPharmacyTotal(p));
         billing.facilityCharges?.filter(f => !isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions?.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.admissions?.forEach(a => total += getAdmissionDue(a));
         billing.surgeryPlans?.filter(s => s.paymentStatus !== 'PAID').forEach(s => {
             const cost = Number(s.surgeryCost) || 0;
             const paid = Number(s.paidAmount) || 0;
             total += Math.max(0, cost - paid);
         });
-        return total;
+        return Math.round(total * 100) / 100;
     };
     const totalPaidBill = () => {
         if (!billing) return 0;
         
-        // Sum from individual modules
+        // Sum strictly hospital-owned modules (Appointments, IPD Admissions, Facility Charges, OT Surgeries)
         let modulePaid = 0;
         billing.appointments?.filter(a => isPaid(a.paymentStatus) || a.isPaid).forEach(a => modulePaid += (Number(a.amount) || 0));
-        billing.labReports?.filter(l => isPaid(l.paymentStatus) || isPaid(l.status)).forEach(l => modulePaid += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.filter(p => isPaid(p.paymentStatus) || isPaid(p.status) || isPaid(p.orderStatus)).forEach(p => modulePaid += getPharmacyTotal(p));
         billing.facilityCharges?.filter(f => isPaid(f.paymentStatus)).forEach(f => modulePaid += (Number(f.totalAmount) || 0));
-        billing.admissions?.forEach(a => modulePaid += (Number(a.paidAmount) || (isPaid(a.paymentStatus) ? Number(a.totalAmount) : 0) || 0));
+        billing.admissions?.forEach(a => modulePaid += getAdmissionPaid(a));
         billing.surgeryPlans?.forEach(s => modulePaid += (Number(s.paidAmount) || (s.paymentStatus === 'PAID' ? Number(s.surgeryCost) : 0) || 0));
 
-        // Sum from payment history - check both p.paymentStatus and p.status
+        // Sum hospital-owned payment history
         let historyPaid = 0;
         billing.paymentTransactions?.filter(p => {
+            if (isDepartmentSeparatedTxn(p)) return false;
             const st = (p.paymentStatus || p.status || 'Paid').toLowerCase();
             return st === 'paid';
         }).forEach(p => historyPaid += (Number(p.amount) || 0));
@@ -1795,8 +1910,6 @@ const PatientBillingProfile = () => {
         if (!billing) return 0;
         let total = 0;
         billing.appointments?.forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.forEach(p => total += getPharmacyTotal(p));
         billing.facilityCharges?.forEach(f => total += (Number(f.totalAmount) || 0));
         billing.admissions?.forEach(a => total += (Number(a.totalAmount) || 0));
         billing.surgeryPlans?.forEach(s => total += (Number(s.surgeryCost) || 0));
@@ -1856,26 +1969,49 @@ const PatientBillingProfile = () => {
     };
 
     const executePayment = async (extraData = {}) => {
+        if (paying) return;
         const total = totalSelected();
+        if (total <= 0) {
+            toast.error('Please select at least one payable hospital bill and enter a valid payment amount.');
+            return;
+        }
+        const admissionPayments = {};
+        for (const admId of (selected.admissions || [])) {
+            const admObj = billing?.admissions?.find(a => String(a._id) === String(admId));
+            const payAmt = getSelectedAdmissionPay(admObj);
+            const dueAmt = getAdmissionDue(admObj);
+            if (payAmt <= 0 || payAmt > dueAmt) {
+                toast.error(`Please enter a valid payment amount between ₹1 and ${fmt(dueAmt)} for the selected IPD bill.`);
+                return;
+            }
+            admissionPayments[admId] = payAmt;
+        }
+
         setPaying(true);
         try {
+            const activeMode = splitPayments.length > 1 ? 'Mixed' : (splitPayments[0]?.method || paymentMode || 'Cash');
             await billingAPI.processPayment({
                 appointmentIds: selected.appointments,
-                labReportIds: selected.labReports,
-                pharmacyOrderIds: selected.pharmacyOrders,
                 facilityChargeIds: selected.facilityCharges,
                 admissionIds: selected.admissions,
+                admissionPayments,
                 surgeryPlanIds: selected.surgeryPlans,
                 splitPayments,
+                paymentMode: activeMode,
                 patientId: patient?._id,
                 amount: total,
+                idempotencyKey: `pay_${patient?._id || 'hosp'}_${Date.now()}`,
                 ...extraData
             });
-            setSuccessMsg(`Payment of ${fmt(total)} processed successfully via ${paymentMode}.`);
+            setSuccessMsg(`Hospital payment of ${fmt(total)} processed successfully via ${activeMode}.`);
             toast.success(`Payment of ${fmt(total)} processed successfully!`);
-            const res = await billingAPI.getPatientBills(searchQuery.trim());
-            if (res.success) setBilling(res.billing);
+            const refreshId = patient?.mrn || patient?.patientId || searchQuery.trim() || patient?._id;
+            if (refreshId) {
+                const res = await billingAPI.getPatientBills(refreshId);
+                if (res.success) setBilling(res.billing);
+            }
             setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
+            setAdmissionPayAmounts({});
         } catch (err) {
             toast.error(err.response?.data?.message || 'Payment failed');
         } finally {
@@ -2041,7 +2177,7 @@ const PatientBillingProfile = () => {
                             <span style={{ fontSize: '1.25rem' }}>💳</span> {isHospitalAdmin ? 'Patient Payment Profile' : 'Record & Settle Patient Payment'}
                         </h1>
                         <p style={{ margin: 0, fontSize: '0.84rem', opacity: 0.9 }}>
-                            {isHospitalAdmin ? 'View patient billing history, outstanding dues, and settlement details.' : 'Search patient, calculate outstanding dues across OPD, Pharmacy, Lab, and record collections.'}
+                            {isHospitalAdmin ? 'View hospital billing history, outstanding dues, and settlement details.' : 'Search patient, calculate outstanding hospital dues across OPD, IPD Admissions, Ward/Bed & OT, and record collections.'}
                         </p>
                     </div>
                     <button className="btn-back" onClick={() => setActiveTab('history')} style={{
@@ -2339,73 +2475,151 @@ const PatientBillingProfile = () => {
                                 <span className="admitted-badge">Currently Admitted</span>
                                 <h3>Active Hospitalization</h3>
                             </div>
-                            {(isHospitalAdmin ? pendingAdmissionsList : activeAdmissions).map(adm => (
-                                <div key={adm._id} className="admission-card active">
-                                    <div className="admission-top">
-                                        <div>
-                                            <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
-                                            {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
-                                            {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
+                            {(isHospitalAdmin ? pendingAdmissionsList : activeAdmissions).map(adm => {
+                                const admDue = getAdmissionDue(adm);
+                                const admPaid = getAdmissionPaid(adm);
+                                const isSel = selected.admissions.includes(adm._id);
+                                return (
+                                    <div
+                                        key={adm._id}
+                                        className={`admission-card active ${isSel ? 'selected-row' : ''}`}
+                                        style={{
+                                            border: isSel ? '2px solid #0d9488' : undefined,
+                                            background: isSel ? '#f0fdfa' : undefined
+                                        }}
+                                    >
+                                        <div className="admission-top" style={{ flexWrap: 'wrap', gap: '10px' }}>
+                                            <div>
+                                                <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
+                                                {adm.ipdNumber && <span className="badge-ward" style={{ background: '#e0e7ff', color: '#3730a3' }}> {adm.ipdNumber}</span>}
+                                                {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
+                                                {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
+                                            </div>
+                                            <div className="admission-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: { ...adm, patientId: patient || adm.patientId } })}
+                                                    style={{
+                                                        padding: '5px 11px',
+                                                        borderRadius: '7px',
+                                                        border: '1px solid #99f6e4',
+                                                        background: '#f0fdfa',
+                                                        color: '#0f766e',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.78rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    title="Preview or Reprint IPD Patient Wristband"
+                                                >
+                                                    🪪 Wristband
+                                                </button>
+                                                {!isHospitalAdmin ? (
+                                                    <>
+                                                        <label className="check-label" style={{ cursor: admDue <= 0 ? 'default' : 'pointer', fontWeight: 700 }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSel}
+                                                                onChange={() => toggle('admissions', adm._id)}
+                                                                disabled={admDue <= 0}
+                                                            />
+                                                            {admDue <= 0 ? (
+                                                                <span className="paid-badge">Paid</span>
+                                                            ) : (
+                                                                <span>{admPaid > 0 ? `Select Balance (${fmt(admDue)})` : `Select Bill (${fmt(admDue)})`}</span>
+                                                            )}
+                                                        </label>
+                                                        <button
+                                                            className="btn-discharge"
+                                                            onClick={() => handleDischarge(adm._id)}
+                                                            disabled={dischargingId === adm._id}
+                                                        >
+                                                            {dischargingId === adm._id ? 'Discharging...' : 'Discharge'}
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <span className="status-badge" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 700 }}>
+                                                        {admPaid > 0 ? `Partially Paid — Due ${fmt(admDue)}` : `Pending — ${fmt(admDue)}`}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="admission-actions">
-                                            {!isHospitalAdmin ? (
-                                                <>
-                                                    <label className="check-label">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selected.admissions.includes(adm._id)}
-                                                            onChange={() => toggle('admissions', adm._id)}
-                                                            disabled={isPaid(adm.paymentStatus)}
-                                                        />
-                                                        {isPaid(adm.paymentStatus) ? (
-                                                            <span className="paid-badge">Paid</span>
-                                                        ) : (
-                                                            <span>Mark for payment</span>
-                                                        )}
-                                                    </label>
-                                                    <button
-                                                        className="btn-discharge"
-                                                        onClick={() => handleDischarge(adm._id)}
-                                                        disabled={dischargingId === adm._id}
-                                                    >
-                                                        {dischargingId === adm._id ? 'Discharging...' : 'Discharge'}
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <span className="status-badge" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 700 }}>
-                                                    Pending — {fmt(adm.totalAmount)}
+
+                                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '8px 0', fontSize: '0.82rem' }}>
+                                            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '4px 10px', borderRadius: '6px' }}>
+                                                Total Bill: <strong>{fmt(adm.totalAmount)}</strong>
+                                            </span>
+                                            {admPaid > 0 && (
+                                                <span style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#15803d', padding: '4px 10px', borderRadius: '6px' }}>
+                                                    Paid: <strong>{fmt(admPaid)}</strong>
                                                 </span>
                                             )}
+                                            <span style={{ background: admDue > 0 ? '#fffbeb' : '#ecfdf5', border: `1px solid ${admDue > 0 ? '#fde68a' : '#bbf7d0'}`, color: admDue > 0 ? '#b45309' : '#15803d', padding: '4px 10px', borderRadius: '6px' }}>
+                                                Outstanding Balance: <strong>{fmt(admDue)}</strong>
+                                            </span>
                                         </div>
-                                    </div>
-                                    {adm.selectedFacilities?.length > 0 && (
-                                        <div className="billing-table-responsive">
-                                            <table className="facility-table">
-                                                <thead>
-                                                    <tr><th>Facility</th><th>Rate/Day</th><th>Days</th><th>Amount</th></tr>
-                                                </thead>
-                                                <tbody>
-                                                    {adm.selectedFacilities.map((f, i) => (
-                                                        <tr key={i}>
-                                                            <td>{f.facilityName}</td>
-                                                            <td>{fmt(f.pricePerDay)}</td>
-                                                            <td>{f.days}</td>
-                                                            <td>{fmt(f.totalAmount)}</td>
+
+                                        {!isHospitalAdmin && isSel && admDue > 0 && (
+                                            <div style={{ marginTop: '10px', padding: '10px 14px', background: '#ffffff', border: '1.5px solid #0d9488', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                    <label style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>
+                                                        Payment Amount to Collect Now (₹):
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max={admDue}
+                                                        step="any"
+                                                        value={admissionPayAmounts[adm._id] ?? String(admDue)}
+                                                        onChange={(e) => handleAdmissionAmountChange(adm, e.target.value)}
+                                                        style={{ width: '150px', padding: '7px 10px', borderRadius: '6px', border: '1.5px solid #cbd5e1', fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAdmissionAmountChange(adm, String(admDue))}
+                                                        style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #0d9488', background: '#ccfbf1', color: '#0f766e', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                                                    >
+                                                        Full Balance ({fmt(admDue)})
+                                                    </button>
+                                                    {getSelectedAdmissionPay(adm) < admDue && getSelectedAdmissionPay(adm) > 0 && (
+                                                        <span style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 600 }}>
+                                                            Remaining after payment: {fmt(admDue - getSelectedAdmissionPay(adm))}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {adm.selectedFacilities?.length > 0 && (
+                                            <div className="billing-table-responsive">
+                                                <table className="facility-table">
+                                                    <thead>
+                                                        <tr><th>Facility</th><th>Rate/Day</th><th>Duration</th><th>Amount</th></tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {adm.selectedFacilities.map((f, i) => (
+                                                            <tr key={i}>
+                                                                <td>{f.facilityName}</td>
+                                                                <td>{fmt(f.pricePerDay)}</td>
+                                                                <td>{f.durationText || (Number(f.days) > 0 ? `${f.days}d` : `${f.hours || 1}h`)}</td>
+                                                                <td>{fmt(f.totalAmount)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr>
+                                                            <td colSpan="3"><strong>Total</strong></td>
+                                                            <td><strong>{fmt(adm.totalAmount)}</strong></td>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                                <tfoot>
-                                                    <tr>
-                                                        <td colSpan="3"><strong>Total</strong></td>
-                                                        <td><strong>{fmt(adm.totalAmount)}</strong></td>
-                                                    </tr>
-                                                </tfoot>
-                                            </table>
-                                        </div>
-                                    )}
-                                    {adm.notes && <p className="admission-notes">Notes: {adm.notes}</p>}
-                                </div>
-                            ))}
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        )}
+                                        {adm.notes && <p className="admission-notes">Notes: {adm.notes}</p>}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -2619,159 +2833,198 @@ const PatientBillingProfile = () => {
                         </div>
                     )}
 
-                    {/* Lab Reports */}
-                    {(billing.labReports && billing.labReports.length > 0) && (
-                        <div className="billing-section">
-                            <div className="section-header">
-                                <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
-                                {!isHospitalAdmin && billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
-                                    <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
-                                        {billing.labReports.filter(l => !isPaid(l.paymentStatus)).every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
-                                    </button>
-                                )}
-                            </div>
-                            <div className="billing-table-responsive">
-                                <table className="billing-table">
-                                    <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
-                                    <tbody>
-                                        {(billing.labReports || []).map(l => (
-                                            <tr key={l._id} className={!isHospitalAdmin && selected.labReports.includes(l._id) ? 'selected-row' : ''}>
-                                                {!isHospitalAdmin && (
-                                                    <td>
-                                                        {isPaid(l.paymentStatus) ? (
-                                                            <span className="paid-icon-check">✓</span>
-                                                        ) : (
-                                                            <input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} />
-                                                        )}
-                                                    </td>
-                                                )}
-                                                <td>{fmtDate(l.createdAt)}</td>
-                                                <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
-                                                <td>
-                                                    <span className="status-badge">
-                                                        {isPaid(l.paymentStatus) ? 'PAID' : 'Pending'}
-                                                    </span>
-                                                </td>
-                                                <td className="amount-cell">{fmt(l.amount || l.price)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Pharmacy Orders */}
-                    {(billing.pharmacyOrders && billing.pharmacyOrders.length > 0) && (
-                        <div className="billing-section">
-                            <div className="section-header">
-                                <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
-                                {!isHospitalAdmin && billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
-                                    <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
-                                        {billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
-                                    </button>
-                                )}
-                            </div>
-                            <div className="billing-table-responsive">
-                                <table className="billing-table">
-                                    <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
-                                    <tbody>
-                                        {(billing.pharmacyOrders || []).map(p => (
-                                            <tr key={p._id} className={!isHospitalAdmin && selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
-                                                {!isHospitalAdmin && (
-                                                    <td>
-                                                        {isPaid(p.paymentStatus) ? (
-                                                            <span className="paid-icon-check">✓</span>
-                                                        ) : (
-                                                            <input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} />
-                                                        )}
-                                                    </td>
-                                                )}
-                                                <td>{fmtDate(p.createdAt)}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
-                                                            📦 {p.items?.length || 0} Items
-                                                        </span>
-                                                        <button
-                                                            onClick={() => toggleExpand(p._id)}
-                                                            style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
-                                                        >
-                                                            {expandedRows[p._id] ? 'Hide Details ↑' : 'View Details ↓'}
-                                                        </button>
-                                                    </div>
-                                                    {expandedRows[p._id] && Array.isArray(p.items) && (
-                                                        <div className="bg-gray-50/50 p-2 rounded mt-1" style={{ backgroundColor: '#f8fafc', padding: '8px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
-                                                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
-                                                                {p.items.map((item, idx) => {
-                                                                    const name = item.medicineName || item.name;
-                                                                    const freq = item.frequency ? ` (${item.frequency})` : '';
-                                                                    const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
-                                                                    const itemTotal = (Number(item.price) || 50) * qty;
-                                                                    if (!name) return null;
-                                                                    const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
-                                                                    return (
-                                                                        <li key={idx} style={{ marginBottom: '4px' }}>
-                                                                            <span style={{ color: '#000' }}>{name}{freq}</span>
-                                                                            <span style={{ marginLeft: '6px', color: '#475569', fontSize: '0.85rem' }}>[{durationText}]</span>
-                                                                            <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>- ₹{itemTotal}</span>
-                                                                        </li>
-                                                                    );
-                                                                })}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <span className="status-badge">
-                                                        {isPaid(p.paymentStatus) ? 'PAID' : 'Pending'}
-                                                    </span>
-                                                </td>
-                                                <td className="amount-cell">{fmt(getPharmacyTotal(p))}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Past Admissions */}
+                    {/* Past / Discharged IPD Admissions (Selectable for Outstanding Discharge Billing) */}
                     {pastAdmissions.length > 0 && (
                         <div className="billing-section past-admissions">
-                            <div className="section-header">
-                                <h3>Past Admissions ({pastAdmissions.length})</h3>
+                            <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                                <h3>Past / Discharged Admissions ({pastAdmissions.length})</h3>
+                                {!isHospitalAdmin && pastAdmissions.some(adm => getAdmissionDue(adm) > 0) && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('admissions', pastAdmissions)}>
+                                        {pastAdmissions.filter(adm => getAdmissionDue(adm) > 0).every(adm => selected.admissions.includes(adm._id))
+                                            ? 'Deselect Discharged Bills'
+                                            : 'Select All Unpaid IPD Bills'}
+                                    </button>
+                                )}
                             </div>
-                            {pastAdmissions.map(adm => (
-                                <div key={adm._id} className="admission-card past">
-                                    <div className="admission-top">
-                                        <div>
-                                            <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
-                                            <strong style={{ marginLeft: 16 }}>Discharged:</strong> {fmtAdmissionDateTime(adm.dischargeDate, adm.dischargeTime, adm.updatedAt)}
-                                            {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
-                                            {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
+                            {pastAdmissions.map(adm => {
+                                const admDue = getAdmissionDue(adm);
+                                const admPaid = getAdmissionPaid(adm);
+                                const isSel = selected.admissions.includes(adm._id);
+                                return (
+                                    <div
+                                        key={adm._id}
+                                        className={`admission-card past ${isSel ? 'selected-row' : ''}`}
+                                        onClick={() => {
+                                            if (!isHospitalAdmin && admDue > 0 && !isSel) {
+                                                toggle('admissions', adm._id);
+                                            }
+                                        }}
+                                        style={{
+                                            border: isSel ? '2px solid #0d9488' : (admDue > 0 ? '1.5px solid #fcd34d' : undefined),
+                                            background: isSel ? '#f0fdfa' : undefined,
+                                            cursor: (!isHospitalAdmin && admDue > 0 && !isSel) ? 'pointer' : 'default',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        <div className="admission-top" style={{ flexWrap: 'wrap', gap: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                {!isHospitalAdmin && admDue > 0 && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSel}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onChange={() => toggle('admissions', adm._id)}
+                                                        style={{ width: '18px', height: '18px', accentColor: '#0d9488', cursor: 'pointer' }}
+                                                        title="Select this discharged IPD bill for payment"
+                                                    />
+                                                )}
+                                                <div>
+                                                    <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
+                                                    <strong style={{ marginLeft: 14 }}>Discharged:</strong> {fmtAdmissionDateTime(adm.dischargeDate, adm.dischargeTime, adm.updatedAt)}
+                                                    {adm.ipdNumber && <span className="badge-ward" style={{ background: '#e0e7ff', color: '#3730a3' }}> {adm.ipdNumber}</span>}
+                                                    {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
+                                                    {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: { ...adm, patientId: patient || adm.patientId } })}
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid #cbd5e1',
+                                                        background: '#f8fafc',
+                                                        color: '#334155',
+                                                        fontWeight: 700,
+                                                        fontSize: '0.76rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    title="View / Reprint IPD Admission Wristband"
+                                                >
+                                                    🪪 Wristband
+                                                </button>
+                                                <span className={admDue <= 0 ? 'paid-badge' : 'pending-badge'}>
+                                                    {admDue <= 0
+                                                        ? 'Paid'
+                                                        : (admPaid > 0
+                                                            ? `Partially Paid — Due ${fmt(admDue)}`
+                                                            : `Pending — ${fmt(admDue)}`)}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <span className={isPaid(adm.paymentStatus) ? 'paid-badge' : 'pending-badge'}>
-                                            {isPaid(adm.paymentStatus) ? 'Paid' : `Pending — ${fmt(adm.totalAmount)}`}
-                                        </span>
+
+                                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px', fontSize: '0.82rem' }}>
+                                            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '4px 10px', borderRadius: '6px' }}>
+                                                Total IPD Bill: <strong>{fmt(adm.totalAmount)}</strong>
+                                            </span>
+                                            {admPaid > 0 && (
+                                                <span style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#15803d', padding: '4px 10px', borderRadius: '6px' }}>
+                                                    Paid: <strong>{fmt(admPaid)}</strong>
+                                                </span>
+                                            )}
+                                            <span style={{ background: admDue > 0 ? '#fffbeb' : '#ecfdf5', border: `1px solid ${admDue > 0 ? '#fde68a' : '#bbf7d0'}`, color: admDue > 0 ? '#b45309' : '#15803d', padding: '4px 10px', borderRadius: '6px' }}>
+                                                Outstanding Balance: <strong>{fmt(admDue)}</strong>
+                                            </span>
+                                        </div>
+
+                                        {adm.selectedFacilities?.length > 0 && (
+                                            <div className="facility-list" style={{ marginTop: '8px' }}>
+                                                {adm.selectedFacilities.map((f, i) => (
+                                                    <span key={i} className="facility-tag">
+                                                        {f.facilityName} × {f.durationText || (Number(f.days) > 0 ? `${f.days}d` : `${f.hours || 1}h`)} = {fmt(f.totalAmount)}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {!isHospitalAdmin && isSel && admDue > 0 && (
+                                            <div
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{
+                                                    marginTop: '12px',
+                                                    padding: '10px 14px',
+                                                    background: '#ffffff',
+                                                    border: '1.5px solid #0d9488',
+                                                    borderRadius: '8px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    flexWrap: 'wrap',
+                                                    gap: '10px'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                    <label style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a' }}>
+                                                        Enter Payment Amount (₹):
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max={admDue}
+                                                        step="any"
+                                                        value={admissionPayAmounts[adm._id] ?? String(admDue)}
+                                                        onChange={(e) => handleAdmissionAmountChange(adm, e.target.value)}
+                                                        placeholder={`Max ${admDue}`}
+                                                        style={{
+                                                            width: '160px',
+                                                            padding: '7px 10px',
+                                                            borderRadius: '6px',
+                                                            border: '1.5px solid #0d9488',
+                                                            fontWeight: 800,
+                                                            fontSize: '0.92rem',
+                                                            color: '#0f172a',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAdmissionAmountChange(adm, String(admDue))}
+                                                        style={{
+                                                            padding: '5px 10px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #0d9488',
+                                                            background: '#ccfbf1',
+                                                            color: '#0f766e',
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: 700,
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Pay Full Balance ({fmt(admDue)})
+                                                    </button>
+                                                    {getSelectedAdmissionPay(adm) > 0 && getSelectedAdmissionPay(adm) < admDue && (
+                                                        <span style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 700 }}>
+                                                            Partial Payment • Balance Remaining: {fmt(admDue - getSelectedAdmissionPay(adm))}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    {adm.selectedFacilities?.length > 0 && (
-                                        <div className="facility-list">
-                                            {adm.selectedFacilities.map((f, i) => (
-                                                <span key={i} className="facility-tag">{f.facilityName} × {f.days}d = {fmt(f.totalAmount)}</span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
 
-                    {/* No items at all (Only for Receptionist if no records found) */}
-                    {!isHospitalAdmin && billing.appointments?.length === 0 && billing.labReports?.length === 0 &&
-                        billing.pharmacyOrders?.length === 0 && billing.facilityCharges?.length === 0 &&
+                    {/* Department Billing Separation Notice (Pharmacy & Laboratory collect their own bills) */}
+                    {((billing.pharmacyOrders && billing.pharmacyOrders.length > 0) || (billing.labReports && billing.labReports.length > 0)) && (
+                        <div style={{ margin: '12px 0 18px 0', padding: '12px 16px', background: '#f8fafc', border: '1px solid #cbd5e1', borderLeft: '4px solid #0284c7', borderRadius: '10px', fontSize: '0.84rem', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                            <div>
+                                <strong style={{ color: '#0f172a' }}>Department-Wise Billing Separation:</strong>{' '}
+                                Reception collects hospital-owned charges only (Appointments, Consultations, IPD Admissions, Room/Bed/Facility &amp; OT). Pharmacy medicines and Laboratory diagnostic tests are billed directly at the Pharmacy and Laboratory billing counters.
+                            </div>
+                        </div>
+                    )}
+
+                    {/* No hospital items at all */}
+                    {!isHospitalAdmin && (!billing.appointments || billing.appointments.length === 0) &&
+                        (!billing.facilityCharges || billing.facilityCharges.length === 0) &&
+                        (!billing.surgeryPlans || billing.surgeryPlans.length === 0) &&
                         activeAdmissions.length === 0 && pastAdmissions.length === 0 && (
-                            <div className="no-bills">No billing items found for this patient.</div>
+                            <div className="no-bills">No hospital billing items found for this patient.</div>
                         )}
 
                     {/* Payment Panel (Only for Receptionist collection) */}
@@ -2789,7 +3042,11 @@ const PatientBillingProfile = () => {
                             </div>
                             <form className="payment-controls" onSubmit={async (e) => {
                                 e.preventDefault();
-                                if (totalSplitAmount !== totalSelected()) {
+                                if (totalSelected() <= 0) {
+                                    toast.error('Please select an unpaid bill and enter a valid payment amount.');
+                                    return;
+                                }
+                                if (Math.abs(totalSplitAmount - totalSelected()) > 0.01) {
                                     toast.error(`Total split amount (${fmt(totalSplitAmount)}) must exactly match the selected amount (${fmt(totalSelected())}).`);
                                     return;
                                 }
@@ -2814,7 +3071,7 @@ const PatientBillingProfile = () => {
                                     onProofFileChange={setProofFile}
                                 />
 
-                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()} style={{ marginTop: '20px' }}>
+                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() <= 0 || Math.abs(totalSplitAmount - totalSelected()) > 0.01} style={{ marginTop: '20px' }}>
                                     {paying ? 'Processing...' : `Pay ${fmt(totalSelected())} (Split: ${fmt(totalSplitAmount)})`}
                                 </button>
                             </form>
@@ -4008,60 +4265,6 @@ const PatientBillingProfile = () => {
                                 </div>
                             )}
 
-                            {/* Lab Reports */}
-                            {inspectPatientModal.billing.labReports?.length > 0 && (
-                                <div className="breakdown-module">
-                                    <h4>Lab Investigations ({inspectPatientModal.billing.labReports.length})</h4>
-                                    <table className="breakdown-mini-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Test Names</th>
-                                                <th>Status</th>
-                                                <th style={{ textAlign: 'right' }}>Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {inspectPatientModal.billing.labReports.map(l => (
-                                                <tr key={l._id}>
-                                                    <td>{fmtDate(l.createdAt)}</td>
-                                                    <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
-                                                    <td><span className={l.paymentStatus === 'Paid' ? 'paid-pill' : 'pending-pill'}>{l.paymentStatus}</span></td>
-                                                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(l.amount || l.price)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
-                            {/* Pharmacy Orders */}
-                            {inspectPatientModal.billing.pharmacyOrders?.length > 0 && (
-                                <div className="breakdown-module">
-                                    <h4>Pharmacy & Medicines ({inspectPatientModal.billing.pharmacyOrders.length})</h4>
-                                    <table className="breakdown-mini-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Medicines</th>
-                                                <th>Status</th>
-                                                <th style={{ textAlign: 'right' }}>Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {inspectPatientModal.billing.pharmacyOrders.map(p => (
-                                                <tr key={p._id}>
-                                                    <td>{fmtDate(p.createdAt)}</td>
-                                                    <td>{p.items?.length || 0} Medicines</td>
-                                                    <td><span className={p.paymentStatus === 'Paid' ? 'paid-pill' : 'pending-pill'}>{p.paymentStatus}</span></td>
-                                                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(getPharmacyTotal(p))}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
                             {/* Admissions */}
                             {inspectPatientModal.billing.admissions?.length > 0 && (
                                 <div className="breakdown-module">
@@ -4189,10 +4392,14 @@ const PatientBillingProfile = () => {
                     </div>
                 ) : (
                     <>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '9px 12px', marginBottom: '12px', fontSize: '0.8rem', color: '#1e40af' }}>
+                            <strong>Hospital Refund Policy:</strong> OPD Appointment / Consultation payments are strictly non-refundable. Only eligible IPD admission, room/bed/facility, and hospital service payments can be refunded here.
+                        </div>
+
                         {patientRefundData && (
                             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#166534', marginBottom: '4px' }}>
-                                    <span>Total Collected From Patient:</span>
+                                    <span>Eligible Hospital Collected:</span>
                                     <strong>{fmt(patientRefundData.totalPaid)}</strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#166534', marginBottom: '4px' }}>
@@ -4214,15 +4421,15 @@ const PatientBillingProfile = () => {
 
                         {patientRefundData?.refundableAmount <= 0 ? (
                             <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: '#991b1b', fontSize: '0.85rem', marginBottom: '16px' }}>
-                                No refundable balance available for this patient. All payments have either been refunded or are currently pending approval.
+                                No eligible refundable balance available for this patient. Appointment consultation fees are non-refundable, and any eligible IPD/hospital service payments have already been refunded or are pending approval.
                             </div>
                         ) : (
                             <>
-                                {/* Quick payment selector if transactions exist */}
+                                {/* Quick payment selector if eligible non-appointment transactions exist */}
                                 {patientRefundData?.payments?.length > 0 && (
                                     <div style={{ marginBottom: '14px' }}>
                                         <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
-                                            Select Payment to Refund (Optional):
+                                            Select Eligible Hospital Payment to Refund (Optional):
                                         </label>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '110px', overflowY: 'auto' }}>
                                             {patientRefundData.payments.slice(0, 4).map(p => {
@@ -4255,6 +4462,7 @@ const PatientBillingProfile = () => {
                                                         <div>
                                                             <strong>{fmt(p.amount)}</strong>
                                                             <span style={{ marginLeft: '8px', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem' }}>{p.paymentMode || 'Cash'}</span>
+                                                            {p.sourceLabel && <span style={{ marginLeft: '6px', background: '#dbeafe', color: '#1d4ed8', padding: '1px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>{p.sourceLabel}</span>}
                                                             {p.transactionId && <span style={{ marginLeft: '6px', color: '#64748b', fontSize: '0.72rem' }}>#{p.transactionId}</span>}
                                                         </div>
                                                         <span style={{ color: isSel ? '#059669' : '#64748b', fontWeight: isSel ? 700 : 500 }}>
@@ -4299,13 +4507,14 @@ const PatientBillingProfile = () => {
 
                                 <div style={{ marginBottom: '16px' }}>
                                     <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                        Reason for Refund
+                                        Reason for Refund *
                                     </label>
                                     <textarea
                                         rows={2}
                                         value={newRefundForm.reason}
                                         onChange={e => setNewRefundForm(f => ({ ...f, reason: e.target.value }))}
-                                        placeholder="Reason for refund (e.g. consultation cancelled, billing adjustment)..."
+                                        placeholder="Enter mandatory reason (e.g. IPD excess deposit, room/bed billing adjustment)..."
+                                        required
                                         style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem', outline: 'none', resize: 'vertical' }}
                                     />
                                 </div>
@@ -4321,8 +4530,8 @@ const PatientBillingProfile = () => {
                                     <button
                                         type="button"
                                         onClick={handleCreatePatientRefund}
-                                        disabled={submittingRefund}
-                                        style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                        disabled={submittingRefund || !newRefundForm.reason.trim() || !newRefundForm.refundAmount}
+                                        style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: (!newRefundForm.reason.trim() || !newRefundForm.refundAmount) ? '#94a3b8' : '#dc2626', color: '#fff', cursor: (!newRefundForm.reason.trim() || !newRefundForm.refundAmount) ? 'not-allowed' : 'pointer', fontWeight: 700 }}
                                     >
                                         {submittingRefund ? 'Submitting...' : 'Submit Refund Request'}
                                     </button>
@@ -4334,6 +4543,13 @@ const PatientBillingProfile = () => {
             </div>
         </div>
     )}
+
+    <IPDWristbandModal
+        isOpen={wristbandModal.open}
+        onClose={() => setWristbandModal({ open: false, admissionId: null, admission: null })}
+        admissionId={wristbandModal.admissionId}
+        admission={wristbandModal.admission}
+    />
         </div>
     );
 };

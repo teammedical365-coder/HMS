@@ -58,6 +58,10 @@ const refundRequestSchema = new mongoose.Schema({
         enum: ['CASH', 'UPI', 'BANK_TRANSFER'],
     },
     reason: { type: String, default: '' },
+    sourceCategory: {
+        type: String,
+        default: 'HOSPITAL_SERVICE'
+    },
 
     // ── Status Lifecycle ──────────────────────────────────────────────────────
     status: {

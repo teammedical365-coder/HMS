@@ -53,7 +53,7 @@ const LabBillingDashboard = () => {
             const [metricsRes, invoicesRes, ordersRes, paymentsRes, regRes] = await Promise.allSettled([
                 labAPI.billing.getDashboardMetrics({ period }),
                 labAPI.billing.getInvoices({ period, search, paymentStatus: statusFilter, limit: 50 }),
-                labAPI.reception.getOrders({ status: 'Confirmed', limit: 50 }),
+                labAPI.reception.getOrders({ limit: 100 }),
                 labAPI.billing.getPayments({ period, limit: 50 }),
                 labAPI.billing.getCashRegister()
             ]);
@@ -71,11 +71,13 @@ const LabBillingDashboard = () => {
                 setCashRegister(regRes.value.register || null);
             }
 
-            // Filter unbilled orders (orders that don't yet have an active invoice)
+            // Filter unbilled orders (all active clinical lab orders that don't yet have an invoice)
             if (ordersRes.status === 'fulfilled' && ordersRes.value?.success && ordersRes.value.orders) {
                 const invoicesList = (invoicesRes.status === 'fulfilled' && invoicesRes.value?.invoices) ? invoicesRes.value.invoices : [];
-                const billedOrderIds = new Set(invoicesList.map(inv => String(inv.orderId)));
-                const unbilled = ordersRes.value.orders.filter(ord => !billedOrderIds.has(String(ord._id)));
+                const billedOrderIds = new Set(invoicesList.map(inv => String(inv.orderId?._id || inv.orderId)));
+                const unbilled = ordersRes.value.orders.filter(
+                    ord => ord.status !== 'Cancelled' && !billedOrderIds.has(String(ord._id))
+                );
                 setUnbilledOrders(unbilled);
             }
 

@@ -1024,7 +1024,7 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                ===================================================================== */}
             {collectModal.open && collectModal.item && (
                 <div className="scd-modal-backdrop" role="dialog" aria-modal="true" aria-label="Confirm Specimen Collection">
-                    <div className="scd-modal-card">
+                    <div className="scd-modal-card" onClick={(e) => e.stopPropagation()}>
                         <div className="scd-modal-header">
                             <h3 className="scd-modal-title">
                                 <ConicalFlaskIcon size={18} /> Confirm Specimen Collection
@@ -1039,8 +1039,8 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleConfirmCollection}>
-                            <div className="scd-modal-body">
+                        <form className="scd-modal-form" onSubmit={handleConfirmCollection}>
+                            <div className="scd-modal-body" data-scrollable="true" data-lenis-prevent="true">
                                 <div className="scd-summary-banner">
                                     <div>
                                         <span className="scd-summary-item-label">Patient &amp; MRN</span>
@@ -1158,7 +1158,7 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                ===================================================================== */}
             {dispatchModal.open && dispatchModal.sample && (
                 <div className="scd-modal-backdrop" role="dialog" aria-modal="true" aria-label="Send Sample to Laboratory">
-                    <div className="scd-modal-card">
+                    <div className="scd-modal-card" onClick={(e) => e.stopPropagation()}>
                         <div className="scd-modal-header">
                             <h3 className="scd-modal-title">
                                 <FiSend size={17} style={{ color: '#2563eb' }} /> Send Sample to Processing Laboratory
@@ -1173,8 +1173,8 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleConfirmDispatch}>
-                            <div className="scd-modal-body">
+                        <form className="scd-modal-form" onSubmit={handleConfirmDispatch}>
+                            <div className="scd-modal-body" data-scrollable="true" data-lenis-prevent="true">
                                 <div className="scd-summary-banner">
                                     <div>
                                         <span className="scd-summary-item-label">Sample Barcode</span>
@@ -1268,7 +1268,7 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                ===================================================================== */}
             {infoModal.open && infoModal.item && (
                 <div className="scd-modal-backdrop" role="dialog" aria-modal="true" aria-label="Sample Details and Custody History">
-                    <div className="scd-modal-card">
+                    <div className="scd-modal-card" onClick={(e) => e.stopPropagation()}>
                         <div className="scd-modal-header">
                             <h3 className="scd-modal-title">
                                 <FiInfo size={18} style={{ color: '#2563eb' }} /> Specimen &amp; Order Details
@@ -1283,7 +1283,7 @@ const LabCollectionDashboard = ({ mode = 'overview' }) => {
                             </button>
                         </div>
 
-                        <div className="scd-modal-body">
+                        <div className="scd-modal-body" data-scrollable="true" data-lenis-prevent="true">
                             <div className="scd-summary-banner">
                                 <div>
                                     <span className="scd-summary-item-label">Barcode</span>

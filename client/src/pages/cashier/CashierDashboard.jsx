@@ -170,35 +170,44 @@ const CashierDashboard = () => {
         }
     };
 
+    const getAdmDue = (adm) => {
+        if (!adm || ['Paid', 'paid'].includes(adm.paymentStatus)) return 0;
+        return Math.max(0, (Number(adm.totalAmount) || 0) - (Number(adm.paidAmount) || 0));
+    };
+
     const handlePayment = async () => {
         if (!patientInfo) return;
         setProcessingPayment(true);
         setError('');
 
         const appointmentIds = pendingAppointments.map(a => a._id);
-        const labReportIds = pendingLab.map(l => l._id);
-        const pharmacyOrderIds = pendingPharmacy.map(p => p._id);
         const facilityChargeIds = pendingFacilities.map(f => f._id);
         const admissionIds = pendingAdmissions.map(a => a._id);
+        const admissionPayments = {};
+        pendingAdmissions.forEach(a => {
+            admissionPayments[a._id] = getAdmDue(a);
+        });
 
         try {
             const res = await billingAPI.processPayment({
+                patientId: patientInfo._id,
                 appointmentIds,
-                labReportIds,
-                pharmacyOrderIds,
                 facilityChargeIds,
                 admissionIds,
-                paymentMode
+                admissionPayments,
+                amount: grandTotal,
+                paymentMode,
+                idempotencyKey: `cashier_${patientInfo._id}_${Date.now()}`
             });
             if (res.success) {
-                setSuccess('Payment processed successfully. Items marked as Paid.');
+                setSuccess('Hospital payment processed successfully. Items marked as Paid.');
                 // Refresh billing details
                 if (selectedPatient) handleSelectPatient(selectedPatient);
                 fetchPatientsList();
             }
         } catch (err) {
             console.error('Payment error:', err);
-            setError('Error processing payment');
+            setError(err.response?.data?.message || 'Error processing payment');
         } finally {
             setProcessingPayment(false);
         }
@@ -206,34 +215,26 @@ const CashierDashboard = () => {
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
-    // Filter items by payment status
+    // Filter hospital-owned items by payment status (Pharmacy & Lab billed in their own modules)
     const pendingAppointments = (billingData.appointments || []).filter(a => !['Paid', 'paid'].includes(a.paymentStatus));
-    const pendingLab = (billingData.labReports || []).filter(l => !['PAID', 'Paid', 'paid'].includes(l.paymentStatus));
-    const pendingPharmacy = (billingData.pharmacyOrders || []).filter(p => !['Paid', 'paid'].includes(p.paymentStatus));
     const pendingFacilities = (billingData.facilityCharges || []).filter(f => !['Paid', 'paid'].includes(f.paymentStatus));
-    const pendingAdmissions = (billingData.admissions || []).filter(a => !['Paid', 'paid'].includes(a.paymentStatus));
+    const pendingAdmissions = (billingData.admissions || []).filter(a => getAdmDue(a) > 0);
 
     const paidAppointments = (billingData.appointments || []).filter(a => ['Paid', 'paid'].includes(a.paymentStatus));
-    const paidLab = (billingData.labReports || []).filter(l => ['PAID', 'Paid', 'paid'].includes(l.paymentStatus));
-    const paidPharmacy = (billingData.pharmacyOrders || []).filter(p => ['Paid', 'paid'].includes(p.paymentStatus));
     const paidFacilities = (billingData.facilityCharges || []).filter(f => ['Paid', 'paid'].includes(f.paymentStatus));
-    const paidAdmissions = (billingData.admissions || []).filter(a => ['Paid', 'paid'].includes(a.paymentStatus));
+    const paidAdmissions = (billingData.admissions || []).filter(a => ['Paid', 'paid'].includes(a.paymentStatus) || Number(a.paidAmount) > 0);
 
-    // Dues totals
+    // Dues totals (strictly hospital-owned charges)
     const totalAppointments = pendingAppointments.reduce((sum, a) => sum + (a.amount || 0), 0);
-    const totalLab = pendingLab.reduce((sum, l) => sum + (l.amount || 0), 0);
-    const totalPharmacy = pendingPharmacy.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
     const totalFacilities = pendingFacilities.reduce((sum, f) => sum + (f.totalAmount || 0), 0);
-    const totalAdmissions = pendingAdmissions.reduce((sum, a) => sum + (a.totalAmount || 0), 0);
-    const grandTotal = totalAppointments + totalLab + totalPharmacy + totalFacilities + totalAdmissions;
+    const totalAdmissions = pendingAdmissions.reduce((sum, a) => sum + getAdmDue(a), 0);
+    const grandTotal = totalAppointments + totalFacilities + totalAdmissions;
 
-    // Paid totals (History)
+    // Paid totals (History — strictly hospital-owned collections)
     const paidTotalAppointments = paidAppointments.reduce((sum, a) => sum + (a.amount || 0), 0);
-    const paidTotalLab = paidLab.reduce((sum, l) => sum + (l.amount || 0), 0);
-    const paidTotalPharmacy = paidPharmacy.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
     const paidTotalFacilities = paidFacilities.reduce((sum, f) => sum + (f.totalAmount || 0), 0);
-    const paidTotalAdmissions = paidAdmissions.reduce((sum, a) => sum + (a.totalAmount || 0), 0);
-    const totalPaidSum = paidTotalAppointments + paidTotalLab + paidTotalPharmacy + paidTotalFacilities + paidTotalAdmissions;
+    const paidTotalAdmissions = paidAdmissions.reduce((sum, a) => sum + (['Paid', 'paid'].includes(a.paymentStatus) ? (a.totalAmount || 0) : (a.paidAmount || 0)), 0);
+    const totalPaidSum = paidTotalAppointments + paidTotalFacilities + paidTotalAdmissions;
 
     return (
         <div className="cashier-dashboard">
@@ -382,11 +383,16 @@ const CashierDashboard = () => {
                                                                     <td>
                                                                         {adm.selectedFacilities?.map((f, i) => (
                                                                             <div key={i} style={{ fontSize: '11px', color: '#64748b' }}>
-                                                                                {f.facilityName} ({f.days} days @ {formatCurrency(f.pricePerDay)}/day)
+                                                                                {f.facilityName} ({f.durationText || `${f.days || 1} days`} @ {formatCurrency(f.pricePerDay)}/day)
                                                                             </div>
                                                                         ))}
                                                                     </td>
-                                                                    <td style={{ fontWeight: '700', color: '#ef4444' }}>{formatCurrency(adm.totalAmount)}</td>
+                                                                    <td style={{ fontWeight: '700', color: '#ef4444' }}>
+                                                                        {formatCurrency(getAdmDue(adm))}
+                                                                        {Number(adm.paidAmount) > 0 && (
+                                                                            <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>Paid: {formatCurrency(adm.paidAmount)}</div>
+                                                                        )}
+                                                                    </td>
                                                                 </tr>
                                                             );
                                                         })}
@@ -435,48 +441,11 @@ const CashierDashboard = () => {
                                             </div>
                                         )}
 
-                                        {/* LAB TESTS */}
-                                        {pendingLab.length > 0 && (
-                                            <div className="billing-section">
-                                                <h3>🧪 Laboratory Tests</h3>
-                                                <table className="bill-items-table">
-                                                    <thead><tr><th>Date Ordered</th><th>Ordered Test(s)</th><th>Charges</th></tr></thead>
-                                                    <tbody>
-                                                        {pendingLab.map((l) => (
-                                                            <tr key={l._id}>
-                                                                <td>{new Date(l.createdAt).toLocaleDateString()}</td>
-                                                                <td>{l.testNames?.join(', ')}</td>
-                                                                <td style={{ fontWeight: '700', color: '#ef4444' }}>{formatCurrency(l.amount)}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-
-                                        {/* PHARMACY */}
-                                        {pendingPharmacy.length > 0 && (
-                                            <div className="billing-section">
-                                                <h3>💊 Pharmacy Dispenses</h3>
-                                                <table className="bill-items-table">
-                                                    <thead><tr><th>Date Dispensed</th><th>Items Description</th><th>Dues</th></tr></thead>
-                                                    <tbody>
-                                                        {pendingPharmacy.map((p) => (
-                                                            <tr key={p._id}>
-                                                                <td>{new Date(p.createdAt).toLocaleDateString()}</td>
-                                                                <td>{p.items?.map(i => `${i.medicineName} (${i.duration})`).join(', ')}</td>
-                                                                <td style={{ fontWeight: '700', color: '#ef4444' }}>{formatCurrency(p.totalAmount)}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-
                                         {grandTotal === 0 && (
                                             <div style={{ textAlign: 'center', padding: '40px', background: 'white', borderRadius: '12px' }}>
                                                 <div style={{ fontSize: '40px', marginBottom: '10px' }}>✓</div>
-                                                <h3 style={{ color: '#475569', margin: 0 }}>This patient has no outstanding dues.</h3>
+                                                <h3 style={{ color: '#475569', margin: 0 }}>This patient has no outstanding hospital dues.</h3>
+                                                <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '6px' }}>Pharmacy and Laboratory charges are collected separately by their respective billing counters.</p>
                                             </div>
                                         )}
                                     </div>
@@ -485,13 +454,12 @@ const CashierDashboard = () => {
                                     <div className="billing-summary">
                                         <div className="summary-card">
                                             <div className="summary-header">
-                                                <h3>Settle Bill Payment</h3>
+                                                <h3>Settle Hospital Bill</h3>
                                             </div>
                                             <div className="summary-body">
                                                 <div className="summary-row"><span>Consultations:</span><span>{formatCurrency(totalAppointments)}</span></div>
-                                                <div className="summary-row"><span>Lab Dues:</span><span>{formatCurrency(totalLab)}</span></div>
-                                                <div className="summary-row"><span>Pharmacy Dues:</span><span>{formatCurrency(totalPharmacy)}</span></div>
-                                                <div className="summary-row"><span>Facilities & Ward:</span><span>{formatCurrency(totalFacilities + totalAdmissions)}</span></div>
+                                                <div className="summary-row"><span>IPD Ward &amp; Bed:</span><span>{formatCurrency(totalAdmissions)}</span></div>
+                                                <div className="summary-row"><span>Facility Charges:</span><span>{formatCurrency(totalFacilities)}</span></div>
                                                 
                                                 <div className="summary-row summary-total">
                                                     <span>Grand Total:</span>
@@ -556,8 +524,8 @@ const CashierDashboard = () => {
                                                                             </div>
                                                                         ))}
                                                                     </td>
-                                                                    <td><strong style={{ color: '#10b981' }}>{formatCurrency(adm.totalAmount)}</strong></td>
-                                                                    <td><span className="badge-settled">Paid</span></td>
+                                                                    <td><strong style={{ color: '#10b981' }}>{formatCurrency(['Paid', 'paid'].includes(adm.paymentStatus) ? adm.totalAmount : adm.paidAmount)}</strong></td>
+                                                                    <td><span className="badge-settled">{adm.paymentStatus || 'Paid'}</span></td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>
@@ -599,47 +567,6 @@ const CashierDashboard = () => {
                                                                     <td>{a.doctorName} ({a.serviceName || 'Consultation'})</td>
                                                                     <td>{a.paymentMode || 'Cash'}</td>
                                                                     <td><strong style={{ color: '#10b981' }}>{formatCurrency(a.amount)}</strong></td>
-                                                                    <td><span className="badge-settled">Paid</span></td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-
-                                            {/* Lab history */}
-                                            {paidLab.length > 0 && (
-                                                <div>
-                                                    <h4 style={{ margin: '0 0 10px 0', color: '#475569' }}>🧪 Laboratory Tests History</h4>
-                                                    <table className="bill-items-table">
-                                                        <thead><tr><th>Date</th><th>Tests</th><th>Method</th><th>Paid</th><th>Status</th></tr></thead>
-                                                        <tbody>
-                                                            {paidLab.map(l => (
-                                                                <tr key={l._id}>
-                                                                    <td>{new Date(l.createdAt).toLocaleDateString()}</td>
-                                                                    <td>{l.testNames?.join(', ')}</td>
-                                                                    <td>{l.paymentMode || 'Cash'}</td>
-                                                                    <td><strong style={{ color: '#10b981' }}>{formatCurrency(l.amount)}</strong></td>
-                                                                    <td><span className="badge-settled">Paid</span></td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-
-                                            {/* Pharmacy history */}
-                                            {paidPharmacy.length > 0 && (
-                                                <div>
-                                                    <h4 style={{ margin: '0 0 10px 0', color: '#475569' }}>💊 Pharmacy Orders History</h4>
-                                                    <table className="bill-items-table">
-                                                        <thead><tr><th>Date</th><th>Medicines</th><th>Paid</th><th>Status</th></tr></thead>
-                                                        <tbody>
-                                                            {paidPharmacy.map(p => (
-                                                                <tr key={p._id}>
-                                                                    <td>{new Date(p.createdAt).toLocaleDateString()}</td>
-                                                                    <td>{p.items?.map(i => `${i.medicineName}`).join(', ')}</td>
-                                                                    <td><strong style={{ color: '#10b981' }}>{formatCurrency(p.totalAmount)}</strong></td>
                                                                     <td><span className="badge-settled">Paid</span></td>
                                                                 </tr>
                                                             ))}

@@ -125,7 +125,33 @@ const LabSidebar = ({ isOpen, onClose }) => {
     };
 
     const resolvedHospitalName = hospitalName || 'Medical 365';
-    const resolvedLogoUrl = branding?.logoUrl || branding?.logo || '/assets/logo.png';
+    const customLogo = branding?.logoUrl || branding?.logo || '';
+    const resolvedLogoUrl = customLogo || '/assets/logo.png';
+
+    // Single-winner longest-prefix active path across all sidebar items
+    const activeNavPath = useMemo(() => {
+        const pathname = location.pathname;
+        const allItems = navSections.flatMap((s) => s.items || []);
+        let bestPath = null;
+        let bestScore = -1;
+
+        for (const item of allItems) {
+            if (pathname === item.path) {
+                const score = 1000 + item.path.length;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestPath = item.path;
+                }
+            } else if (pathname.startsWith(`${item.path}/`)) {
+                const score = item.path.length;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestPath = item.path;
+                }
+            }
+        }
+        return bestPath;
+    }, [location.pathname, navSections]);
 
     return (
         <aside className={`lab-sidebar ${isOpen ? 'open' : ''}`}>
@@ -134,31 +160,42 @@ const LabSidebar = ({ isOpen, onClose }) => {
                     src={resolvedLogoUrl}
                     alt={resolvedHospitalName}
                     onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = '/logo.png';
+                        if (!e.target.dataset.triedAssets) {
+                            e.target.dataset.triedAssets = '1';
+                            e.target.src = '/assets/logo.png';
+                        } else {
+                            e.target.onerror = null;
+                            e.target.src = '/logo.png';
+                        }
                     }}
-                    style={{ height: '34px', maxWidth: '44px', width: 'auto', objectFit: 'contain' }}
+                    style={{ height: '34px', maxWidth: customLogo ? '48px' : '150px', width: 'auto', objectFit: 'contain' }}
                 />
-                <div className="lab-brand-text">
-                    <h2>{resolvedHospitalName}</h2>
-                </div>
+                {(customLogo || resolvedHospitalName !== 'Medical 365') && (
+                    <div className="lab-brand-text">
+                        <h2>{resolvedHospitalName}</h2>
+                    </div>
+                )}
             </div>
 
             <nav className="lab-sidebar-nav">
                 {navSections.map((section, sIdx) => (
                     <div key={sIdx} style={{ marginBottom: '16px' }}>
                         <div className="lab-nav-section-title">{section.title}</div>
-                        {section.items.map((item, iIdx) => (
-                            <NavLink
-                                key={iIdx}
-                                to={item.path}
-                                onClick={onClose}
-                                className={({ isActive }) => `lab-nav-item ${isActive ? 'active' : ''}`}
-                            >
-                                <span className="lab-nav-icon">{item.icon}</span>
-                                <span>{item.label}</span>
-                            </NavLink>
-                        ))}
+                        {section.items.map((item, iIdx) => {
+                            const active = activeNavPath === item.path;
+                            return (
+                                <NavLink
+                                    key={iIdx}
+                                    to={item.path}
+                                    end
+                                    onClick={onClose}
+                                    className={() => `lab-nav-item ${active ? 'active' : ''}`}
+                                >
+                                    <span className="lab-nav-icon">{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </NavLink>
+                            );
+                        })}
                     </div>
                 ))}
             </nav>

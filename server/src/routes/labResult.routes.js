@@ -49,7 +49,15 @@ const verifyResultAccess = (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Access denied: Result workflow permissions required' });
     }
 
-    req.hospitalId = req.user.hospitalId || req.headers['x-hospital-id'] || null;
+    const isCentral = roleName === 'centraladmin' || roleName === 'superadmin';
+    req.hospitalId = isCentral
+        ? (req.user.hospitalId || req.headers['x-hospital-id'] || (req.tenant ? req.tenant._id : null))
+        : (req.user.hospitalId || (req.tenant ? req.tenant._id : null));
+
+    if (!req.hospitalId && !isCentral) {
+        return res.status(403).json({ success: false, message: 'Hospital tenant context required' });
+    }
+
     next();
 };
 
@@ -99,6 +107,151 @@ async function logResultHistory({ hospitalId, resultId, orderId, testId, testCod
     }
 }
 
+// Helper: Normalize test names/codes for catalog matching
+function normalizeTestTokens(raw = '') {
+    const str = String(raw || '').trim();
+    const lower = str.toLowerCase();
+    const parenMatch = str.match(/\(([a-zA-Z0-9\-\s]{2,15})\)/);
+    const parenCode = parenMatch ? parenMatch[1].trim().toLowerCase() : '';
+    const baseName = lower
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/&/g, ' and ')
+        .replace(/\bmicroscopy\b/g, '')
+        .replace(/\bexamination\b/g, '')
+        .replace(/\btest\b/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    return { lower, parenCode, baseName };
+}
+
+function isAutoStubParameterList(params = [], testName = '') {
+    const active = (params || []).filter((p) => p && p.isActive !== false);
+    if (active.length === 0) return true;
+    if (active.length > 1) return false;
+    const only = active[0];
+    const sameAsTestName = String(only.parameterName || '').trim().toLowerCase() === String(testName || '').trim().toLowerCase();
+    const hasRanges = Array.isArray(only.referenceRanges) && only.referenceRanges.length > 0;
+    const hasChoices = Array.isArray(only.choices) && only.choices.length > 0;
+    return (
+        only.dataType === 'Text' &&
+        !only.unit &&
+        !hasRanges &&
+        !hasChoices &&
+        sameAsTestName
+    );
+}
+
+/**
+ * Resolves the authoritative Phase 3 LabTest definition and its active configured parameters.
+ * If the linked LabTest was auto-provisioned as a 1-field text placeholder from HMS sync,
+ * checks if a richer configured LabTest exists in the tenant/global catalog with matching name/code.
+ */
+async function resolveAuthoritativeCatalogTest(testDoc, hospitalId) {
+    if (!testDoc) return { effectiveTest: null, activeParameters: [] };
+
+    let effectiveTest = testDoc.toObject ? testDoc.toObject() : testDoc;
+    let activeParams = (effectiveTest.parameters || []).filter((p) => p && p.isActive !== false);
+
+    if (isAutoStubParameterList(activeParams, effectiveTest.testName || effectiveTest.name)) {
+        const { lower, parenCode, baseName } = normalizeTestTokens(effectiveTest.testName || effectiveTest.name);
+        const candidates = await LabTest.find({
+            _id: { $ne: effectiveTest._id },
+            isActive: { $ne: false },
+            $or: [
+                ...(hospitalId ? [{ hospitalId }] : []),
+                { hospitalId: null },
+                { hospitalId: { $exists: false } }
+            ]
+        }).lean();
+
+        const hidStr = hospitalId ? String(hospitalId) : '';
+        const richCandidates = candidates
+            .filter((c) => {
+                const cActive = (c.parameters || []).filter((p) => p && p.isActive !== false);
+                return cActive.length > 0 && !isAutoStubParameterList(cActive, c.testName || c.name);
+            })
+            .sort((a, b) => {
+                const aTenant = hidStr && String(a.hospitalId || '') === hidStr ? 0 : 1;
+                const bTenant = hidStr && String(b.hospitalId || '') === hidStr ? 0 : 1;
+                if (aTenant !== bTenant) return aTenant - bTenant;
+                return (b.parameters?.length || 0) - (a.parameters?.length || 0);
+            });
+
+        const matchedRich = richCandidates.find((c) => {
+            const cTokens = normalizeTestTokens(c.testName || c.name);
+            const cCode = String(c.testCode || c.code || '').trim().toLowerCase();
+            const cShort = String(c.shortName || '').trim().toLowerCase();
+            return (
+                (cTokens.lower && cTokens.lower === lower) ||
+                (cTokens.baseName && baseName && cTokens.baseName === baseName) ||
+                (parenCode && (cCode === parenCode || cShort === parenCode)) ||
+                (cTokens.parenCode && (cTokens.parenCode === lower || cTokens.parenCode === parenCode))
+            );
+        });
+
+        if (matchedRich) {
+            effectiveTest = matchedRich;
+            activeParams = (matchedRich.parameters || []).filter((p) => p && p.isActive !== false);
+        }
+    }
+
+    const sortedParams = [...activeParams].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    return { effectiveTest, activeParameters: sortedParams };
+}
+
+/**
+ * Builds or non-destructively synchronizes resultParameters from configured catalog parameters,
+ * preserving any values/remarks already entered by the technician.
+ */
+function buildSyncedResultParameters(existingParams = [], catalogParams = [], patientSnapshot = {}) {
+    if (!Array.isArray(catalogParams) || catalogParams.length === 0) {
+        return existingParams || [];
+    }
+
+    return catalogParams.map((p, idx) => {
+        const pIdStr = p._id ? String(p._id) : '';
+        const pCodeLower = String(p.parameterCode || '').trim().toLowerCase();
+        const pNameLower = String(p.parameterName || '').trim().toLowerCase();
+
+        const existing = (existingParams || []).find((ep) => {
+            if (pIdStr && ep.parameterId && String(ep.parameterId) === pIdStr) return true;
+            if (pCodeLower && ep.parameterCode && String(ep.parameterCode).trim().toLowerCase() === pCodeLower) return true;
+            if (pNameLower && ep.parameterName && String(ep.parameterName).trim().toLowerCase() === pNameLower) return true;
+            return false;
+        });
+
+        const rawVal = existing && existing.enteredValue !== undefined && existing.enteredValue !== null
+            ? existing.enteredValue
+            : (p.defaultValue || '');
+
+        const evaluated = evaluateParameter({
+            parameter: p,
+            enteredValue: rawVal,
+            patient: patientSnapshot
+        });
+
+        return {
+            parameterId: p._id || existing?.parameterId,
+            parameterName: p.parameterName,
+            parameterCode: p.parameterCode || '',
+            dataType: p.dataType || 'Numeric',
+            decimalPlaces: p.decimalPlaces != null ? p.decimalPlaces : 0,
+            enteredValue: evaluated.enteredValue != null ? String(evaluated.enteredValue) : '',
+            numericValue: evaluated.numericValue,
+            unit: p.unit || '',
+            referenceRangeSnapshot: evaluated.referenceRangeSnapshot || {},
+            referenceRangeText: evaluated.referenceRangeText || 'Not Configured',
+            abnormalFlag: evaluated.abnormalFlag || 'NORMAL',
+            criticalFlag: Boolean(evaluated.criticalFlag),
+            criticalAlertId: existing?.criticalAlertId || null,
+            remarks: existing?.remarks || '',
+            displayOrder: p.displayOrder || (idx + 1),
+            isRequired: p.isRequired !== false,
+            choices: Array.isArray(p.choices) ? p.choices : []
+        };
+    });
+}
+
 // =========================================================================
 // 2. RESULT ENTRY QUEUE & INITIALIZATION
 // =========================================================================
@@ -115,17 +268,19 @@ router.get('/entry-queue', verifyToken, verifyResultAccess, async (req, res) => 
         // Query eligible samples: accepted or processing on bench
         const sampleQuery = {
             hospitalId,
-            status: { $in: ['ACCEPTED', 'PROCESSING', 'PROCESSING_COMPLETED', 'COLLECTED'] }
+            status: { $in: ['ACCEPTED', 'PROCESSING', 'PROCESSING_COMPLETED', 'COLLECTED', 'RECEIVED_AT_PROCESSING_LAB'] }
         };
 
         if (priority) sampleQuery.priority = priority;
 
         if (search) {
-            const regex = new RegExp(search.trim(), 'i');
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'i');
             sampleQuery.$or = [
                 { barcode: regex },
                 { orderNumber: regex },
                 { 'patientSnapshot.name': regex },
+                { 'patientSnapshot.mrn': regex },
                 { 'patientSnapshot.uhid': regex },
                 { 'patientSnapshot.phone': regex }
             ];
@@ -136,17 +291,28 @@ router.get('/entry-queue', verifyToken, verifyResultAccess, async (req, res) => 
             .limit(100)
             .lean();
 
-        // Check which tests already have results
-        const sampleIds = samples.map(s => s._id);
-        const existingResults = await LabTestResult.find({
-            hospitalId,
-            sampleId: { $in: sampleIds }
-        }).lean();
+        // Check existing results by BOTH sampleId+testId and orderId+testId (matches unique index)
+        const sampleIds = samples.map((s) => s._id);
+        const orderIds = samples.map((s) => s.orderId).filter(Boolean);
+        const existingResults = (sampleIds.length > 0 || orderIds.length > 0)
+            ? await LabTestResult.find({
+                hospitalId,
+                $or: [
+                    ...(sampleIds.length > 0 ? [{ sampleId: { $in: sampleIds } }] : []),
+                    ...(orderIds.length > 0 ? [{ orderId: { $in: orderIds } }] : [])
+                ]
+            }).lean()
+            : [];
 
-        const resultMap = {};
-        existingResults.forEach(r => {
-            const key = `${r.sampleId}_${r.testId}`;
-            resultMap[key] = r;
+        const resultBySampleTest = {};
+        const resultByOrderTest = {};
+        existingResults.forEach((r) => {
+            if (r.sampleId && r.testId) {
+                resultBySampleTest[`${r.sampleId}_${r.testId}`] = r;
+            }
+            if (r.orderId && r.testId) {
+                resultByOrderTest[`${r.orderId}_${r.testId}`] = r;
+            }
         });
 
         // Flatten tests within eligible samples
@@ -155,15 +321,15 @@ router.get('/entry-queue', verifyToken, verifyResultAccess, async (req, res) => 
             for (const t of (s.tests || [])) {
                 if (department && t.department && t.department !== department) continue;
 
-                const key = `${s._id}_${t.testId}`;
-                const resDoc = resultMap[key];
+                const resDoc = resultBySampleTest[`${s._id}_${t.testId}`] || resultByOrderTest[`${s.orderId}_${t.testId}`] || null;
 
-                // If filter by status requested
+                // Filter by status if requested
                 if (status && resDoc && resDoc.resultStatus !== status) continue;
                 if (status && !resDoc && status !== 'PENDING') continue;
 
-                // Do not display if already final verified
+                // Hide verified or pathologist-queued items unless explicitly searched by barcode/status
                 if (resDoc && resDoc.resultStatus === 'VERIFIED') continue;
+                if (!status && !search && resDoc && ['SUBMITTED', 'UNDER_REVIEW'].includes(resDoc.resultStatus)) continue;
 
                 queueItems.push({
                     sampleId: s._id,
@@ -171,20 +337,25 @@ router.get('/entry-queue', verifyToken, verifyResultAccess, async (req, res) => 
                     orderId: s.orderId,
                     orderNumber: s.orderNumber,
                     tokenNumber: s.tokenNumber,
-                    patientSnapshot: s.patientSnapshot,
+                    patientSnapshot: {
+                        ...(s.patientSnapshot || {}),
+                        mrn: s.patientSnapshot?.mrn || s.patientSnapshot?.uhid || ''
+                    },
                     specimenType: s.specimenType,
                     containerType: s.containerType,
                     priority: s.priority,
                     sampleStatus: s.status,
                     testId: t.testId,
-                    testCode: t.testCode,
-                    testName: t.testName,
-                    department: t.department || 'General Pathology',
+                    testCode: resDoc?.testCode || t.testCode,
+                    testName: resDoc?.testName || t.testName,
+                    department: resDoc?.department || t.department || 'General Pathology',
                     resultId: resDoc ? resDoc._id : null,
                     resultStatus: resDoc ? resDoc.resultStatus : 'PENDING',
                     revisionNumber: resDoc ? resDoc.revisionNumber : 1,
                     hasCritical: resDoc ? resDoc.hasCriticalParameters : false,
                     hasAbnormal: resDoc ? resDoc.hasAbnormalParameters : false,
+                    correctionReason: resDoc?.correctionReason || '',
+                    rejectionReason: resDoc?.rejectionReason || '',
                     updatedAt: resDoc ? resDoc.updatedAt : s.updatedAt
                 });
             }
@@ -203,103 +374,140 @@ router.get('/entry-queue', verifyToken, verifyResultAccess, async (req, res) => 
 
 /**
  * POST /api/lab/results/initialize
- * Initializes or loads a result document for a given sample and test.
+ * Atomically initializes or retrieves a result document for { hospitalId, orderId, testId }
+ * without ever throwing E11000 duplicate key errors under concurrent requests or recollections.
  */
 router.post('/initialize', verifyToken, verifyResultAccess, async (req, res) => {
     try {
         const { sampleId, testId, orderId } = req.body;
         const hospitalId = req.hospitalId;
 
-        if (!testId) {
-            return res.status(400).json({ success: false, message: 'testId is required' });
+        if (!testId || !mongoose.Types.ObjectId.isValid(testId)) {
+            return res.status(400).json({ success: false, message: 'Valid testId is required' });
         }
 
-        // Check if result already exists
-        let result = await LabTestResult.findOne({
-            hospitalId,
-            ...(sampleId ? { sampleId } : {}),
-            ...(orderId ? { orderId } : {}),
-            testId
-        });
-
-        if (result) {
-            return res.json({ success: true, result });
-        }
-
-        // Fetch parent sample, order, and test definition
+        // Fetch parent sample and catalog test definition in parallel
         const [sample, test] = await Promise.all([
-            sampleId ? LabSample.findOne({ _id: sampleId, hospitalId }) : null,
-            LabTest.findOne({ _id: testId })
+            (sampleId && mongoose.Types.ObjectId.isValid(sampleId))
+                ? LabSample.findOne({ _id: sampleId, hospitalId }).lean()
+                : null,
+            LabTest.findById(testId).lean()
         ]);
 
         if (!test) {
             return res.status(404).json({ success: false, message: 'Master test not found in catalog' });
         }
 
-        let order = null;
-        if (orderId || sample?.orderId) {
-            order = await LabOrder.findOne({ _id: orderId || sample?.orderId, hospitalId });
+        const candidateOrderId = orderId || sample?.orderId;
+        const order = (candidateOrderId && mongoose.Types.ObjectId.isValid(candidateOrderId))
+            ? await LabOrder.findOne({ _id: candidateOrderId, hospitalId }).lean()
+            : null;
+
+        const effectiveOrderId = order?._id || sample?.orderId || (mongoose.Types.ObjectId.isValid(orderId) ? orderId : null);
+
+        if (!effectiveOrderId) {
+            return res.status(400).json({ success: false, message: 'Valid sample or lab order is required to initialize test result' });
         }
 
-        if (!order && !sample) {
-            return res.status(400).json({ success: false, message: 'Valid sample or order required to initialize test result' });
-        }
-
-        const patientSnapshot = sample?.patientSnapshot || order?.patientSnapshot || {
-            name: 'Patient',
+        const rawSnapshot = sample?.patientSnapshot || order?.patientSnapshot || {
+            name: 'Registered Patient',
             age: 30,
             gender: 'Any'
         };
+        const patientSnapshot = {
+            ...rawSnapshot,
+            uhid: rawSnapshot.uhid || rawSnapshot.mrn || ''
+        };
 
-        // Build parameter rows from Phase 3 master catalog
-        const parameters = (test.parameters || []).map((p, idx) => {
-            const evaluated = evaluateParameter({
-                parameter: p,
-                enteredValue: p.defaultValue || '',
-                patient: patientSnapshot
-            });
+        const { effectiveTest, activeParameters } = await resolveAuthoritativeCatalogTest(test, hospitalId);
+        const initialParameters = buildSyncedResultParameters([], activeParameters, patientSnapshot);
 
-            return {
-                parameterId: p._id,
-                parameterName: p.parameterName,
-                parameterCode: p.parameterCode || '',
-                dataType: p.dataType || 'Numeric',
-                decimalPlaces: p.decimalPlaces != null ? p.decimalPlaces : 0,
-                enteredValue: evaluated.enteredValue || '',
-                numericValue: evaluated.numericValue,
-                unit: p.unit || '',
-                referenceRangeSnapshot: evaluated.referenceRangeSnapshot || {},
-                referenceRangeText: evaluated.referenceRangeText || 'Not Configured',
-                abnormalFlag: evaluated.abnormalFlag || 'NORMAL',
-                criticalFlag: evaluated.criticalFlag || false,
-                remarks: '',
-                displayOrder: p.displayOrder || (idx + 1),
-                isRequired: p.isRequired !== false,
-                choices: p.choices || []
-            };
-        });
-
-        result = await LabTestResult.create({
+        const newDocPayload = {
             hospitalId,
-            patientId: sample?.patientId || order?.patient,
+            patientId: sample?.patientId || order?.patient || null,
             patientSnapshot,
-            orderId: order?._id || sample?.orderId,
+            orderId: effectiveOrderId,
             orderNumber: order?.orderNumber || sample?.orderNumber || 'ORD',
             tokenNumber: order?.tokenNumber || sample?.tokenNumber || 1,
             sampleId: sample?._id || null,
             barcode: sample?.barcode || 'N/A',
             testId: test._id,
-            testCode: test.testCode || test.code || 'TEST',
-            testName: test.testName || test.name,
-            department: test.department || 'General Pathology',
+            testCode: effectiveTest?.testCode || effectiveTest?.code || test.testCode || test.code || 'TEST',
+            testName: test.testName || test.name || effectiveTest?.testName,
+            department: effectiveTest?.department || test.department || 'General Pathology',
             processingLocationId: sample?.currentLocationId || null,
             priority: sample?.priority || order?.priority || 'Routine',
             resultStatus: 'PENDING',
-            resultParameters: parameters,
+            resultParameters: initialParameters,
             revisionNumber: 1
-        });
+        };
 
-        res.json({ success: true, result });
+        // Atomic idempotent upsert keyed by exact unique index { hospitalId, orderId, testId }
+        let result = null;
+        try {
+            result = await LabTestResult.findOneAndUpdate(
+                { hospitalId, orderId: effectiveOrderId, testId: test._id },
+                { $setOnInsert: newDocPayload },
+                { new: true, upsert: true }
+            );
+        } catch (upsertErr) {
+            if (upsertErr && upsertErr.code === 11000) {
+                result = await LabTestResult.findOne({ hospitalId, orderId: effectiveOrderId, testId: test._id });
+            } else {
+                throw upsertErr;
+            }
+        }
+
+        if (!result) {
+            result = await LabTestResult.findOne({ hospitalId, orderId: effectiveOrderId, testId: test._id });
+        }
+
+        // If unverified, keep latest barcoded sample link & non-destructively sync newly configured catalog parameters
+        if (result && result.resultStatus !== 'VERIFIED') {
+            let needsSave = false;
+
+            if (sample && (!result.sampleId || String(result.sampleId) !== String(sample._id))) {
+                result.sampleId = sample._id;
+                result.barcode = sample.barcode || result.barcode;
+                needsSave = true;
+            } else if (sample?.barcode && (!result.barcode || result.barcode === 'N/A')) {
+                result.barcode = sample.barcode;
+                needsSave = true;
+            }
+
+            if (
+                ['PENDING', 'DRAFT', 'CORRECTION_REQUESTED', 'REJECTED'].includes(result.resultStatus) &&
+                activeParameters.length > 0
+            ) {
+                const synced = buildSyncedResultParameters(result.resultParameters, activeParameters, result.patientSnapshot || patientSnapshot);
+                const currentCount = (result.resultParameters || []).length;
+                const currentIsStub = isAutoStubParameterList(result.resultParameters, result.testName);
+                if (currentCount !== synced.length || currentIsStub) {
+                    result.resultParameters = synced;
+                    needsSave = true;
+                }
+            }
+
+            if (needsSave) {
+                await result.save();
+            }
+        }
+
+        const history = result
+            ? await LabResultHistory.find({ hospitalId, resultId: result._id }).sort({ timestamp: -1 }).lean()
+            : [];
+
+        const resultObj = result?.toObject ? result.toObject() : result;
+        if (resultObj && resultObj.patientSnapshot) {
+            resultObj.patientSnapshot.mrn = resultObj.patientSnapshot.mrn || resultObj.patientSnapshot.uhid || '';
+        }
+
+        res.json({
+            success: true,
+            result: resultObj,
+            sample: sample ? { specimenType: sample.specimenType, containerType: sample.containerType, status: sample.status } : null,
+            history
+        });
     } catch (error) {
         console.error('[results] initialize error:', error);
         res.status(500).json({ success: false, message: 'Failed to initialize result template: ' + error.message });
@@ -307,34 +515,58 @@ router.post('/initialize', verifyToken, verifyResultAccess, async (req, res) => 
 });
 
 /**
- * GET /api/lab/results/:id
- * Retrieves full result document with parameters and history.
+ * GET /api/lab/results/history-list
+ * Lists verified, rejected, and correction-requested results for Pathologist History & Audit view.
  */
-router.get('/:id', verifyToken, verifyResultAccess, async (req, res) => {
+router.get('/history-list', verifyToken, verifyResultAccess, async (req, res) => {
     try {
-        const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: 'Invalid result ID format' });
-        }
         const hospitalId = req.hospitalId;
+        const { search = '', department = '', status = '' } = req.query;
 
-        const result = await LabTestResult.findOne({ _id: id, hospitalId }).lean();
-        if (!result) {
-            return res.status(404).json({ success: false, message: 'Result record not found' });
+        const allowedHistoryStatuses = ['VERIFIED', 'REJECTED', 'CORRECTION_REQUESTED'];
+        const query = {
+            hospitalId,
+            resultStatus: status && allowedHistoryStatuses.includes(status)
+                ? status
+                : { $in: allowedHistoryStatuses }
+        };
+
+        if (department) query.department = department;
+
+        if (search) {
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'i');
+            query.$or = [
+                { barcode: regex },
+                { orderNumber: regex },
+                { testCode: regex },
+                { testName: regex },
+                { 'patientSnapshot.name': regex },
+                { 'patientSnapshot.uhid': regex }
+            ];
         }
 
-        const history = await LabResultHistory.find({ hospitalId, resultId: id })
-            .sort({ timestamp: -1 })
+        const results = await LabTestResult.find(query)
+            .sort({ verifiedAt: -1, updatedAt: -1 })
+            .limit(150)
             .lean();
+
+        const normalized = results.map((r) => ({
+            ...r,
+            patientSnapshot: {
+                ...(r.patientSnapshot || {}),
+                mrn: r.patientSnapshot?.mrn || r.patientSnapshot?.uhid || ''
+            }
+        }));
 
         res.json({
             success: true,
-            result,
-            history
+            total: normalized.length,
+            results: normalized
         });
     } catch (error) {
-        console.error('[results] get by id error:', error);
-        res.status(500).json({ success: false, message: 'Failed to fetch result: ' + error.message });
+        console.error('[results] history-list error:', error);
+        res.status(500).json({ success: false, message: 'Failed to load verified results history: ' + error.message });
     }
 });
 
@@ -622,16 +854,19 @@ router.post('/:id/submit', verifyToken, verifyResultAccess, async (req, res) => 
 
 /**
  * GET /api/lab/results/verification-queue
- * Lists results submitted for pathologist medical verification.
+ * Lists results strictly eligible for Pathologist review (SUBMITTED & UNDER_REVIEW).
  */
 router.get('/verification-queue', verifyToken, verifyResultAccess, async (req, res) => {
     try {
         const hospitalId = req.hospitalId;
-        const { search = '', department = '', priority = '', abnormalOnly = '', criticalOnly = '' } = req.query;
+        const { search = '', department = '', priority = '', abnormalOnly = '', criticalOnly = '', status = '' } = req.query;
 
+        const eligibleStatuses = ['SUBMITTED', 'UNDER_REVIEW'];
         const query = {
             hospitalId,
-            resultStatus: { $in: ['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUESTED'] }
+            resultStatus: (status && eligibleStatuses.includes(status))
+                ? status
+                : { $in: eligibleStatuses }
         };
 
         if (department) query.department = department;
@@ -640,7 +875,8 @@ router.get('/verification-queue', verifyToken, verifyResultAccess, async (req, r
         if (criticalOnly === 'true') query.hasCriticalParameters = true;
 
         if (search) {
-            const regex = new RegExp(search.trim(), 'i');
+            const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'i');
             query.$or = [
                 { barcode: regex },
                 { orderNumber: regex },
@@ -652,18 +888,69 @@ router.get('/verification-queue', verifyToken, verifyResultAccess, async (req, r
         }
 
         const queue = await LabTestResult.find(query)
-            .sort({ hasCriticalParameters: -1, priority: -1, submittedAt: -1 })
+            .sort({ hasCriticalParameters: -1, priority: -1, submittedAt: -1, updatedAt: -1 })
             .limit(100)
             .lean();
 
+        const normalizedQueue = queue.map((r) => ({
+            ...r,
+            patientSnapshot: {
+                ...(r.patientSnapshot || {}),
+                mrn: r.patientSnapshot?.mrn || r.patientSnapshot?.uhid || ''
+            }
+        }));
+
         res.json({
             success: true,
-            total: queue.length,
-            queue
+            total: normalizedQueue.length,
+            queue: normalizedQueue
         });
     } catch (error) {
         console.error('[results] verification-queue error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch verification queue: ' + error.message });
+    }
+});
+
+/**
+ * POST /api/lab/results/:id/start-review
+ * Marks a SUBMITTED result as UNDER_REVIEW when opened by an authorized Pathologist.
+ */
+router.post('/:id/start-review', verifyToken, verifyResultAccess, verifyVerificationPermission, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const hospitalId = req.hospitalId;
+
+        const result = await LabTestResult.findOne({ _id: id, hospitalId });
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Result record not found' });
+        }
+
+        if (result.resultStatus === 'SUBMITTED') {
+            result.resultStatus = 'UNDER_REVIEW';
+            result.reviewedBy = req.user._id;
+            result.reviewedByName = req.user.name || 'Pathologist';
+            result.reviewedAt = new Date();
+            await result.save();
+
+            await logResultHistory({
+                hospitalId,
+                resultId: result._id,
+                orderId: result.orderId,
+                testId: result.testId,
+                testCode: result.testCode,
+                previousStatus: 'SUBMITTED',
+                newStatus: 'UNDER_REVIEW',
+                action: 'REVIEW_STARTED',
+                revisionNumber: result.revisionNumber,
+                user: req.user,
+                details: { reviewedBy: req.user.name }
+            });
+        }
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('[results] start-review error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update review state: ' + error.message });
     }
 });
 
@@ -695,10 +982,12 @@ router.post('/:id/verify', verifyToken, verifyResultAccess, verifyVerificationPe
         const roleName = String(roleData?.name || req.user.role || '').toLowerCase();
         const isAdmin = roleName.includes('admin') || roleName === 'superadmin';
 
-        if (result.enteredBy && String(result.enteredBy) === String(req.user._id) && !isAdmin) {
+        const enteredSameUser = result.enteredBy && String(result.enteredBy) === String(req.user._id);
+        const submittedSameUser = result.submittedBy && String(result.submittedBy) === String(req.user._id);
+        if ((enteredSameUser || submittedSameUser) && !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Clinical Safety Violation: The technician who entered this result cannot verify their own results. Independent pathologist sign-off is mandatory.'
+                message: 'Clinical Safety Violation: The technician who entered or submitted this result cannot verify their own results. Independent pathologist sign-off is mandatory.'
             });
         }
 
@@ -708,6 +997,7 @@ router.post('/:id/verify', verifyToken, verifyResultAccess, verifyVerificationPe
         result.verifiedByName = req.user.name || 'Pathologist';
         result.verifiedAt = new Date();
         if (overallRemarks) result.overallRemarks = overallRemarks;
+        if (req.body.clinicalNotes !== undefined) result.clinicalNotes = req.body.clinicalNotes;
 
         await result.save();
 
@@ -762,6 +1052,13 @@ router.post('/:id/reject', verifyToken, verifyResultAccess, verifyVerificationPe
             return res.status(404).json({ success: false, message: 'Result record not found' });
         }
 
+        if (result.resultStatus === 'VERIFIED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Verified results are immutable and cannot be directly rejected. Create an audited amendment instead.'
+            });
+        }
+
         const prevStatus = result.resultStatus;
         result.resultStatus = 'REJECTED';
         result.rejectionReason = rejectionReason.trim();
@@ -814,6 +1111,13 @@ router.post('/:id/request-correction', verifyToken, verifyResultAccess, verifyVe
         const result = await LabTestResult.findOne({ _id: id, hospitalId });
         if (!result) {
             return res.status(404).json({ success: false, message: 'Result record not found' });
+        }
+
+        if (result.resultStatus === 'VERIFIED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Verified results are immutable. Create an audited amendment to revise verified findings.'
+            });
         }
 
         const prevStatus = result.resultStatus;
@@ -872,6 +1176,19 @@ router.post('/:id/amendment', verifyToken, verifyResultAccess, async (req, res) 
         const result = await LabTestResult.findOne({ _id: id, hospitalId });
         if (!result) {
             return res.status(404).json({ success: false, message: 'Result record not found' });
+        }
+
+        if (result.resultStatus === 'VERIFIED') {
+            const roleData = req.user._roleData;
+            const roleName = String(roleData?.name || req.user.role || '').toLowerCase();
+            const perms = roleData?.permissions || [];
+            const canAmendVerified = perms.includes('*') || roleName.includes('admin') || roleName.includes('pathologist') || perms.includes('results:verify');
+            if (!canAmendVerified) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Only an authorized Pathologist or Laboratory Administrator can initiate an amendment on a verified result.'
+                });
+            }
         }
 
         // Snapshot current parameters into correctionHistory
@@ -1105,15 +1422,30 @@ router.post('/critical-alerts/:id/escalate', verifyToken, verifyResultAccess, as
 
 /**
  * GET /api/lab/results/dashboard
- * Aggregated live metrics across result workflow.
+ * Aggregated live metrics across result & pathologist verification workflow.
  */
 router.get('/dashboard', verifyToken, verifyResultAccess, async (req, res) => {
     try {
         const hospitalId = req.hospitalId;
+        const matchFilter = (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId))
+            ? { hospitalId: new mongoose.Types.ObjectId(hospitalId) }
+            : (hospitalId ? { hospitalId } : {});
 
-        const counts = await LabTestResult.aggregate([
-            { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId) } },
-            { $group: { _id: '$resultStatus', count: { $sum: 1 } } }
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        const [counts, verifiedTodayCount, pendingCriticalAlerts, totalCriticalAlerts] = await Promise.all([
+            LabTestResult.aggregate([
+                { $match: matchFilter },
+                { $group: { _id: '$resultStatus', count: { $sum: 1 } } }
+            ]),
+            LabTestResult.countDocuments({
+                ...(hospitalId ? { hospitalId } : {}),
+                resultStatus: 'VERIFIED',
+                verifiedAt: { $gte: todayStart }
+            }),
+            LabCriticalAlert.countDocuments({ ...(hospitalId ? { hospitalId } : {}), alertStatus: 'PENDING' }),
+            LabCriticalAlert.countDocuments({ ...(hospitalId ? { hospitalId } : {}) })
         ]);
 
         const stats = {
@@ -1124,10 +1456,11 @@ router.get('/dashboard', verifyToken, verifyResultAccess, async (req, res) => {
             correctionRequested: 0,
             rejected: 0,
             verified: 0,
+            verifiedToday: verifiedTodayCount,
             total: 0
         };
 
-        counts.forEach(c => {
+        counts.forEach((c) => {
             stats.total += c.count;
             if (c._id === 'PENDING') stats.pending = c.count;
             else if (c._id === 'DRAFT') stats.draft = c.count;
@@ -1138,17 +1471,14 @@ router.get('/dashboard', verifyToken, verifyResultAccess, async (req, res) => {
             else if (c._id === 'VERIFIED') stats.verified = c.count;
         });
 
-        // Count pending critical alerts
-        const [pendingCriticalAlerts, totalCriticalAlerts] = await Promise.all([
-            LabCriticalAlert.countDocuments({ hospitalId, alertStatus: 'PENDING' }),
-            LabCriticalAlert.countDocuments({ hospitalId })
-        ]);
-
         res.json({
             success: true,
             stats: {
                 ...stats,
-                pendingVerification: stats.submitted + stats.underReview,
+                pendingVerification: stats.submitted,
+                awaitingPathologistTotal: stats.submitted + stats.underReview,
+                rejectedResults: stats.rejected,
+                criticalAlerts: pendingCriticalAlerts,
                 pendingCriticalAlerts,
                 totalCriticalAlerts
             }
@@ -1166,16 +1496,19 @@ router.get('/dashboard', verifyToken, verifyResultAccess, async (req, res) => {
 router.get('/department-summary', verifyToken, verifyResultAccess, async (req, res) => {
     try {
         const hospitalId = req.hospitalId;
+        const matchFilter = (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId))
+            ? { hospitalId: new mongoose.Types.ObjectId(hospitalId) }
+            : (hospitalId ? { hospitalId } : {});
 
         const summary = await LabTestResult.aggregate([
-            { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId) } },
+            { $match: matchFilter },
             {
                 $group: {
                     _id: '$department',
                     total: { $sum: 1 },
                     pending: { $sum: { $cond: [{ $eq: ['$resultStatus', 'PENDING'] }, 1, 0] } },
                     draft: { $sum: { $cond: [{ $eq: ['$resultStatus', 'DRAFT'] }, 1, 0] } },
-                    submitted: { $sum: { $cond: [{ $eq: ['$resultStatus', 'SUBMITTED'] }, 1, 0] } },
+                    submitted: { $sum: { $cond: [{ $in: ['$resultStatus', ['SUBMITTED', 'UNDER_REVIEW']] }, 1, 0] } },
                     verified: { $sum: { $cond: [{ $eq: ['$resultStatus', 'VERIFIED'] }, 1, 0] } },
                     critical: { $sum: { $cond: ['$hasCriticalParameters', 1, 0] } }
                 }
@@ -1190,6 +1523,63 @@ router.get('/department-summary', verifyToken, verifyResultAccess, async (req, r
     } catch (error) {
         console.error('[results] department-summary error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch department summary: ' + error.message });
+    }
+});
+
+/**
+ * GET /api/lab/results/:id
+ * Retrieves full result document with synchronized catalog parameters, sample metadata, and audit history.
+ * Placed after static GET routes so named endpoints (/dashboard, /verification-queue, /critical-alerts) never collide.
+ */
+router.get('/:id', verifyToken, verifyResultAccess, async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid result ID format' });
+        }
+        const hospitalId = req.hospitalId;
+
+        let result = await LabTestResult.findOne({ _id: id, hospitalId });
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Result record not found' });
+        }
+
+        // Non-destructively sync editable results with active Phase 3 Test Catalogue parameters
+        if (['PENDING', 'DRAFT', 'CORRECTION_REQUESTED', 'REJECTED'].includes(result.resultStatus) && result.testId) {
+            const masterTest = await LabTest.findById(result.testId).lean();
+            if (masterTest) {
+                const { activeParameters } = await resolveAuthoritativeCatalogTest(masterTest, hospitalId);
+                if (activeParameters.length > 0) {
+                    const synced = buildSyncedResultParameters(result.resultParameters, activeParameters, result.patientSnapshot || {});
+                    const currentCount = (result.resultParameters || []).length;
+                    const currentIsStub = isAutoStubParameterList(result.resultParameters, result.testName);
+                    if (currentCount !== synced.length || currentIsStub) {
+                        result.resultParameters = synced;
+                        await result.save();
+                    }
+                }
+            }
+        }
+
+        const [history, sample] = await Promise.all([
+            LabResultHistory.find({ hospitalId, resultId: id }).sort({ timestamp: -1 }).lean(),
+            result.sampleId ? LabSample.findOne({ _id: result.sampleId, hospitalId }).select('specimenType containerType status barcode collectedAt').lean() : null
+        ]);
+
+        const resultObj = result.toObject ? result.toObject() : result;
+        if (resultObj && resultObj.patientSnapshot) {
+            resultObj.patientSnapshot.mrn = resultObj.patientSnapshot.mrn || resultObj.patientSnapshot.uhid || '';
+        }
+
+        res.json({
+            success: true,
+            result: resultObj,
+            sample,
+            history
+        });
+    } catch (error) {
+        console.error('[results] get by id error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch result: ' + error.message });
     }
 });
 

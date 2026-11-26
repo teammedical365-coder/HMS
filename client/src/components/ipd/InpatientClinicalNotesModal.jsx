@@ -10,6 +10,7 @@ import {
 } from '../../utils/inpatientNotesPdf';
 import RuledSectionEditor from './RuledSectionEditor';
 import TabletPenCanvas from './TabletPenCanvas';
+import TabletSheetWorkspace from './TabletSheetWorkspace';
 import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
 import {
     FiX, FiPrinter, FiDownload, FiFileText, FiSave,
@@ -45,7 +46,9 @@ const InpatientClinicalNotesModal = ({
     // Active tool: 'type' | 'pen' | 'eraser'
     const [activeTool, setActiveTool] = useState('type');
     const [penColor, setPenColor] = useState('#1d4ed8'); // Medical blue
-    const [penWidth, setPenWidth] = useState(2);
+    const [penWidth, setPenWidth] = useState(2.5); // Default Medium (2.5px)
+    const [sheetZoom, setSheetZoom] = useState(1);
+    const penSessionRef = useRef({ isPenDown: false, lastPenTime: 0, lastPenHoverTime: 0 });
 
     const [admission, setAdmission] = useState(initialAdmission || null);
     const [latestVitals, setLatestVitals] = useState(null);
@@ -57,10 +60,28 @@ const InpatientClinicalNotesModal = ({
     const [formState, setFormState] = useState(() =>
         buildDefaultClinicalNoteState({ patient: initialPatient, admission: initialAdmission, isBlank })
     );
+    const formStateRef = useRef(formState);
+    formStateRef.current = formState;
 
-    // History stack for Undo/Redo
-    const [historyStack, setHistoryStack] = useState([]);
-    const [historyIndex, setHistoryIndex] = useState(-1);
+    // Synchronous Unified History stack for Undo/Redo (Pen Strokes + Eraser + Typed Text)
+    const historyRef = useRef({ stack: [], index: -1 });
+    const [historyBounds, setHistoryBounds] = useState({ canUndo: false, canRedo: false });
+
+    const cloneDocSnapshot = useCallback((stateObj) => {
+        try {
+            return JSON.parse(JSON.stringify(stateObj));
+        } catch (_) {
+            return { ...stateObj };
+        }
+    }, []);
+
+    const resetHistoryWithState = useCallback((initSt) => {
+        const snap = cloneDocSnapshot(initSt);
+        formStateRef.current = snap;
+        setFormState(snap);
+        historyRef.current = { stack: [snap], index: 0 };
+        setHistoryBounds({ canUndo: false, canRedo: false });
+    }, [cloneDocSnapshot]);
 
     // Communication state (Patient & Nurse Notes)
     const [commMessages, setCommMessages] = useState([]);
@@ -94,9 +115,7 @@ const InpatientClinicalNotesModal = ({
                 const brandRes = await brandingPromise;
                 if (brandRes?.hospital) setTenantHospital(brandRes.hospital);
                 const initSt = buildDefaultClinicalNoteState({ patient: initialPatient, admission: initialAdmission, isBlank });
-                setFormState(initSt);
-                setHistoryStack([initSt]);
-                setHistoryIndex(0);
+                resetHistoryWithState(initSt);
                 return;
             }
 
@@ -121,14 +140,12 @@ const InpatientClinicalNotesModal = ({
                 clinicalNote: loadedNote,
                 isBlank
             });
-            setFormState(initState);
-            setHistoryStack([initState]);
-            setHistoryIndex(0);
+            resetHistoryWithState(initState);
             setCommMessages(commRes?.messages || []);
         } finally {
             setLoading(false);
         }
-    }, [isOpen, effectiveAdmissionId, isBlank, user?.hospitalId, initialAdmission, initialPatient]);
+    }, [isOpen, effectiveAdmissionId, isBlank, user?.hospitalId, initialAdmission, initialPatient, resetHistoryWithState]);
 
     useEffect(() => {
         if (isOpen) loadAllData();
@@ -148,43 +165,63 @@ const InpatientClinicalNotesModal = ({
         [initialPatient, admission, isBlank]
     );
 
-    // Push new state onto history stack (supporting Undo/Redo)
+    // Push new state onto unified history stack (supporting Pen Strokes, Eraser, and Typed Text)
     const commitStateUpdate = useCallback((updater) => {
-        setFormState((prev) => {
-            const next = typeof updater === 'function' ? updater(prev) : updater;
-            setHistoryStack((oldStack) => {
-                const trimmed = oldStack.slice(0, historyIndex + 1);
-                return [...trimmed, next].slice(-50);
-            });
-            setHistoryIndex((oldIdx) => Math.min(oldIdx + 1, 49));
-            setHasUnsavedChanges(true);
-            return next;
+        const current = formStateRef.current;
+        const computed = typeof updater === 'function' ? updater(current) : updater;
+        const snapshot = cloneDocSnapshot(computed);
+
+        formStateRef.current = snapshot;
+        setFormState(snapshot);
+
+        const h = historyRef.current;
+        const baseStack = h.index >= 0 ? h.stack.slice(0, h.index + 1) : [];
+        const nextStack = [...baseStack, snapshot].slice(-60);
+        const nextIndex = nextStack.length - 1;
+        historyRef.current = { stack: nextStack, index: nextIndex };
+
+        setHistoryBounds({
+            canUndo: nextIndex > 0,
+            canRedo: false
         });
-    }, [historyIndex]);
+        setHasUnsavedChanges(true);
+    }, [cloneDocSnapshot]);
 
     const handleUndo = useCallback(() => {
-        if (historyIndex > 0) {
-            const targetIdx = historyIndex - 1;
-            const targetState = historyStack[targetIdx];
+        const h = historyRef.current;
+        if (h.index > 0) {
+            const targetIdx = h.index - 1;
+            const targetState = cloneDocSnapshot(h.stack[targetIdx]);
             if (targetState) {
-                setHistoryIndex(targetIdx);
+                historyRef.current = { ...h, index: targetIdx };
+                formStateRef.current = targetState;
                 setFormState(targetState);
-                toast('Undo performed');
+                setHistoryBounds({
+                    canUndo: targetIdx > 0,
+                    canRedo: targetIdx < h.stack.length - 1
+                });
+                setHasUnsavedChanges(true);
             }
         }
-    }, [historyIndex, historyStack]);
+    }, [cloneDocSnapshot]);
 
     const handleRedo = useCallback(() => {
-        if (historyIndex < historyStack.length - 1) {
-            const targetIdx = historyIndex + 1;
-            const targetState = historyStack[targetIdx];
+        const h = historyRef.current;
+        if (h.index < h.stack.length - 1) {
+            const targetIdx = h.index + 1;
+            const targetState = cloneDocSnapshot(h.stack[targetIdx]);
             if (targetState) {
-                setHistoryIndex(targetIdx);
+                historyRef.current = { ...h, index: targetIdx };
+                formStateRef.current = targetState;
                 setFormState(targetState);
-                toast('Redo performed');
+                setHistoryBounds({
+                    canUndo: targetIdx > 0,
+                    canRedo: targetIdx < h.stack.length - 1
+                });
+                setHasUnsavedChanges(true);
             }
         }
-    }, [historyIndex, historyStack]);
+    }, [cloneDocSnapshot]);
 
     // Keyboard shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y / Ctrl+Shift+Z)
     useEffect(() => {
@@ -491,7 +528,7 @@ const InpatientClinicalNotesModal = ({
                     <div className="ipn-toolbar-group">
                         <button
                             type="button"
-                            className={`ipn-tool-btn ${activeTool === 'type' ? 'active' : ''}`}
+                            className={`ipn-tool-btn tool-type ${activeTool === 'type' ? 'active' : ''}`}
                             onClick={() => setActiveTool('type')}
                             title="Type directly on any ruled line or grid cell"
                         >
@@ -502,7 +539,7 @@ const InpatientClinicalNotesModal = ({
                             <>
                                 <button
                                     type="button"
-                                    className={`ipn-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                                    className={`ipn-tool-btn tool-pen ${activeTool === 'pen' ? 'active' : ''}`}
                                     onClick={() => setActiveTool('pen')}
                                     title="Tablet pen / Stylus ink handwriting"
                                 >
@@ -510,7 +547,7 @@ const InpatientClinicalNotesModal = ({
                                 </button>
                                 <button
                                     type="button"
-                                    className={`ipn-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                                    className={`ipn-tool-btn tool-eraser ${activeTool === 'eraser' ? 'active' : ''}`}
                                     onClick={() => setActiveTool('eraser')}
                                     title="Erase handwriting ink strokes"
                                 >
@@ -558,7 +595,7 @@ const InpatientClinicalNotesModal = ({
                             type="button"
                             className="ipn-tool-btn"
                             onClick={handleUndo}
-                            disabled={historyIndex <= 0}
+                            disabled={!historyBounds.canUndo}
                             title="Undo (Ctrl+Z)"
                         >
                             <FiRotateCcw size={12} />
@@ -568,7 +605,7 @@ const InpatientClinicalNotesModal = ({
                             type="button"
                             className="ipn-tool-btn"
                             onClick={handleRedo}
-                            disabled={historyIndex >= historyStack.length - 1}
+                            disabled={!historyBounds.canRedo}
                             title="Redo (Ctrl+Y)"
                         >
                             <FiRotateCw size={12} />
@@ -612,6 +649,12 @@ const InpatientClinicalNotesModal = ({
 
                 {/* Modal Main Body */}
                 <div className="ipn-modal-body">
+                    <TabletSheetWorkspace
+                        zoom={sheetZoom}
+                        setZoom={setSheetZoom}
+                        activeTool={canUsePenTool ? activeTool : 'type'}
+                        penSessionRef={penSessionRef}
+                    >
                     <div className="ipn-sheets-stack">
                             {/* ==================== PAGE 1 ==================== */}
                             <div className="ipn-sheet-paper">
@@ -624,6 +667,8 @@ const InpatientClinicalNotesModal = ({
                                     activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
+                                    zoom={sheetZoom}
+                                    penSessionRef={penSessionRef}
                                     onSaveStrokes={(newStrokes) => handleSavePageStrokes('page1', newStrokes)}
                                 />
 
@@ -854,6 +899,8 @@ const InpatientClinicalNotesModal = ({
                                     activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
+                                    zoom={sheetZoom}
+                                    penSessionRef={penSessionRef}
                                     onSaveStrokes={(newStrokes) => handleSavePageStrokes('page2', newStrokes)}
                                 />
 
@@ -1028,6 +1075,8 @@ const InpatientClinicalNotesModal = ({
                                             activeTool={canUsePenTool ? activeTool : 'type'}
                                             penColor={penColor}
                                             penWidth={penWidth}
+                                            zoom={sheetZoom}
+                                            penSessionRef={penSessionRef}
                                             onSaveStrokes={(newStrokes) => handleSavePageStrokes(pageKey, newStrokes)}
                                         />
 
@@ -1093,6 +1142,7 @@ const InpatientClinicalNotesModal = ({
                                 );
                             })}
                         </div>
+                    </TabletSheetWorkspace>
                 </div>
 
                 {/* AI Voice Scribe Modal */}

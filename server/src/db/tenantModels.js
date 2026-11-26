@@ -201,6 +201,9 @@ const admissionSchema = new mongoose.Schema({
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
     doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     admittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ipdNumber: { type: String, default: '', index: true },
+    wristbandId: { type: mongoose.Schema.Types.ObjectId, ref: 'IPDWristband', default: null },
+    wristbandCode: { type: String, default: '' },
     admissionDate: { type: Date, default: Date.now },
     admissionTime: { type: String, default: '' },
     dischargeDate: Date,
@@ -239,10 +242,12 @@ const admissionSchema = new mongoose.Schema({
         totalAmount: { type: Number, required: true }
     }],
     totalAmount: { type: Number, default: 0 },
-    paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+    paidAmount: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ['Pending', 'Partially Paid', 'Paid'], default: 'Pending' },
     splitPayments: [{
         method: { type: String },
-        amount: { type: Number, default: 0 }
+        amount: { type: Number, default: 0 },
+        date: { type: Date, default: Date.now }
     }],
     notes: String,
 }, { timestamps: true });
@@ -253,19 +258,34 @@ const paymentTransactionSchema = new mongoose.Schema({
     paymentMode: { type: String, default: 'Cash' },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Failed', 'Refunded'], default: 'Paid' },
     amount: { type: Number, required: true, default: 0 },
+    splitPayments: [{
+        method: { type: String },
+        amount: { type: Number, default: 0 }
+    }],
     transactionId: { type: String, default: '' },
     upiId: { type: String, default: '' },
     cardDetails: { type: String, default: '' }, // Masked
     bankReference: { type: String, default: '' },
     paymentDate: { type: Date, default: Date.now },
+    appointmentTime: { type: String, default: '' },
     proofUrl: { type: String, default: '' },
     proofFileId: { type: String, default: '' },
+    department: {
+        type: String,
+        enum: ['HOSPITAL_RECEPTION', 'OPD_CONSULTATION', 'IPD', 'HOSPITAL_SERVICES', 'OT_SURGERY', 'PHARMACY', 'LABORATORY'],
+        default: 'HOSPITAL_RECEPTION'
+    },
+    sourceCategory: { type: String, default: 'HOSPITAL_BILLING' },
+    nonAppointmentAmount: { type: Number, default: null },
+    idempotencyKey: { type: String, sparse: true },
+    description: { type: String, default: '' },
     billedItems: {
         appointments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' }],
         labReports: [{ type: mongoose.Schema.Types.ObjectId, ref: 'LabReport' }],
         pharmacyOrders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PharmacyOrder' }],
         facilityCharges: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FacilityCharge' }],
-        admissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Admission' }]
+        admissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Admission' }],
+        surgeryPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SurgeryPlan' }]
     },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
@@ -395,6 +415,7 @@ function getTenantModels(tenantDb) {
     const { patientNurseNoteSchema } = require('../models/patientNurseNote.model');
     const { inpatientProgressNoteSchema } = require('../models/inpatientProgressNote.model');
     const { inpatientDrugChartSchema } = require('../models/inpatientDrugChart.model');
+    const { ipdWristbandSchema } = require('../models/ipdWristband.model');
 
     const models = {
         User: model('User', userSchema),
@@ -404,6 +425,7 @@ function getTenantModels(tenantDb) {
         FacilityCharge: model('FacilityCharge', facilityChargeSchema),
         Role: model('Role', roleSchema),
         Admission: model('Admission', admissionSchema),
+        IPDWristband: model('IPDWristband', ipdWristbandSchema),
         PaymentTransaction: model('PaymentTransaction', paymentTransactionSchema),
         Bed: model('Bed', bedSchema),
         OTRoom: model('OTRoom', otRoomSchema),

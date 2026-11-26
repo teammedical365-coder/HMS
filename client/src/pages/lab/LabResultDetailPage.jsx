@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { labAPI } from '../../utils/api';
 import LabLayout from '../../components/lab/LabLayout';
 import LabResultModal from './LabResultModal';
+import './LabResultEntry.css';
 import {
     FiArrowLeft, FiCheckCircle, FiAlertOctagon, FiAlertTriangle,
     FiClock, FiFileText, FiRefreshCw, FiEdit3, FiCheck, FiX, FiLayers

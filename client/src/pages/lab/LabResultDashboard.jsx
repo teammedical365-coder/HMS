@@ -1,234 +1,315 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { labAPI } from '../../utils/api';
 import LabLayout from '../../components/lab/LabLayout';
+import LabResultModal from './LabResultModal';
 import {
-    FiActivity, FiFileText, FiCheckCircle, FiAlertOctagon,
-    FiAlertTriangle, FiClock, FiRefreshCw, FiArrowRight,
-    FiFilter, FiLayers, FiCheckSquare, FiGrid
+    FiSearch, FiRefreshCw, FiCheckCircle, FiAlertTriangle,
+    FiClock, FiEye, FiFileText, FiX, FiRotateCcw, FiXCircle
 } from 'react-icons/fi';
+import './LabResultEntry.css';
+
+const formatDateTime = (val) => {
+    if (!val) return '—';
+    try {
+        return new Date(val).toLocaleString([], {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (_) {
+        return '—';
+    }
+};
 
 const LabResultDashboard = () => {
+    const location = useLocation();
     const navigate = useNavigate();
+    const initialParams = new URLSearchParams(location.search);
+
     const [stats, setStats] = useState(null);
-    const [departmentSummary, setDepartmentSummary] = useState([]);
-    const [criticalAlerts, setCriticalAlerts] = useState([]);
+    const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const loadDashboard = async () => {
+    const [search, setSearch] = useState(() => initialParams.get('search') || '');
+    const [department, setDepartment] = useState('');
+    const [statusFilter, setStatusFilter] = useState(() => initialParams.get('status') || '');
+    const [activeResultId, setActiveResultId] = useState(null);
+
+    useEffect(() => {
+        const sp = new URLSearchParams(location.search);
+        const st = sp.get('status');
+        const s = sp.get('search');
+        if (st !== null) setStatusFilter(st);
+        if (s !== null) setSearch(s);
+    }, [location.search]);
+
+    const loadHistory = useCallback(async (overrideSearch) => {
         setLoading(true);
         setError(null);
         try {
-            const [statRes, deptRes, alertRes] = await Promise.all([
+            const params = {};
+            const q = overrideSearch !== undefined ? overrideSearch : search;
+            if (q && q.trim()) params.search = q.trim();
+            if (department) params.department = department;
+            if (statusFilter) params.status = statusFilter;
+
+            const [statRes, histRes] = await Promise.all([
                 labAPI.results.getDashboardStats(),
-                labAPI.results.getDepartmentSummary(),
-                labAPI.results.getCriticalAlerts({ alertStatus: 'PENDING' })
+                labAPI.results.getHistoryList(params)
             ]);
 
-            if (statRes.success) setStats(statRes.stats);
-            if (deptRes.success) setDepartmentSummary(deptRes.summary || []);
-            if (alertRes.success) setCriticalAlerts(alertRes.alerts || []);
+            if (statRes?.success) setStats(statRes.stats);
+            if (histRes?.success) setResults(histRes.results || []);
         } catch (err) {
-            console.error('Failed to load result dashboard:', err);
-            setError(err.response?.data?.message || err.message || 'Failed to load laboratory result dashboard');
+            console.error('Failed to load verified results history:', err);
+            setError(err.response?.data?.message || err.message || 'Failed to load verified results and revision history');
         } finally {
             setLoading(false);
         }
-    };
+    }, [search, department, statusFilter]);
 
     useEffect(() => {
-        loadDashboard();
-    }, []);
+        loadHistory();
+    }, [department, statusFilter]);
 
-    const cards = [
-        { label: 'Pending Result Entry', value: stats?.pending || 0, icon: <FiClock />, color: '#0284c7', bg: '#f0f9ff', path: '/lab/results/entry?status=PENDING' },
-        { label: 'Draft Findings', value: stats?.draft || 0, icon: <FiFileText />, color: '#6366f1', bg: '#eef2ff', path: '/lab/results/entry?status=DRAFT' },
-        { label: 'Pending Verification', value: stats?.pendingVerification || 0, icon: <FiCheckSquare />, color: '#d97706', bg: '#fffbeb', path: '/lab/results/verification' },
-        { label: 'Correction Requested', value: stats?.correctionRequested || 0, icon: <FiAlertTriangle />, color: '#ea580c', bg: '#fff7ed', path: '/lab/results/entry?status=CORRECTION_REQUESTED' },
-        { label: 'Verified & Signed Off', value: stats?.verified || 0, icon: <FiCheckCircle />, color: '#16a34a', bg: '#f0fdf4', path: '/lab/completed' },
-        { label: 'Rejected Findings', value: stats?.rejected || 0, icon: <FiAlertOctagon />, color: '#dc2626', bg: '#fef2f2', path: '/lab/results/entry?status=REJECTED' },
-        { label: 'Pending Critical Alerts', value: stats?.pendingCriticalAlerts || 0, icon: <FiAlertOctagon />, color: '#b91c1c', bg: '#fee2e2', path: '/lab/results/critical-alerts', alert: true },
-        { label: 'Total Diagnostic Tests', value: stats?.total || 0, icon: <FiGrid />, color: '#475569', bg: '#f8fafc', path: '/lab/results/entry' }
-    ];
+    const handleSearchSubmit = (e) => {
+        e.preventDefault();
+        loadHistory();
+    };
 
     return (
-        <LabLayout
-            title="Laboratory Result Management & Medical Sign-Off"
-            subtitle="Clinical findings entry, automated reference range evaluation, panic value alerts, and pathologist verification"
-            action={
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={loadDashboard} className="lab-btn lab-btn-secondary">
-                        <FiRefreshCw style={{ marginRight: '6px' }} />
-                        Refresh
-                    </button>
-                    <Link to="/lab/results/entry" className="lab-btn lab-btn-primary">
-                        Technician Result Entry
-                    </Link>
-                    <Link to="/lab/results/verification" className="lab-btn lab-btn-primary" style={{ background: '#16a34a' }}>
-                        Pathologist Verification
-                    </Link>
+        <LabLayout>
+            <div className="lre-page">
+                {/* Header */}
+                <div className="lre-page-header">
+                    <div>
+                        <h1 className="lre-page-title">Verified Results &amp; Clinical Revision History</h1>
+                        <p className="lre-page-subtitle">
+                            Permanent clinical archive of verified laboratory findings, pathologist sign-offs, correction requests, rejected results, and audited amendments.
+                        </p>
+                    </div>
+                    <div className="lre-header-actions">
+                        <button
+                            type="button"
+                            className="lre-btn lre-btn-secondary"
+                            onClick={() => loadHistory()}
+                            disabled={loading}
+                        >
+                            <FiRefreshCw size={14} className={loading ? 'lre-spin' : ''} />
+                            <span>Refresh</span>
+                        </button>
+                        <button
+                            type="button"
+                            className="lre-btn lre-btn-primary"
+                            onClick={() => navigate('/lab/reports')}
+                        >
+                            <FiFileText size={14} />
+                            <span>Diagnostic Reports</span>
+                        </button>
+                    </div>
                 </div>
-            }
-        >
-            {error && (
-                <div className="lab-card" style={{ borderLeft: '4px solid #ef4444', color: '#b91c1c', marginBottom: '20px' }}>
-                    <FiAlertTriangle style={{ marginRight: '8px' }} />
-                    {error}
-                </div>
-            )}
 
-            {/* Metric Cards Grid */}
-            <div className="lab-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-                {cards.map((c, idx) => (
-                    <div
-                        key={idx}
-                        className="lab-stat-card"
-                        onClick={() => navigate(c.path)}
-                        style={{ cursor: 'pointer', border: c.alert && c.value > 0 ? '2px solid #ef4444' : '1px solid #e2e8f0' }}
+                {error && (
+                    <div className="lrm-alert-strip lrm-alert-critical" role="alert">
+                        <FiAlertTriangle size={17} />
+                        <span>{error}</span>
+                    </div>
+                )}
+
+                {/* Quick Status Filter Pills */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        className={`lre-btn ${statusFilter === '' ? 'lre-btn-primary' : 'lre-btn-secondary'}`}
+                        onClick={() => setStatusFilter('')}
                     >
-                        <div className="lab-stat-icon" style={{ background: c.bg, color: c.color }}>
-                            {c.icon}
-                        </div>
-                        <div className="lab-stat-val" style={{ color: c.alert && c.value > 0 ? '#b91c1c' : '#0f172a' }}>
-                            {loading ? '...' : c.value}
-                        </div>
-                        <div className="lab-stat-lbl">{c.label}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Active Critical Alerts Notice */}
-            {criticalAlerts.length > 0 && (
-                <div className="lab-card" style={{ borderLeft: '4px solid #ef4444', background: '#fff1f2', marginBottom: '24px', padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#991b1b' }}>
-                            <FiAlertOctagon style={{ fontSize: '24px' }} />
-                            <div>
-                                <h4 style={{ margin: 0, fontSize: '15px' }}>
-                                    {criticalAlerts.length} Unacknowledged Critical Value Alert{criticalAlerts.length > 1 ? 's' : ''}
-                                </h4>
-                                <span style={{ fontSize: '12px', color: '#7f1d1d' }}>
-                                    Immediate clinical correlation and attending physician notification mandatory.
-                                </span>
-                            </div>
-                        </div>
-                        <Link to="/lab/results/critical-alerts" className="lab-btn lab-btn-danger">
-                            Open Critical Console <FiArrowRight style={{ marginLeft: '6px' }} />
-                        </Link>
-                    </div>
+                        <span>All History ({(stats?.verified || 0) + (stats?.correctionRequested || 0) + (stats?.rejected || 0)})</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`lre-btn ${statusFilter === 'VERIFIED' ? 'lre-btn-success' : 'lre-btn-secondary'}`}
+                        onClick={() => setStatusFilter('VERIFIED')}
+                    >
+                        <FiCheckCircle size={14} />
+                        <span>Verified ({stats?.verified ?? 0})</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`lre-btn ${statusFilter === 'CORRECTION_REQUESTED' ? 'lre-btn-warning' : 'lre-btn-secondary'}`}
+                        onClick={() => setStatusFilter('CORRECTION_REQUESTED')}
+                    >
+                        <FiRotateCcw size={14} />
+                        <span>Correction Requested ({stats?.correctionRequested ?? 0})</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={`lre-btn ${statusFilter === 'REJECTED' ? 'lre-btn-danger' : 'lre-btn-secondary'}`}
+                        onClick={() => setStatusFilter('REJECTED')}
+                    >
+                        <FiXCircle size={14} />
+                        <span>Rejected ({stats?.rejected ?? 0})</span>
+                    </button>
                 </div>
-            )}
 
-            {/* Department Summary & Clinical Queues Split */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '20px' }}>
-                {/* Department Workload Summary */}
-                <div className="lab-card">
-                    <h3 style={{ fontSize: '16px', margin: '0 0 16px 0', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FiLayers style={{ color: '#0284c7' }} />
-                        Departmental Workload Distribution
-                    </h3>
-
-                    {loading ? (
-                        <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                            <FiRefreshCw className="spin" style={{ fontSize: '24px' }} />
+                {/* Search & Department Filter */}
+                <div className="lre-filter-card">
+                    <form className="lre-filter-form" onSubmit={handleSearchSubmit}>
+                        <div className="lre-search-field">
+                            <FiSearch className="lre-search-icon" />
+                            <input
+                                type="text"
+                                className="lre-search-input"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search verified results by patient name, MRN, order number, barcode, or test..."
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    className="lre-search-clear"
+                                    onClick={() => {
+                                        setSearch('');
+                                        loadHistory('');
+                                    }}
+                                    aria-label="Clear search"
+                                >
+                                    <FiX size={15} />
+                                </button>
+                            )}
                         </div>
-                    ) : departmentSummary.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                            No department workload data available today.
+
+                        <select
+                            className="lre-select"
+                            value={department}
+                            onChange={(e) => setDepartment(e.target.value)}
+                            aria-label="Filter by department"
+                        >
+                            <option value="">All Departments</option>
+                            <option value="Hematology">Hematology</option>
+                            <option value="Biochemistry">Biochemistry</option>
+                            <option value="Clinical Pathology">Clinical Pathology</option>
+                            <option value="Serology">Serology</option>
+                            <option value="Microbiology">Microbiology</option>
+                            <option value="Immunology">Immunology</option>
+                            <option value="Histopathology">Histopathology</option>
+                            <option value="Radiology">Radiology</option>
+                        </select>
+
+                        <button type="submit" className="lre-btn lre-btn-primary">
+                            Search
+                        </button>
+                    </form>
+                </div>
+
+                {/* History Table */}
+                <div className="lre-table-card">
+                    {loading ? (
+                        <div className="lre-empty-box">
+                            <FiRefreshCw className="lre-spin" size={28} style={{ color: '#2563eb' }} />
+                            <h4>Loading Clinical Result History...</h4>
+                            <p>Fetching verified diagnostic records and revision logs.</p>
+                        </div>
+                    ) : results.length === 0 ? (
+                        <div className="lre-empty-box">
+                            <FiClock size={36} style={{ color: '#94a3b8' }} />
+                            <h4>No Historical Result Records Found</h4>
+                            <p>Verified, rejected, and correction-requested results appear here automatically.</p>
                         </div>
                     ) : (
-                        <table className="lab-table" style={{ width: '100%', fontSize: '13px' }}>
-                            <thead>
-                                <tr>
-                                    <th>Department</th>
-                                    <th>Total Tests</th>
-                                    <th>Pending</th>
-                                    <th>Submitted</th>
-                                    <th>Verified</th>
-                                    <th>Critical</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {departmentSummary.map((d, idx) => (
-                                    <tr key={idx}>
-                                        <td style={{ fontWeight: 600, color: '#1e293b' }}>
-                                            {d._id || 'General Pathology'}
-                                        </td>
-                                        <td><strong>{d.total}</strong></td>
-                                        <td>
-                                            <span className="lab-badge" style={{ background: '#f0f9ff', color: '#0284c7' }}>
-                                                {d.pending}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className="lab-badge lab-badge-warning">
-                                                {d.submitted}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className="lab-badge lab-badge-success">
-                                                {d.verified}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {d.critical > 0 ? (
-                                                <span className="lab-badge lab-badge-danger">
-                                                    {d.critical}
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: '#94a3b8' }}>0</span>
-                                            )}
-                                        </td>
+                        <div className="lre-table-scroll">
+                            <table className="lre-table">
+                                <thead>
+                                    <tr>
+                                        <th>Patient Name / MRN</th>
+                                        <th>Order Number</th>
+                                        <th>Sample Barcode</th>
+                                        <th>Test Name</th>
+                                        <th>Department</th>
+                                        <th>Reviewed / Verified By</th>
+                                        <th>Timestamp</th>
+                                        <th>Revision</th>
+                                        <th>Status</th>
+                                        <th style={{ textAlign: 'right' }}>Action</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {results.map((r) => {
+                                        const mrn = r.patientSnapshot?.mrn || r.patientSnapshot?.uhid || 'N/A';
+                                        const reviewer = r.verifiedByName || r.rejectedByName || r.correctionRequestedByName || 'Pathologist';
+                                        const actionTime = r.verifiedAt || r.rejectedAt || r.correctionRequestedAt || r.updatedAt;
+
+                                        return (
+                                            <tr key={String(r._id)}>
+                                                <td>
+                                                    <div style={{ fontWeight: 800, color: '#0f172a' }}>
+                                                        {r.patientSnapshot?.name || 'Registered Patient'}
+                                                    </div>
+                                                    <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                                                        MRN: {mrn} &bull; {r.patientSnapshot?.age ?? '—'}y / {r.patientSnapshot?.gender || '—'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ fontWeight: 700, color: '#334155' }}>{r.orderNumber}</td>
+                                                <td><span className="lre-mono">{r.barcode}</span></td>
+                                                <td>
+                                                    <div style={{ fontWeight: 700, color: '#1d4ed8' }}>{r.testName}</div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>{r.testCode}</div>
+                                                </td>
+                                                <td>{r.department || 'General Pathology'}</td>
+                                                <td style={{ fontWeight: 600, color: '#334155' }}>{reviewer}</td>
+                                                <td style={{ whiteSpace: 'nowrap', fontSize: '12px', color: '#475569' }}>
+                                                    {formatDateTime(actionTime)}
+                                                </td>
+                                                <td>
+                                                    <span className="lre-badge lre-badge-routine">
+                                                        Rev #{r.revisionNumber || 1}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        className={`lre-badge ${
+                                                            r.resultStatus === 'VERIFIED'
+                                                                ? 'lre-badge-verified'
+                                                                : r.resultStatus === 'REJECTED'
+                                                                    ? 'lre-badge-rejected'
+                                                                    : 'lre-badge-correction'
+                                                        }`}
+                                                    >
+                                                        {String(r.resultStatus).replace(/_/g, ' ')}
+                                                    </span>
+                                                </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="lre-btn lre-btn-secondary lre-btn-sm"
+                                                        onClick={() => setActiveResultId(r._id)}
+                                                    >
+                                                        <FiEye size={13} />
+                                                        <span>Inspect &amp; Audit</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
 
-                {/* Workstation Quick Actions */}
-                <div className="lab-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <h3 style={{ fontSize: '16px', margin: 0, color: '#0f172a' }}>
-                        Clinical Workstations
-                    </h3>
-
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#fafafa' }}>
-                        <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#0284c7' }}>
-                            🧪 Technician Result Entry Workstation
-                        </h4>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#64748b' }}>
-                            Enter parameter findings for accepted specimens, auto-calculate physiological reference intervals, and submit for verification.
-                        </p>
-                        <Link to="/lab/results/entry" className="lab-btn lab-btn-primary" style={{ width: '100%', textAlign: 'center', justifyContent: 'center' }}>
-                            Launch Entry Workstation <FiArrowRight style={{ marginLeft: '6px' }} />
-                        </Link>
-                    </div>
-
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#fbfcf8' }}>
-                        <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#16a34a' }}>
-                            🩺 Pathologist Medical Sign-Off Console
-                        </h4>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#64748b' }}>
-                            Review submitted technician results, verify diagnostic findings against clinical history, request corrections, or sign off.
-                        </p>
-                        <Link to="/lab/results/verification" className="lab-btn lab-btn-primary" style={{ width: '100%', textAlign: 'center', justifyContent: 'center', background: '#16a34a' }}>
-                            Launch Verification Console <FiArrowRight style={{ marginLeft: '6px' }} />
-                        </Link>
-                    </div>
-
-                    <div style={{ border: '1px solid #fee2e2', borderRadius: '8px', padding: '16px', background: '#fff5f5' }}>
-                        <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', color: '#dc2626' }}>
-                            🚨 Critical Panic Value Console
-                        </h4>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '12px', color: '#64748b' }}>
-                            Track, acknowledge, and audit critical life-threatening findings with attending physician notification logging.
-                        </p>
-                        <Link to="/lab/results/critical-alerts" className="lab-btn lab-btn-danger" style={{ width: '100%', textAlign: 'center', justifyContent: 'center' }}>
-                            Open Critical Alerts <FiArrowRight style={{ marginLeft: '6px' }} />
-                        </Link>
-                    </div>
-                </div>
+                {/* Inspection / Audit / Amendment Modal */}
+                {activeResultId && (
+                    <LabResultModal
+                        isOpen={true}
+                        onClose={() => setActiveResultId(null)}
+                        resultId={activeResultId}
+                        mode="verification"
+                        onActionSuccess={() => loadHistory()}
+                    />
+                )}
             </div>
         </LabLayout>
     );

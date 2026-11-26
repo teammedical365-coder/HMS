@@ -70,6 +70,9 @@ const admissionSchema = new mongoose.Schema({
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
     doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     admittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ipdNumber: { type: String, default: '', index: true },
+    wristbandId: { type: mongoose.Schema.Types.ObjectId, ref: 'IPDWristband', default: null },
+    wristbandCode: { type: String, default: '' },
     admissionDate: { type: Date, default: Date.now },
     admissionTime: { type: String, default: '' },
     dischargeDate: Date,
@@ -108,10 +111,12 @@ const admissionSchema = new mongoose.Schema({
         totalAmount: { type: Number, required: true }
     }],
     totalAmount: { type: Number, default: 0 },
-    paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+    paidAmount: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ['Pending', 'Partially Paid', 'Paid'], default: 'Pending' },
     splitPayments: [{
         method: { type: String },
-        amount: { type: Number, default: 0 }
+        amount: { type: Number, default: 0 },
+        date: { type: Date, default: Date.now }
     }],
     handwritingStrokes: {
         type: mongoose.Schema.Types.Mixed,

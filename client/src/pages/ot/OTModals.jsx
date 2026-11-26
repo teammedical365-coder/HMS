@@ -1,6 +1,7 @@
 import React from 'react';
 import toast from 'react-hot-toast';
 import { FiEye, FiCalendar, FiClock, FiPlus, FiX, FiDollarSign, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
 
 export const getStatusStyle = (status) => {
     switch(status) {
@@ -625,6 +626,8 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
         fetchBeds();
     }, []);
 
+    const [createdWristbandState, setCreatedWristbandState] = React.useState(null);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedBedId) return toast.error('Please select a bed');
@@ -632,7 +635,7 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
             const { admissionAPI, otAPI } = await import('../../utils/api');
             const targetBed = beds.find(b => b._id === selectedBedId);
             if (actionType === 'ADMIT') {
-                await admissionAPI.createAdmission({
+                const admRes = await admissionAPI.createAdmission({
                     patientId,
                     bedId: selectedBedId,
                     ward: targetBed?.ward,
@@ -641,7 +644,17 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
                     notes: 'Pre-Op Admission for Surgery'
                 });
                 await otAPI.updateSurgeryWorkflow(surgeryId, { status: 'ADMITTED' });
-                toast.success('Patient admitted for surgery');
+                toast.success('Patient admitted for surgery! Wristband generated.');
+                if (onSuccess) onSuccess();
+                const createdAdm = admRes?.admission || admRes?.data || null;
+                if (createdAdm?._id || admRes?.wristband) {
+                    setCreatedWristbandState({
+                        admissionId: createdAdm?._id || admRes?.wristband?.admissionId,
+                        admission: createdAdm,
+                        initialWristband: admRes?.wristband || null
+                    });
+                    return;
+                }
             } else if (actionType === 'TRANSFER') {
                 const actAdmRes = await admissionAPI.getPatientAdmissions(patientId);
                 const activeAdm = actAdmRes.admissions?.find(a => a.status === 'Admitted');
@@ -666,6 +679,21 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
             toast.error(err.response?.data?.message || 'Action failed');
         }
     };
+
+    if (createdWristbandState) {
+        return (
+            <IPDWristbandModal
+                isOpen={true}
+                onClose={() => {
+                    setCreatedWristbandState(null);
+                    onClose();
+                }}
+                admissionId={createdWristbandState.admissionId}
+                admission={createdWristbandState.admission}
+                initialWristband={createdWristbandState.initialWristband}
+            />
+        );
+    }
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(3px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>

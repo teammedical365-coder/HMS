@@ -23,6 +23,7 @@ import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
 import ICUChartModal from '../../components/ipd/ICUChartModal';
+import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
 import './DoctorIPDPatients.css';
 
 const DoctorIPDPatients = () => {
@@ -39,6 +40,7 @@ const DoctorIPDPatients = () => {
     const [clinicalNotesModal, setClinicalNotesModal] = useState({ open: false, admission: null });
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, admission: null, tab: 'progress_notes' });
     const [icuChartModal, setIcuChartModal] = useState({ open: false, admission: null });
+    const [wristbandModal, setWristbandModal] = useState({ open: false, admission: null });
 
     // Fetch active hospitalized IPD patients
     const fetchPatients = useCallback(async (isManual = false) => {
@@ -416,6 +418,14 @@ const DoctorIPDPatients = () => {
                                     >
                                         <FiFileText size={12} /> Clinical Notes
                                     </button>
+                                    <button
+                                        type="button"
+                                        className="doc-ipd-mini-btn"
+                                        onClick={() => setWristbandModal({ open: true, admission: pt.admission || { _id: pt.admissionId, patientId: { _id: pt.patientId, name: pt.name, mrn: pt.patientMRN, age: pt.age, gender: pt.gender }, ward: pt.ward, bedNumber: pt.bedNumber, ipdNumber: pt.ipdNumber, admissionDate: pt.admissionDate } })}
+                                        title="Preview or Reprint IPD Wristband"
+                                    >
+                                        <FiPrinter size={12} /> Wristband
+                                    </button>
                                     {isICU && (
                                         <button
                                             type="button"
@@ -478,6 +488,13 @@ const DoctorIPDPatients = () => {
                 admissionId={icuChartModal.admission?._id}
                 admission={icuChartModal.admission}
                 patient={icuChartModal.admission?.patientId}
+            />
+
+            <IPDWristbandModal
+                isOpen={wristbandModal.open}
+                onClose={() => setWristbandModal({ open: false, admission: null })}
+                admissionId={wristbandModal.admission?._id}
+                admission={wristbandModal.admission}
             />
         </div>
     );

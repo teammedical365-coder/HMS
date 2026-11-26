@@ -428,9 +428,25 @@ async function syncPrescribedTestsToLmsOrder({
     for (const item of normalizedItems) {
         const lowerName = item.rawName.toLowerCase();
         const lowerCode = item.code ? String(item.code).toLowerCase() : lowerName;
+        const parenMatch = String(item.rawName || '').match(/\(([a-zA-Z0-9\-\s]{2,15})\)/);
+        const parenCode = parenMatch ? parenMatch[1].trim().toLowerCase() : '';
+        const normBase = lowerName
+            .replace(/\([^)]*\)/g, ' ')
+            .replace(/&/g, ' and ')
+            .replace(/\bmicroscopy\b/g, '')
+            .replace(/\bexamination\b/g, '')
+            .replace(/\btest\b/g, '')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
 
-        // Try matchingLabTest first
-        let matchedTest = sortedCatalogTests.find((t) => {
+        // Try exact match in LabTest catalog first (preferring multi-parameter configured catalog entries)
+        const richFirstCatalog = [...sortedCatalogTests].sort((a, b) => {
+            const aRich = (a.parameters || []).length > 1 ? 0 : 1;
+            const bRich = (b.parameters || []).length > 1 ? 0 : 1;
+            return aRich - bRich;
+        });
+
+        let matchedTest = richFirstCatalog.find((t) => {
             if (item.testId && String(t._id) === String(item.testId)) return true;
             const tName = String(t.testName || t.name || '').trim().toLowerCase();
             const pName = String(t.name || '').trim().toLowerCase();
@@ -443,6 +459,27 @@ async function syncPrescribedTestsToLmsOrder({
                 (sName && sName === lowerName)
             );
         });
+
+        // Secondary normalized match (e.g. "Complete Blood Count (CBC)" -> CBC or "Urine Routine & Microscopy" -> Urine Routine)
+        if (!matchedTest) {
+            matchedTest = richFirstCatalog.find((t) => {
+                const tRaw = String(t.testName || t.name || '').trim().toLowerCase();
+                const tCode = String(t.testCode || t.code || '').trim().toLowerCase();
+                const sName = String(t.shortName || '').trim().toLowerCase();
+                const tBase = tRaw
+                    .replace(/\([^)]*\)/g, ' ')
+                    .replace(/&/g, ' and ')
+                    .replace(/\bmicroscopy\b/g, '')
+                    .replace(/\bexamination\b/g, '')
+                    .replace(/\btest\b/g, '')
+                    .replace(/[^a-z0-9]+/g, ' ')
+                    .trim();
+                return (
+                    (parenCode && (tCode === parenCode || sName === parenCode)) ||
+                    (normBase && tBase && normBase === tBase)
+                );
+            });
+        }
 
         if (!matchedTest) {
             // Check if prescribed item matches a TestPackage

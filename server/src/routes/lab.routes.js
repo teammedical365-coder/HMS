@@ -984,11 +984,13 @@ router.get('/dashboard/search', verifyToken, verifyLab, async (req, res) => {
 
         const isCollectionRole = roleLower.includes('phlebotomist') || roleLower.includes('sample collector') || roleLower === 'sample collection';
         const isTechnicianRole = (roleLower.includes('technician') || roleLower.includes('lab tech')) && !roleLower.includes('admin');
+        const isPathologistRole = roleLower.includes('pathologist') && !roleLower.includes('admin');
 
         const resolveOrderPath = (orderNo) => {
             const enc = encodeURIComponent(orderNo || '');
             if (isCollectionRole) return `/lab/collection/samples?search=${enc}`;
             if (isTechnicianRole) return `/lab/bench?search=${enc}`;
+            if (isPathologistRole) return `/lab/results/verification?search=${enc}`;
             return `/lab/orders?search=${enc}`;
         };
 
@@ -996,6 +998,7 @@ router.get('/dashboard/search', verifyToken, verifyLab, async (req, res) => {
             const enc = encodeURIComponent(sample.barcode || sample.orderNumber || '');
             if (isCollectionRole) return `/lab/collection/samples?search=${enc}`;
             if (isTechnicianRole) return `/lab/bench?search=${enc}`;
+            if (isPathologistRole) return `/lab/results/verification?search=${enc}`;
             return `/lab/samples/${sample._id}`;
         };
 

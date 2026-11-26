@@ -25,6 +25,27 @@ const paymentTransactionSchema = new mongoose.Schema({
     proofUrl: { type: String, default: '' },
     proofFileId: { type: String, default: '' },
     
+    // Department & Source Accounting Classification
+    department: {
+        type: String,
+        enum: ['HOSPITAL_RECEPTION', 'OPD_CONSULTATION', 'IPD', 'HOSPITAL_SERVICES', 'OT_SURGERY', 'PHARMACY', 'LABORATORY'],
+        default: 'HOSPITAL_RECEPTION',
+        index: true
+    },
+    sourceCategory: {
+        type: String,
+        default: 'HOSPITAL_BILLING'
+    },
+    nonAppointmentAmount: {
+        type: Number,
+        default: null
+    },
+    idempotencyKey: {
+        type: String,
+        sparse: true,
+        index: true
+    },
+
     // Related items
     description: { type: String, default: '' },
     billedItems: {
@@ -32,7 +53,8 @@ const paymentTransactionSchema = new mongoose.Schema({
         labReports: [{ type: mongoose.Schema.Types.ObjectId, ref: 'LabReport' }],
         pharmacyOrders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PharmacyOrder' }],
         facilityCharges: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FacilityCharge' }],
-        admissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Admission' }]
+        admissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Admission' }],
+        surgeryPlans: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SurgeryPlan' }]
     },
     
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

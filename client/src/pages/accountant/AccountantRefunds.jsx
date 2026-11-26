@@ -109,6 +109,10 @@ const AccountantRefunds = () => {
             toast.error('Please fill all required fields');
             return;
         }
+        if (!refundForm.reason || !refundForm.reason.trim()) {
+            toast.error('Please provide a valid reason for the refund request');
+            return;
+        }
 
         const amount = parseFloat(refundForm.refundAmount);
         if (isNaN(amount) || amount <= 0) {
@@ -127,7 +131,7 @@ const AccountantRefunds = () => {
                 patientId: selectedPatient._id,
                 refundAmount: amount,
                 refundMode: refundForm.refundMode,
-                reason: refundForm.reason,
+                reason: refundForm.reason.trim(),
                 originalPaymentId: refundForm.originalPaymentId || undefined
             });
 
@@ -331,8 +335,11 @@ const AccountantRefunds = () => {
 
                                 {refundData && (
                                     <>
+                                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: '0.78rem', color: '#1e40af' }}>
+                                            <strong>Hospital Refund Policy:</strong> OPD Appointment / Consultation payments are non-refundable. Only eligible IPD admission, room/bed/facility, and hospital service charges appear below.
+                                        </div>
                                         <div className="acc-modal-summary">
-                                            <div className="acc-modal-summary-row"><span>Total Paid</span><span style={{ fontWeight: 600 }}>{formatCurrency(refundData.totalPaid)}</span></div>
+                                            <div className="acc-modal-summary-row"><span>Eligible Hospital Paid</span><span style={{ fontWeight: 600 }}>{formatCurrency(refundData.totalPaid)}</span></div>
                                             <div className="acc-modal-summary-row"><span>Already Refunded</span><span>{formatCurrency(refundData.alreadyRefunded)}</span></div>
                                             {refundData.pendingRefundAmount > 0 && (
                                                 <div className="acc-modal-summary-row"><span>Pending Approval</span><span style={{ color: '#d97706', fontWeight: 600 }}>{formatCurrency(refundData.pendingRefundAmount)}</span></div>
@@ -347,7 +354,7 @@ const AccountantRefunds = () => {
                                         {refundData.payments && refundData.payments.length > 0 && (
                                             <div style={{ marginBottom: 12 }}>
                                                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
-                                                    Quick Select From Recent Payments (Optional)
+                                                    Select Eligible Hospital Payment (Optional)
                                                 </label>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
                                                     {refundData.payments.slice(0, 5).map(p => {
@@ -380,6 +387,7 @@ const AccountantRefunds = () => {
                                                                 <div>
                                                                     <strong>{formatCurrency(p.amount)}</strong>
                                                                     <span style={{ marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: '#e2e8f0', fontSize: '0.72rem', fontWeight: 600 }}>{p.paymentMode || 'Cash'}</span>
+                                                                    {p.sourceLabel && <span style={{ marginLeft: 6, padding: '2px 6px', borderRadius: 4, background: '#dbeafe', color: '#1d4ed8', fontSize: '0.7rem', fontWeight: 600 }}>{p.sourceLabel}</span>}
                                                                     {p.transactionId && <span style={{ marginLeft: 6, color: '#64748b', fontSize: '0.72rem' }}>#{p.transactionId}</span>}
                                                                 </div>
                                                                 <span style={{ color: isSelected ? '#059669' : '#64748b', fontWeight: isSelected ? 700 : 500 }}>
@@ -393,7 +401,7 @@ const AccountantRefunds = () => {
                                         )}
 
                                         {refundData.refundableAmount <= 0 ? (
-                                            <div className="acc-error-banner">No refundable amount available for this patient (all collected payments have already been refunded or are pending approval).</div>
+                                            <div className="acc-error-banner">No eligible hospital refundable balance available for this patient. Note: OPD Appointment consultation payments are non-refundable, and Pharmacy/Laboratory refunds are processed by their respective departments.</div>
                                         ) : (
                                             <>
                                                 <div className="acc-modal-field">
@@ -413,14 +421,14 @@ const AccountantRefunds = () => {
                                                 </div>
 
                                                 <div className="acc-modal-field">
-                                                    <label>Reason / Notes</label>
+                                                    <label>Reason for Refund *</label>
                                                     <textarea value={refundForm.reason} onChange={e => setRefundForm(f => ({ ...f, reason: e.target.value }))}
-                                                        placeholder="Reason for refund..." />
+                                                        placeholder="Enter mandatory reason for refund (e.g. IPD excess deposit, room/bed adjustment)..." required />
                                                 </div>
 
                                                 <div className="acc-modal-actions">
                                                     <button className="acc-btn acc-btn-sm" onClick={() => setShowNewRefund(false)}>Cancel</button>
-                                                    <button className="acc-btn acc-btn-primary" onClick={handleSubmitRefund} disabled={submitting}>
+                                                    <button className="acc-btn acc-btn-primary" onClick={handleSubmitRefund} disabled={submitting || !refundForm.reason.trim() || !refundForm.refundAmount}>
                                                         {submitting ? 'Submitting...' : 'Request Refund'}
                                                     </button>
                                                 </div>

@@ -16,6 +16,7 @@ import {
 import { FaRupeeSign, FaHeartbeat } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
 import SlotPicker from '../../components/SlotPicker';
+import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
 import { useBranding } from '../../context/BrandingContext';
 import { TopBar } from '../../components/layouts/DashboardLayout';
 import './ReceptionDashboard.css';
@@ -175,6 +176,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     // Hospitalization modal
     const [hospitalizeModal, setHospitalizeModal] = useState({ open: false, appointment: null });
+    const [wristbandModal, setWristbandModal] = useState({ open: false, admissionId: null, admission: null, initialWristband: null });
     const [hospitalizeForm, setHospitalizeForm] = useState({
         ward: '',
         bedId: '',
@@ -1297,7 +1299,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         setHospitalizingSaving(true);
         try {
-            await admissionAPI.createAdmission({
+            const admRes = await admissionAPI.createAdmission({
                 patientId: patientId,
                 appointmentId: appointment._id,
                 doctorId: doctorId,
@@ -1307,8 +1309,17 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 admissionTime: hospitalizeForm.admissionTime,
                 notes: hospitalizeForm.notes,
             });
-            toast.success('Patient admitted successfully!');
+            toast.success('Patient admitted to IPD! Wristband generated automatically.');
             setHospitalizeModal({ open: false, appointment: null });
+            const createdAdm = admRes?.admission || admRes?.data || null;
+            if (createdAdm?._id || admRes?.wristband) {
+                setWristbandModal({
+                    open: true,
+                    admissionId: createdAdm?._id || admRes?.wristband?.admissionId,
+                    admission: createdAdm ? { ...createdAdm, patientId: appointment.patientId || createdAdm.patientId } : null,
+                    initialWristband: admRes?.wristband || null
+                });
+            }
             fetchAppointments();
             fetchHospitalizedPatients();
             fetchAvailableBeds();
@@ -3432,6 +3443,15 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                     <FiEye size={13} />
                                                     <span>Profile</span>
                                                 </button>
+                                                <button
+                                                    className="rec-tbl-btn rec-btn-profile"
+                                                    title="Preview / Reprint IPD Wristband"
+                                                    onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
+                                                    style={{ background: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
+                                                >
+                                                    <FiPrinter size={13} />
+                                                    <span>Wristband</span>
+                                                </button>
                                                 {adm.status === 'Admitted' ? (
                                                     <>
                                                         <button 
@@ -4806,6 +4826,15 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                                 <span>Profile</span>
                                                             </button>
                                                             <button
+                                                                className="rec-tbl-btn rec-btn-profile"
+                                                                title="Preview / Reprint IPD Wristband"
+                                                                onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
+                                                                style={{ background: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
+                                                            >
+                                                                <FiPrinter size={13} />
+                                                                <span>Wristband</span>
+                                                            </button>
+                                                            <button
                                                                 className="rec-tbl-btn rec-btn-transfer"
                                                                 title="Transfer Ward or Bed"
                                                                 onClick={() => openTransferModal(adm)}
@@ -5006,6 +5035,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             {renderCameraModal()}
 
             {renderModals()}
+
+            <IPDWristbandModal
+                isOpen={wristbandModal.open}
+                onClose={() => setWristbandModal({ open: false, admissionId: null, admission: null, initialWristband: null })}
+                admissionId={wristbandModal.admissionId}
+                admission={wristbandModal.admission}
+                initialWristband={wristbandModal.initialWristband}
+            />
         </div>
     );
 };

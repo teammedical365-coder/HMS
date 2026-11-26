@@ -222,8 +222,13 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                         src={(isCentralAdmin ? '/assets/logo.png' : (branding?.logoUrl || branding?.logo || '/assets/logo.png'))}
                         alt={hospitalName || "Medical 365"}
                         onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = '/logo.png';
+                            if (!e.target.dataset.triedAssets) {
+                                e.target.dataset.triedAssets = '1';
+                                e.target.src = '/assets/logo.png';
+                            } else {
+                                e.target.onerror = null;
+                                e.target.src = '/logo.png';
+                            }
                         }}
                         style={{ height: '36px', maxWidth: '175px', width: 'auto', objectFit: 'contain' }}
                     />
@@ -619,8 +624,9 @@ const DashboardLayout = ({ children }) => {
     const isLabAdminRole = roleClean === 'labadmin' || roleClean === 'lab' || roleRaw === 'laboratory administrator';
     const isSampleCollectionRole = roleRaw.includes('phlebotomist') || roleRaw.includes('sample collector') || roleRaw === 'sample collection';
     const isLabTechnicianRole = (roleRaw.includes('lab technician') || roleClean === 'labtechnician' || roleClean === 'technician') && !isLabAdminRole;
+    const isPathologistRole = roleRaw.includes('pathologist') && !isLabAdminRole;
     const useDedicatedLabAdminShell = (
-        ((isLabAdminRole || isSampleCollectionRole || isLabTechnicianRole) && location.pathname.startsWith('/lab')) ||
+        ((isLabAdminRole || isSampleCollectionRole || isLabTechnicianRole || isPathologistRole) && location.pathname.startsWith('/lab')) ||
         location.pathname === '/lab/dashboard'
     );
 

@@ -299,14 +299,14 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
 
         const surgeryPlans = await populateBillingSurgeryPlans(rawSurgeryPlans);
 
-        // Calculate ICU charges dynamically for active/past admissions
+        // Calculate ICU charges dynamically ONLY for active admissions where stay hasn't been finalized on discharge
         const Hospital = require('../models/hospital.model');
         const hospital = patient.hospitalId ? await Hospital.findById(patient.hospitalId).lean() : null;
         const icuFacility = hospital?.facilities?.find(f => f.name.toUpperCase().startsWith('ICU'));
         const icuRate = icuFacility ? (Number(icuFacility.pricePerDay) || 0) : 0;
 
         for (const adm of admissions) {
-            if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
+            if (adm.status !== 'Discharged' && adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
                 const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
                 if (!hasIcuCharge && icuRate > 0) {
                     const startDate = new Date(adm.admissionDate);
@@ -325,7 +325,24 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
                     adm.totalAmount = (adm.totalAmount || 0) + icuTotal;
                 }
             }
+            const totalAmt = Number(adm.totalAmount) || 0;
+            const paidAmt = ['Paid', 'paid', 'PAID'].includes(adm.paymentStatus)
+                ? totalAmt
+                : Math.min(totalAmt, Math.max(0, Number(adm.paidAmount) || 0));
+            adm.paidAmount = paidAmt;
+            adm.dueAmount = Math.max(0, totalAmt - paidAmt);
         }
+
+        // Exclude Pharmacy-only or Lab-only transactions from Hospital Reception payment history to prevent cross-department double-counting
+        const hospitalPaymentTransactions = (paymentTransactions || []).filter(pt => {
+            if (pt.department === 'PHARMACY' || pt.department === 'LABORATORY') return false;
+            const b = pt.billedItems || {};
+            const hasHospitalItems = (b.appointments?.length > 0) || (b.admissions?.length > 0) || (b.facilityCharges?.length > 0) || (b.surgeryPlans?.length > 0);
+            const hasDeptOnlyItems = (b.pharmacyOrders?.length > 0 || b.labReports?.length > 0) && !hasHospitalItems;
+            return !hasDeptOnlyItems;
+        });
+        paymentTransactions.length = 0;
+        paymentTransactions.push(...hospitalPaymentTransactions);
 
         // Merge any paid appointments that don't have a PaymentTransaction record yet (so their screenshot & UTR show up)
         const ptApptIds = new Set();
@@ -422,6 +439,9 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
                     paymentDate: resolvedPaymentDate,
                     createdAt: apt.createdAt || resolvedPaymentDate,
                     description: `OPD Consultation Fee - Dr. ${apt.doctorName || 'Doctor'}`,
+                    department: 'OPD_CONSULTATION',
+                    sourceCategory: 'APPOINTMENT',
+                    nonAppointmentAmount: 0,
                     billedItems: { appointments: [apt._id] }
                 });
             }
@@ -489,7 +509,7 @@ router.post('/facility-charge', verifyToken, verifyBillingAccess, resolveTenant,
     }
 });
 
-// 3. Mark items as paid — updates tenant DB
+// 3. Mark hospital-owned items as paid — updates tenant DB & enforces strict department separation
 router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CONFIRM_PAYMENT'), async (req, res) => {
     try {
         const {
@@ -498,6 +518,7 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
             pharmacyOrderIds = [],
             facilityChargeIds = [],
             admissionIds = [],
+            admissionPayments = {}, // optional map: { [admissionId]: amountToPay } for partial/full IPD settlement
             surgeryPlanIds = [],
             surgeryPayments = {}, // optional map: { [planId]: amountToPay }
             paymentMode = 'Cash',
@@ -510,8 +531,25 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
             cardDetails,
             bankReference,
             proofUrl,
-            proofFileId
+            proofFileId,
+            idempotencyKey
         } = req.body;
+
+        // STRICT DEPARTMENT OWNERSHIP ENFORCEMENT (Requirements 2, 3, 4 & 8)
+        if ((Array.isArray(pharmacyOrderIds) && pharmacyOrderIds.length > 0) || (Array.isArray(labReportIds) && labReportIds.length > 0)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Department Billing Separation: Pharmacy and Laboratory payments must be collected through their respective department billing dashboards, not Hospital Reception.'
+            });
+        }
+
+        const totalSelectedItems = (appointmentIds?.length || 0) + (facilityChargeIds?.length || 0) + (admissionIds?.length || 0) + (surgeryPlanIds?.length || 0);
+        if (totalSelectedItems === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please select at least one eligible hospital bill item to settle.'
+            });
+        }
 
         // Validation: Payment date cannot be in the future
         if (paymentDate) {
@@ -526,9 +564,15 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
         let rawMode = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : paymentMode;
         if (!rawMode || String(rawMode).trim() === '') rawMode = 'Cash';
         const actualPaymentMode = String(rawMode).trim();
-        const totalAmount = splitPayments.length > 0 ? splitPayments.reduce((acc, p) => acc + Number(p.amount), 0) : amount;
+        const totalAmount = splitPayments.length > 0
+            ? splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
+            : Number(amount) || 0;
 
-        const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
+        if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+            return res.status(400).json({ success: false, message: 'Payment amount must be greater than zero.' });
+        }
+
+        const { Appointment, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
 
         // Security Control (FINDING-05): Cross-tenant BOLA prevention
         const effectiveHospitalId = req.hospitalId || req.user?.hospitalId;
@@ -541,10 +585,6 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 itemsToCheck.push(MasterAppointment.find({ _id: { $in: appointmentIds } }).select('hospitalId').lean());
                 if (MasterAppointment !== Appointment) itemsToCheck.push(Appointment.find({ _id: { $in: appointmentIds } }).select('hospitalId').lean());
             }
-            if (labReportIds.length > 0) {
-                itemsToCheck.push(MasterLabReport.find({ _id: { $in: labReportIds } }).select('hospitalId').lean());
-                if (MasterLabReport !== LabReport) itemsToCheck.push(LabReport.find({ _id: { $in: labReportIds } }).select('hospitalId').lean());
-            }
             if (admissionIds.length > 0) {
                 itemsToCheck.push(MasterAdmission.find({ _id: { $in: admissionIds } }).select('hospitalId').lean());
                 if (MasterAdmission !== Admission) itemsToCheck.push(Admission.find({ _id: { $in: admissionIds } }).select('hospitalId').lean());
@@ -552,10 +592,6 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
             if (surgeryPlanIds.length > 0) {
                 itemsToCheck.push(MasterSurgeryPlan.find({ _id: { $in: surgeryPlanIds } }).select('hospitalId').lean());
                 if (MasterSurgeryPlan !== SurgeryPlan) itemsToCheck.push(SurgeryPlan.find({ _id: { $in: surgeryPlanIds } }).select('hospitalId').lean());
-            }
-            if (pharmacyOrderIds.length > 0) {
-                itemsToCheck.push(MasterPharmacyOrder.find({ _id: { $in: pharmacyOrderIds } }).select('hospitalId').lean());
-                if (MasterPharmacyOrder !== PharmacyOrder) itemsToCheck.push(PharmacyOrder.find({ _id: { $in: pharmacyOrderIds } }).select('hospitalId').lean());
             }
             if (facilityChargeIds.length > 0) {
                 itemsToCheck.push(MasterFacilityCharge.find({ _id: { $in: facilityChargeIds } }).select('hospitalId').lean());
@@ -577,11 +613,78 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
 
         const hospitalFilter = (!isCentral && effectiveHospitalId) ? { hospitalId: effectiveHospitalId } : {};
 
-        // Calculate and persist ICU charges for any admissions before marking Paid
+        // Duplicate payment submission guard (idempotencyKey or identical payload within 15s)
+        if (patientId) {
+            const recentWindow = new Date(Date.now() - 15000);
+            const dupQuery = idempotencyKey
+                ? { ...(effectiveHospitalId ? { hospitalId: effectiveHospitalId } : {}), idempotencyKey }
+                : {
+                    ...(effectiveHospitalId ? { hospitalId: effectiveHospitalId } : {}),
+                    patientId,
+                    amount: totalAmount,
+                    paymentStatus: 'Paid',
+                    createdAt: { $gte: recentWindow },
+                    'billedItems.admissions': admissionIds,
+                    'billedItems.appointments': appointmentIds,
+                    'billedItems.facilityCharges': facilityChargeIds
+                };
+            const existingDup = await PaymentTransaction.findOne(dupQuery).lean();
+            if (existingDup) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Duplicate payment submission detected. This payment was already recorded moments ago.'
+                });
+            }
+        }
+
+        // Server-side validation of exact expected payable amounts across selected hospital items
+        let expectedAppointmentsTotal = 0;
+        let expectedFacilitiesTotal = 0;
+        let expectedAdmissionsTotal = 0;
+        let expectedSurgeriesTotal = 0;
+
+        if (appointmentIds.length > 0) {
+            const appts = await Appointment.find({ _id: { $in: appointmentIds }, ...hospitalFilter }).lean();
+            for (const a of appts) {
+                if (['Paid', 'paid', 'PAID'].includes(a.paymentStatus)) {
+                    return res.status(400).json({ success: false, message: 'One or more selected appointments are already paid.' });
+                }
+                expectedAppointmentsTotal += (Number(a.amount) || 0);
+            }
+        }
+
+        if (facilityChargeIds.length > 0) {
+            const facs = await FacilityCharge.find({ _id: { $in: facilityChargeIds }, ...hospitalFilter }).lean();
+            for (const f of facs) {
+                if (['Paid', 'paid', 'PAID'].includes(f.paymentStatus)) {
+                    return res.status(400).json({ success: false, message: 'One or more selected facility charges are already paid.' });
+                }
+                expectedFacilitiesTotal += (Number(f.totalAmount) || 0);
+            }
+        }
+
+        // Process IPD Admissions (Active AND Discharged — supports both partial and full payment)
+        const resolvedAdmissionPayMap = {};
+        let admissionsToPay = [];
         if (admissionIds.length > 0) {
-            const admissionsToPay = await Admission.find({ _id: { $in: admissionIds }, ...hospitalFilter });
+            admissionsToPay = await Admission.find({ _id: { $in: admissionIds }, ...hospitalFilter });
+            if (admissionsToPay.length === 0 && MasterAdmission !== Admission) {
+                admissionsToPay = await MasterAdmission.find({ _id: { $in: admissionIds }, ...hospitalFilter });
+            }
+            if (admissionsToPay.length === 0) {
+                return res.status(404).json({ success: false, message: 'Selected IPD admission bill not found.' });
+            }
+
             for (const adm of admissionsToPay) {
-                if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
+                if (['Paid', 'paid', 'PAID'].includes(adm.paymentStatus)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `IPD bill for ${adm.ward || 'Ward'} (Bed ${adm.bedNumber || '—'}) is already fully paid.`
+                    });
+                }
+
+                // Dynamic ICU rate check ONLY for active un-finalized admissions
+                if (adm.status !== 'Discharged' && adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
                     const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
                     if (!hasIcuCharge) {
                         const Hospital = require('../models/hospital.model');
@@ -594,7 +697,7 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                             const diffTime = Math.max(0, endDate - startDate);
                             const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
                             const icuTotal = icuRate * diffDays;
-                            
+
                             adm.selectedFacilities = adm.selectedFacilities || [];
                             adm.selectedFacilities.push({
                                 facilityName: icuFacility.name,
@@ -606,45 +709,110 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                         }
                     }
                 }
-                adm.paymentStatus = 'Paid';
-                await adm.save();
+
+                const admTotal = Number(adm.totalAmount) || 0;
+                const admAlreadyPaid = Math.max(0, Number(adm.paidAmount) || 0);
+                const admRemaining = Math.max(0, Math.round((admTotal - admAlreadyPaid) * 100) / 100);
+
+                if (admRemaining <= 0) {
+                    return res.status(400).json({ success: false, message: 'Selected IPD bill has zero remaining balance.' });
+                }
+
+                const admKey = String(adm._id);
+                const requestedAdmPay = admissionPayments && admissionPayments[admKey] !== undefined
+                    ? Number(admissionPayments[admKey])
+                    : (admissionIds.length === 1 && appointmentIds.length === 0 && facilityChargeIds.length === 0 && surgeryPlanIds.length === 0
+                        ? totalAmount
+                        : admRemaining);
+
+                if (!Number.isFinite(requestedAdmPay) || requestedAdmPay <= 0) {
+                    return res.status(400).json({ success: false, message: 'Invalid payment amount entered for IPD bill.' });
+                }
+                if (requestedAdmPay > admRemaining + 0.5) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `IPD payment amount (₹${requestedAdmPay}) cannot exceed outstanding IPD balance (₹${admRemaining}).`
+                    });
+                }
+
+                resolvedAdmissionPayMap[admKey] = Math.min(admRemaining, Math.round(requestedAdmPay * 100) / 100);
+                expectedAdmissionsTotal += resolvedAdmissionPayMap[admKey];
             }
         }
 
-        // Process Surgery Plan payments (supports full & partial payments)
+        // Validate Surgery Plan payments (supports full & partial payments)
+        let plansToPay = [];
+        const resolvedSurgeryPayMap = {};
         if (surgeryPlanIds.length > 0) {
-            const plansToPay = await SurgeryPlan.find({ _id: { $in: surgeryPlanIds }, ...hospitalFilter });
+            plansToPay = await SurgeryPlan.find({ _id: { $in: surgeryPlanIds }, ...hospitalFilter });
             for (const sp of plansToPay) {
                 const totalCost = Number(sp.surgeryCost) || 0;
                 const currentPaid = Number(sp.paidAmount) || 0;
                 const remaining = Math.max(0, totalCost - currentPaid);
-                const payAmt = surgeryPayments[sp._id] !== undefined ? Number(surgeryPayments[sp._id]) : (Number(totalAmount) || remaining);
+                const payAmt = surgeryPayments[sp._id] !== undefined ? Number(surgeryPayments[sp._id]) : remaining;
 
-                if (payAmt > remaining) {
-                    return res.status(400).json({ 
-                        success: false, 
-                        message: `Payment amount (₹${payAmt}) cannot exceed remaining surgery balance (₹${remaining})` 
+                if (payAmt <= 0 || payAmt > remaining + 0.5) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Payment amount (₹${payAmt}) must be between ₹1 and remaining surgery balance (₹${remaining})`
                     });
                 }
+                resolvedSurgeryPayMap[String(sp._id)] = payAmt;
+                expectedSurgeriesTotal += payAmt;
+            }
+        }
 
-                const newPaid = currentPaid + payAmt;
-                sp.paidAmount = newPaid;
-                sp.paymentStatus = (newPaid >= totalCost && totalCost > 0) ? 'PAID' : (newPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
-                
-                sp.splitPayments = sp.splitPayments || [];
-                if (splitPayments.length > 0) {
-                    splitPayments.forEach(s => sp.splitPayments.push({ ...s, date: paymentDate ? new Date(paymentDate) : new Date() }));
-                } else {
-                    sp.splitPayments.push({ method: actualPaymentMode, amount: payAmt, date: paymentDate ? new Date(paymentDate) : new Date() });
-                }
-                await sp.save();
+        const expectedServerTotal = Math.round((expectedAppointmentsTotal + expectedFacilitiesTotal + expectedAdmissionsTotal + expectedSurgeriesTotal) * 100) / 100;
+        if (Math.abs(totalAmount - expectedServerTotal) > 1) {
+            return res.status(400).json({
+                success: false,
+                message: `Payment total (₹${totalAmount}) does not match selected hospital charges (₹${expectedServerTotal}).`
+            });
+        }
 
-                // If linked facility charge exists and plan is fully paid, update it too
-                if (sp.facilityChargeId) {
-                    if (sp.paymentStatus === 'PAID') {
-                        await FacilityCharge.findOneAndUpdate({ _id: sp.facilityChargeId, ...hospitalFilter }, { paymentStatus: 'Paid' });
-                    }
-                }
+        // Persist IPD Admission partial/full payments (syncing both tenant & master models if distinct)
+        for (const adm of admissionsToPay) {
+            const payAmt = resolvedAdmissionPayMap[String(adm._id)];
+            const admTotal = Number(adm.totalAmount) || 0;
+            const newPaid = Math.min(admTotal, Math.round(((Number(adm.paidAmount) || 0) + payAmt) * 100) / 100);
+            const newStatus = (newPaid >= admTotal - 0.01 && admTotal > 0) ? 'Paid' : 'Partially Paid';
+
+            adm.paidAmount = newPaid;
+            adm.paymentStatus = newStatus;
+            adm.splitPayments = adm.splitPayments || [];
+            if (splitPayments.length > 0) {
+                splitPayments.forEach(s => adm.splitPayments.push({ method: s.method, amount: Number(s.amount) || 0, date: paymentDate ? new Date(paymentDate) : new Date() }));
+            } else {
+                adm.splitPayments.push({ method: actualPaymentMode, amount: payAmt, date: paymentDate ? new Date(paymentDate) : new Date() });
+            }
+            await adm.save();
+
+            if (MasterAdmission !== Admission) {
+                await MasterAdmission.updateOne(
+                    { _id: adm._id },
+                    { $set: { paidAmount: newPaid, paymentStatus: newStatus, splitPayments: adm.splitPayments, totalAmount: adm.totalAmount } }
+                );
+            }
+        }
+
+        // Persist Surgery Plan payments
+        for (const sp of plansToPay) {
+            const payAmt = resolvedSurgeryPayMap[String(sp._id)];
+            const totalCost = Number(sp.surgeryCost) || 0;
+            const newPaid = (Number(sp.paidAmount) || 0) + payAmt;
+            sp.paidAmount = newPaid;
+            sp.paymentStatus = (newPaid >= totalCost && totalCost > 0) ? 'PAID' : (newPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+
+            sp.splitPayments = sp.splitPayments || [];
+            if (splitPayments.length > 0) {
+                splitPayments.forEach(s => sp.splitPayments.push({ ...s, date: paymentDate ? new Date(paymentDate) : new Date() }));
+            } else {
+                sp.splitPayments.push({ method: actualPaymentMode, amount: payAmt, date: paymentDate ? new Date(paymentDate) : new Date() });
+            }
+            await sp.save();
+
+            if (sp.facilityChargeId && sp.paymentStatus === 'PAID') {
+                await FacilityCharge.findOneAndUpdate({ _id: sp.facilityChargeId, ...hospitalFilter }, { paymentStatus: 'Paid' });
             }
         }
 
@@ -653,16 +821,6 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 { _id: { $in: appointmentIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
             appointmentIds.length > 0 && MasterAppointment !== Appointment && MasterAppointment.updateMany(
                 { _id: { $in: appointmentIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
-            
-            labReportIds.length > 0 && LabReport.updateMany(
-                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
-            labReportIds.length > 0 && MasterLabReport !== LabReport && MasterLabReport.updateMany(
-                { _id: { $in: labReportIds }, ...hospitalFilter }, { $set: { paymentStatus: 'PAID', paymentMethod: actualPaymentMode, splitPayments } }),
-
-            pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
-            pharmacyOrderIds.length > 0 && MasterPharmacyOrder !== PharmacyOrder && MasterPharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
 
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments } }),
@@ -670,44 +828,24 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 { _id: { $in: facilityChargeIds }, ...hospitalFilter }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));
 
-        // Ensure any paid HMS lab prescriptions or appointments with labTests are synced to LMS Sample Collection
-        if (effectiveHospitalId && (labReportIds.length > 0 || appointmentIds.length > 0)) {
+        // Sync any lab tests prescribed on paid OPD appointments into LMS Order queue (without collecting lab fee at Reception)
+        if (effectiveHospitalId && appointmentIds.length > 0) {
             try {
                 const { syncPrescribedTestsToLmsOrder } = require('../services/lmsOrderSync.service');
-                if (labReportIds.length > 0) {
-                    const paidReports = await MasterLabReport.find({ _id: { $in: labReportIds }, ...hospitalFilter }).lean();
-                    for (const rep of paidReports) {
-                        if (Array.isArray(rep.testNames) && rep.testNames.length > 0) {
-                            await syncPrescribedTestsToLmsOrder({
-                                hospitalId: rep.hospitalId || effectiveHospitalId,
-                                appointmentId: rep.appointmentId || null,
-                                legacyLabReportId: rep._id,
-                                userId: rep.userId,
-                                patientId: rep.patientId,
-                                doctorId: rep.doctorId,
-                                labTests: rep.testNames,
-                                sourceModule: 'HMS_RECEPTION',
-                                actorId: req.user?._id
-                            });
-                        }
-                    }
-                }
-                if (appointmentIds.length > 0) {
-                    const paidAppts = await MasterAppointment.find({ _id: { $in: appointmentIds }, ...hospitalFilter }).lean();
-                    for (const appt of paidAppts) {
-                        if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
-                            await syncPrescribedTestsToLmsOrder({
-                                hospitalId: appt.hospitalId || effectiveHospitalId,
-                                appointmentId: appt._id,
-                                userId: appt.userId,
-                                patientId: appt.patientId,
-                                doctorId: appt.doctorId,
-                                doctorName: appt.doctorName || '',
-                                labTests: appt.labTests,
-                                sourceModule: 'HMS_RECEPTION',
-                                actorId: req.user?._id
-                            });
-                        }
+                const paidAppts = await MasterAppointment.find({ _id: { $in: appointmentIds }, ...hospitalFilter }).lean();
+                for (const appt of paidAppts) {
+                    if (Array.isArray(appt.labTests) && appt.labTests.length > 0) {
+                        await syncPrescribedTestsToLmsOrder({
+                            hospitalId: appt.hospitalId || effectiveHospitalId,
+                            appointmentId: appt._id,
+                            userId: appt.userId,
+                            patientId: appt.patientId,
+                            doctorId: appt.doctorId,
+                            doctorName: appt.doctorName || '',
+                            labTests: appt.labTests,
+                            sourceModule: 'HMS_RECEPTION',
+                            actorId: req.user?._id
+                        });
                     }
                 }
             } catch (syncErr) {
@@ -716,29 +854,49 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
         }
 
         if (patientId) {
-            // Build dynamic description
             let descParts = [];
-            if (appointmentIds.length > 0) descParts.push(`${appointmentIds.length} Appointments`);
-            if (labReportIds.length > 0) descParts.push(`${labReportIds.length} Lab Tests`);
-            if (pharmacyOrderIds.length > 0) descParts.push(`${pharmacyOrderIds.length} Pharmacy Orders`);
-            if (facilityChargeIds.length > 0) descParts.push(`${facilityChargeIds.length} Facility Charges`);
-            if (admissionIds.length > 0) descParts.push(`${admissionIds.length} ICU/Admissions`);
-            if (surgeryPlanIds.length > 0) descParts.push(`${surgeryPlanIds.length} Surgeries`);
+            if (appointmentIds.length > 0) descParts.push(`${appointmentIds.length} Appointment(s)`);
+            if (facilityChargeIds.length > 0) descParts.push(`${facilityChargeIds.length} Hospital Facility Charge(s)`);
+            if (admissionIds.length > 0) descParts.push(`${admissionIds.length} IPD Admission Bill(s)`);
+            if (surgeryPlanIds.length > 0) descParts.push(`${surgeryPlanIds.length} OT Surgery Bill(s)`);
 
-            const description = descParts.length > 0 ? `Payment for: ${descParts.join(', ')}` : 'General Payment';
+            const description = descParts.length > 0 ? `Payment for: ${descParts.join(', ')}` : 'Hospital Service Payment';
 
             let finalMode = actualPaymentMode;
             if (Array.isArray(finalMode)) finalMode = finalMode.join(' / ');
             if (typeof finalMode === 'string') finalMode = finalMode.trim();
             if (!finalMode) finalMode = 'Cash';
 
-            const pt = new PaymentTransaction({
+            // Classify payment department & non-appointment refundable portion accurately
+            const nonAppointmentAmount = Math.max(0, Math.round((expectedFacilitiesTotal + expectedAdmissionsTotal + expectedSurgeriesTotal) * 100) / 100);
+            let department = 'HOSPITAL_RECEPTION';
+            let sourceCategory = 'HOSPITAL_SERVICES';
+
+            if (appointmentIds.length > 0 && nonAppointmentAmount === 0) {
+                department = 'OPD_CONSULTATION';
+                sourceCategory = 'APPOINTMENT';
+            } else if (admissionIds.length > 0 && appointmentIds.length === 0 && facilityChargeIds.length === 0 && surgeryPlanIds.length === 0) {
+                department = 'IPD';
+                sourceCategory = 'IPD_ADMISSION';
+            } else if (surgeryPlanIds.length > 0 && appointmentIds.length === 0 && admissionIds.length === 0) {
+                department = 'OT_SURGERY';
+                sourceCategory = 'SURGERY';
+            } else if (appointmentIds.length > 0 && nonAppointmentAmount > 0) {
+                department = 'HOSPITAL_RECEPTION';
+                sourceCategory = 'MIXED_WITH_APPOINTMENT';
+            }
+
+            const txnPayload = {
                 hospitalId: req.hospitalId || req.user.hospitalId,
                 patientId,
                 paymentMode: finalMode,
                 splitPayments,
                 paymentStatus: 'Paid',
                 amount: Number(totalAmount) || 0,
+                department,
+                sourceCategory,
+                nonAppointmentAmount,
+                ...(idempotencyKey ? { idempotencyKey } : {}),
                 transactionId,
                 upiId,
                 cardDetails,
@@ -749,18 +907,25 @@ router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CO
                 description,
                 billedItems: {
                     appointments: appointmentIds,
-                    labReports: labReportIds,
-                    pharmacyOrders: pharmacyOrderIds,
+                    labReports: [],
+                    pharmacyOrders: [],
                     facilityCharges: facilityChargeIds,
                     admissions: admissionIds,
                     surgeryPlans: surgeryPlanIds
                 },
                 addedBy: req.user._id || req.user.userId
-            });
+            };
+
+            const pt = new PaymentTransaction(txnPayload);
             await pt.save();
+            if (MasterPaymentTransaction !== PaymentTransaction) {
+                try {
+                    await MasterPaymentTransaction.create({ ...txnPayload, _id: pt._id });
+                } catch (_) {}
+            }
         }
 
-        res.json({ success: true, message: 'Billing settled successfully' });
+        res.json({ success: true, message: 'Hospital billing payment recorded successfully' });
     } catch (error) {
         console.error('[confirm-payment-error]', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -823,24 +988,13 @@ router.get('/patients', verifyToken, verifyBillingAccess, resolveTenant, async (
                 }
             }
 
-            // Dues calculations
+            // Dues calculations (Hospital-owned services ONLY — excludes Pharmacy & Laboratory)
             let totalPaid = 0;
             let pendingDues = 0;
 
             appointments.forEach(a => {
                 if (['Paid', 'paid'].includes(a.paymentStatus)) totalPaid += (a.amount || 0);
-                else totalPaid += 0; // wait, if not paid, it could be pending
                 if (!['Paid', 'paid'].includes(a.paymentStatus)) pendingDues += (a.amount || 0);
-            });
-
-            labReports.forEach(l => {
-                if (['PAID', 'Paid', 'paid'].includes(l.paymentStatus)) totalPaid += (l.amount || 0);
-                if (!['PAID', 'Paid', 'paid'].includes(l.paymentStatus)) pendingDues += (l.amount || 0);
-            });
-
-            pharmacyOrders.forEach(p => {
-                if (['Paid', 'paid'].includes(p.paymentStatus)) totalPaid += (p.totalAmount || 0);
-                if (!['Paid', 'paid'].includes(p.paymentStatus)) pendingDues += (p.totalAmount || 0);
             });
 
             facilityCharges.forEach(f => {
@@ -849,8 +1003,12 @@ router.get('/patients', verifyToken, verifyBillingAccess, resolveTenant, async (
             });
 
             admissions.forEach(adm => {
-                if (['Paid', 'paid'].includes(adm.paymentStatus)) totalPaid += (adm.totalAmount || 0);
-                if (!['Paid', 'paid'].includes(adm.paymentStatus)) pendingDues += (adm.totalAmount || 0);
+                const admTotal = Number(adm.totalAmount) || 0;
+                const admPaid = ['Paid', 'paid'].includes(adm.paymentStatus)
+                    ? admTotal
+                    : Math.min(admTotal, Math.max(0, Number(adm.paidAmount) || 0));
+                totalPaid += admPaid;
+                pendingDues += Math.max(0, admTotal - admPaid);
             });
 
             resolvedPatients.push({
@@ -979,6 +1137,15 @@ router.get('/history', verifyToken, verifyBillingAccess, resolveTenant, async (r
                 });
             } catch (e) {}
         }
+
+        // Exclude Pharmacy-only and Lab-only collections from Hospital Reception billing register
+        transactions = transactions.filter(t => {
+            if (t.department === 'PHARMACY' || t.department === 'LABORATORY') return false;
+            const b = t.billedItems || {};
+            const hasHospital = (b.appointments?.length > 0) || (b.admissions?.length > 0) || (b.facilityCharges?.length > 0) || (b.surgeryPlans?.length > 0);
+            const hasDeptOnly = (b.pharmacyOrders?.length > 0 || b.labReports?.length > 0) && !hasHospital;
+            return !hasDeptOnly;
+        });
 
         // Reconcile booking timestamps and appointment metadata for existing transactions
         transactions.forEach(t => {

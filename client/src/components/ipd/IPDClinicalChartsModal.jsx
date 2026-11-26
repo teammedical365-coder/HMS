@@ -61,113 +61,9 @@ import {
     FiZap
 } from 'react-icons/fi';
 import TabletPenCanvas from './TabletPenCanvas';
+import TabletSheetWorkspace from './TabletSheetWorkspace';
 import toast from 'react-hot-toast';
 import './IPDClinicalChartsModal.css';
-
-
-
-function TabletSheetZoom({ children, zoom: propZoom, setZoom: propSetZoom, activeTool = 'type' }) {
-    const [internalZoom, setInternalZoom] = useState(1);
-    const zoom = propZoom !== undefined ? propZoom : internalZoom;
-    const setZoom = propSetZoom || setInternalZoom;
-    const touchRef = useRef({ distance: 0, startZoom: 1 });
-    const innerContentRef = useRef(null);
-    const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
-
-    const isInkActive = activeTool === 'pen' || activeTool === 'eraser';
-
-    const clampZoom = (v) => Math.min(2, Math.max(0.6, Number(v.toFixed(2))));
-    const zoomIn = () => setZoom(v => clampZoom(v + 0.1));
-    const zoomOut = () => setZoom(v => clampZoom(v - 0.1));
-    const fit = () => setZoom(1);
-
-    useEffect(() => {
-        const el = innerContentRef.current;
-        if (!el) return;
-        const measure = () => {
-            setNaturalSize({
-                width: el.offsetWidth || 0,
-                height: el.offsetHeight || 0
-            });
-        };
-        measure();
-        const ro = new ResizeObserver(measure);
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, [children]);
-
-    const handleTouchStart = (e) => {
-        // Prevent palm + stylus from triggering accidental pinch-zoom while writing
-        if (isInkActive) return;
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            touchRef.current = {
-                distance: Math.hypot(dx, dy),
-                startZoom: zoom
-            };
-        }
-    };
-
-    const handleTouchMove = (e) => {
-        if (isInkActive) return;
-        if (e.touches.length !== 2 || !touchRef.current.distance) return;
-
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const distance = Math.hypot(dx, dy);
-        const scale = distance / touchRef.current.distance;
-
-        setZoom(clampZoom(touchRef.current.startZoom * scale));
-    };
-
-    const handleTouchEnd = (e) => {
-        if (e.touches.length < 2) touchRef.current.distance = 0;
-    };
-
-    const scaledWidth = naturalSize.width > 0 ? Math.round(naturalSize.width * zoom) : undefined;
-    const scaledHeight = naturalSize.height > 0 ? Math.round(naturalSize.height * zoom) : undefined;
-
-    return (
-        <div
-            className={`tablet-sheet-zoom-area ${isInkActive ? 'is-ink-mode' : ''}`}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-        >
-            <div className="tablet-sheet-zoom-controls" aria-label="Progress notes zoom controls">
-                <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={zoom <= 0.6}>−</button>
-                <button type="button" onClick={fit} className="zoom-value" aria-label="Reset zoom">
-                    {Math.round(zoom * 100)}%
-                </button>
-                <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={zoom >= 2}>+</button>
-                <button type="button" onClick={fit}>Fit</button>
-            </div>
-            <div
-                className="tablet-sheet-zoom-sizer"
-                style={{
-                    width: scaledWidth ? `${scaledWidth}px` : '100%',
-                    height: scaledHeight ? `${scaledHeight}px` : 'auto',
-                    margin: '0 auto',
-                    position: 'relative',
-                    flexShrink: 0
-                }}
-            >
-                <div
-                    ref={innerContentRef}
-                    className="tablet-sheet-zoom-content"
-                    style={{
-                        transform: zoom === 1 ? 'none' : `scale(${zoom})`,
-                        transformOrigin: 'top left',
-                        width: 'max-content'
-                    }}
-                >
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
-}
 
 const toDateTimeLocalValue = (dtVal) => {
     const d = dtVal ? new Date(dtVal) : new Date();
@@ -223,14 +119,22 @@ const IPDClinicalChartsModal = ({
     // Master Inline Editor Toolbar state
     const [activeTool, setActiveTool] = useState('type'); // 'type' | 'pen' | 'eraser'
     const [penColor, setPenColor] = useState('#1d4ed8');
-    const [penWidth, setPenWidth] = useState(2);
+    const [penWidth, setPenWidth] = useState(2.5); // Default Medium (2.5px)
     const [penStrokes, setPenStrokes] = useState({});
     const penStrokesRef = useRef({});
+    const penSessionRef = useRef({ isPenDown: false, lastPenTime: 0, lastPenHoverTime: 0 });
     useEffect(() => {
         penStrokesRef.current = penStrokes;
     }, [penStrokes]);
-    const [undoStack, setUndoStack] = useState([]);
-    const [redoStack, setRedoStack] = useState([]);
+
+    // Unified Document History (Pen Strokes + Eraser Splits + Progress Notes + Drug Chart Edits)
+    const undoStackRef = useRef([]);
+    const redoStackRef = useRef([]);
+    const [historyCounts, setHistoryCounts] = useState({ undo: 0, redo: 0 });
+
+    const progressNotesRef = useRef(progressNotes);
+    progressNotesRef.current = progressNotes;
+
     const [activeLineKey, setActiveLineKey] = useState(null);
     const [activeFocusedKey, setActiveFocusedKey] = useState(null);
     const [dictatingKey, setDictatingKey] = useState(null);
@@ -245,22 +149,6 @@ const IPDClinicalChartsModal = ({
     const [savingDrugChart, setSavingDrugChart] = useState(false);
     const [lastSavedProgressTime, setLastSavedProgressTime] = useState(null);
     const [lastSavedDrugChartTime, setLastSavedDrugChartTime] = useState(null);
-
-    const handleUndo = useCallback(() => {
-        if (undoStack.length === 0) return;
-        const prev = undoStack[undoStack.length - 1];
-        setRedoStack(r => [...r, progressNotes]);
-        setUndoStack(u => u.slice(0, -1));
-        setProgressNotes(prev);
-    }, [undoStack, progressNotes]);
-
-    const handleRedo = useCallback(() => {
-        if (redoStack.length === 0) return;
-        const next = redoStack[redoStack.length - 1];
-        setUndoStack(u => [...u, progressNotes]);
-        setRedoStack(r => r.slice(0, -1));
-        setProgressNotes(next);
-    }, [redoStack, progressNotes]);
 
     const [newProgressForm, setNewProgressForm] = useState({
         recordedAt: toDateTimeLocalValue(),
@@ -329,6 +217,77 @@ const IPDClinicalChartsModal = ({
     const [discontinuedOrderIds, setDiscontinuedOrderIds] = useState([]);
     const [manualExtraDrugPages, setManualExtraDrugPages] = useState(0);
 
+    // Live refs for unified undo/redo snapshot capture across all sheet sections
+    const allergyFormRef = useRef(allergyForm);
+    allergyFormRef.current = allergyForm;
+    const editableStatRowsRef = useRef(editableStatRows);
+    editableStatRowsRef.current = editableStatRows;
+    const editableIvRowsRef = useRef(editableIvRows);
+    editableIvRowsRef.current = editableIvRows;
+    const editableMedBlocksRef = useRef(editableMedBlocks);
+    editableMedBlocksRef.current = editableMedBlocks;
+
+    const captureUnifiedSnapshot = useCallback(() => ({
+        progressNotes: JSON.parse(JSON.stringify(progressNotesRef.current || [])),
+        penStrokes: JSON.parse(JSON.stringify(penStrokesRef.current || {})),
+        allergyForm: { ...(allergyFormRef.current || { slot1: '', slot2: '', sheetNo: '1' }) },
+        editableStatRows: JSON.parse(JSON.stringify(editableStatRowsRef.current || [])),
+        editableIvRows: JSON.parse(JSON.stringify(editableIvRowsRef.current || [])),
+        editableMedBlocks: JSON.parse(JSON.stringify(editableMedBlocksRef.current || []))
+    }), []);
+
+    const pushUnifiedUndo = useCallback(() => {
+        const snap = captureUnifiedSnapshot();
+        undoStackRef.current = [...undoStackRef.current.slice(-59), snap];
+        redoStackRef.current = [];
+        setHistoryCounts({ undo: undoStackRef.current.length, redo: 0 });
+    }, [captureUnifiedSnapshot]);
+
+    const applyUnifiedSnapshot = useCallback((snap) => {
+        if (!snap) return;
+        const clonedStrokes = JSON.parse(JSON.stringify(snap.penStrokes || {}));
+        penStrokesRef.current = clonedStrokes;
+        setPenStrokes(clonedStrokes);
+
+        const clonedNotes = JSON.parse(JSON.stringify(snap.progressNotes || []));
+        progressNotesRef.current = clonedNotes;
+        setProgressNotes(clonedNotes);
+
+        if (snap.allergyForm) setAllergyForm({ ...snap.allergyForm });
+        if (snap.editableStatRows) setEditableStatRows(JSON.parse(JSON.stringify(snap.editableStatRows)));
+        if (snap.editableIvRows) setEditableIvRows(JSON.parse(JSON.stringify(snap.editableIvRows)));
+        if (snap.editableMedBlocks) setEditableMedBlocks(JSON.parse(JSON.stringify(snap.editableMedBlocks)));
+
+        setDirtyNotes(true);
+        setDirtyDrugChart(true);
+    }, []);
+
+    const handleUndo = useCallback(() => {
+        if (undoStackRef.current.length === 0) return;
+        const currentSnap = captureUnifiedSnapshot();
+        const prevSnap = undoStackRef.current[undoStackRef.current.length - 1];
+        undoStackRef.current = undoStackRef.current.slice(0, -1);
+        redoStackRef.current = [...redoStackRef.current, currentSnap];
+        applyUnifiedSnapshot(prevSnap);
+        setHistoryCounts({
+            undo: undoStackRef.current.length,
+            redo: redoStackRef.current.length
+        });
+    }, [captureUnifiedSnapshot, applyUnifiedSnapshot]);
+
+    const handleRedo = useCallback(() => {
+        if (redoStackRef.current.length === 0) return;
+        const currentSnap = captureUnifiedSnapshot();
+        const nextSnap = redoStackRef.current[redoStackRef.current.length - 1];
+        redoStackRef.current = redoStackRef.current.slice(0, -1);
+        undoStackRef.current = [...undoStackRef.current, currentSnap];
+        applyUnifiedSnapshot(nextSnap);
+        setHistoryCounts({
+            undo: undoStackRef.current.length,
+            redo: redoStackRef.current.length
+        });
+    }, [captureUnifiedSnapshot, applyUnifiedSnapshot]);
+
     const rawAdmissionId = admissionId || initialAdmission?._id || initialAdmission?.id || admission?._id || null;
     const effectiveAdmissionId = (typeof rawAdmissionId === 'object' && rawAdmissionId)
         ? String(rawAdmissionId._id || rawAdmissionId.id || '')
@@ -363,6 +322,9 @@ const IPDClinicalChartsModal = ({
 
     useEffect(() => {
         if (isOpen) {
+            undoStackRef.current = [];
+            redoStackRef.current = [];
+            setHistoryCounts({ undo: 0, redo: 0 });
             setActiveTab(normalizeTab(initialTab));
             setNewProgressForm({ recordedAt: toDateTimeLocalValue(), sheetNo: '1', note: '' });
             setStatForm(prev => ({
@@ -401,7 +363,7 @@ const IPDClinicalChartsModal = ({
             window.addEventListener('keydown', handleKeyDown);
             return () => window.removeEventListener('keydown', handleKeyDown);
         }
-    }, [isOpen, undoStack, redoStack]);
+    }, [isOpen, handleUndo, handleRedo]);
 
     const loadAllData = useCallback(async () => {
         if (!isOpen) return;
@@ -742,6 +704,7 @@ const IPDClinicalChartsModal = ({
 
     // ==================== DRUG CHART INLINE CELL HANDLERS ====================
     const handleStatCellChange = (rIdx, colKey, val) => {
+        pushUnifiedUndo();
         setDirtyDrugChart(true);
         setEditableStatRows(prev => {
             const copy = [...prev];
@@ -751,6 +714,7 @@ const IPDClinicalChartsModal = ({
     };
 
     const handleIvCellChange = (rIdx, colKey, val) => {
+        pushUnifiedUndo();
         setDirtyDrugChart(true);
         setEditableIvRows(prev => {
             const copy = [...prev];
@@ -815,6 +779,7 @@ const IPDClinicalChartsModal = ({
     };
 
     const handleMedBlockChange = (bIdx, field, val) => {
+        pushUnifiedUndo();
         setDirtyDrugChart(true);
         setEditableMedBlocks(prev => {
             const copy = [...prev];
@@ -933,10 +898,12 @@ const IPDClinicalChartsModal = ({
 
     // ==================== AI VOICE SCRIBE & INLINE EDITING HANDLERS ====================
     const handleSaveStrokes = (pageKey, newStrokes) => {
+        pushUnifiedUndo();
+        const clonedPageStrokes = JSON.parse(JSON.stringify(newStrokes || []));
         setPenStrokes(prev => {
             const next = {
                 ...prev,
-                [pageKey]: newStrokes
+                [pageKey]: clonedPageStrokes
             };
             penStrokesRef.current = next;
             return next;
@@ -949,8 +916,8 @@ const IPDClinicalChartsModal = ({
     };
 
     const handleClearProgressRow = (pageIdx, rowIdx, r) => {
+        pushUnifiedUndo();
         setDirtyNotes(true);
-        setUndoStack(u => [...u.slice(-20), progressNotes]);
         if (r && r.noteId && !r.isSigRow) {
             setProgressNotes(prev => prev.map(n => {
                 if (String(n._id) === String(r.noteId)) {
@@ -1005,8 +972,8 @@ const IPDClinicalChartsModal = ({
     }, [user]);
 
     const handleProgressRowTextChange = (pageIdx, rowIdx, newText, r) => {
+        pushUnifiedUndo();
         setDirtyNotes(true);
-        setUndoStack(u => [...u.slice(-20), progressNotes]);
 
         if (r && r.noteId && !r.isSigRow) {
             // Editing a specific line of an existing note
@@ -1067,11 +1034,11 @@ const IPDClinicalChartsModal = ({
 
         if (e.key === 'Enter') {
             e.preventDefault();
+            pushUnifiedUndo();
             setDirtyNotes(true);
             if (r && r.noteId && !r.isSigRow) {
                 // Split or add a new line inside this note
                 setProgressNotes(prev => {
-                    setUndoStack(u => [...u.slice(-20), prev]);
                     return prev.map(n => {
                         if (String(n._id) === String(r.noteId)) {
                             const lines = String(n.note || '').split('\n');
@@ -1791,7 +1758,7 @@ const IPDClinicalChartsModal = ({
                         <div className="ipdc-toolbar-group">
                             <button
                                 type="button"
-                                className={`ipdc-tool-btn ${activeTool === 'type' ? 'active' : ''}`}
+                                className={`ipdc-tool-btn tool-type ${activeTool === 'type' ? 'active' : ''}`}
                                 onClick={() => setActiveTool('type')}
                                 title="Type directly on ruled lines and document cells"
                             >
@@ -1802,7 +1769,7 @@ const IPDClinicalChartsModal = ({
                                 <>
                                     <button
                                         type="button"
-                                        className={`ipdc-tool-btn ${activeTool === 'pen' ? 'active' : ''}`}
+                                        className={`ipdc-tool-btn tool-pen ${activeTool === 'pen' ? 'active' : ''}`}
                                         onClick={() => setActiveTool('pen')}
                                         title="Tablet pen / Stylus ink handwriting"
                                     >
@@ -1810,7 +1777,7 @@ const IPDClinicalChartsModal = ({
                                     </button>
                                     <button
                                         type="button"
-                                        className={`ipdc-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+                                        className={`ipdc-tool-btn tool-eraser ${activeTool === 'eraser' ? 'active' : ''}`}
                                         onClick={() => setActiveTool('eraser')}
                                         title="Erase handwriting ink strokes"
                                     >
@@ -1857,7 +1824,7 @@ const IPDClinicalChartsModal = ({
                                 type="button"
                                 className="ipdc-tool-btn"
                                 onClick={handleUndo}
-                                disabled={undoStack.length === 0}
+                                disabled={historyCounts.undo === 0}
                                 title="Undo (Ctrl+Z)"
                             >
                                 <FiRotateCcw size={12} />
@@ -1867,7 +1834,7 @@ const IPDClinicalChartsModal = ({
                                 type="button"
                                 className="ipdc-tool-btn"
                                 onClick={handleRedo}
-                                disabled={redoStack.length === 0}
+                                disabled={historyCounts.redo === 0}
                                 title="Redo (Ctrl+Y)"
                             >
                                 <FiRotateCw size={12} />
@@ -1975,17 +1942,20 @@ const IPDClinicalChartsModal = ({
                         TAB 1: PROGRESS NOTES (MASTER INLINE RULED EDITOR)
                        ========================================================= */}
                     {!loading && activeTab === 'progress_notes' && (
-                        <TabletSheetZoom
+                        <TabletSheetWorkspace
                             zoom={sheetZoom}
                             setZoom={setSheetZoom}
                             activeTool={canUsePenTool ? activeTool : 'type'}
+                            penSessionRef={penSessionRef}
                         >
                             <div className="ipdc-sheets-stack">
                             {progressPages.map((pg, idx) => (
                                 <div
                                     key={idx}
                                     className={`ipdc-a4-sheet ipdc-sheet-canvas-wrapper ${selectedSheetIdx === idx ? 'is-active-sheet' : ''}`}
-                                    onPointerDownCapture={() => setSelectedSheetIdx(idx)}
+                                    onPointerDownCapture={() => {
+                                        if (selectedSheetIdx !== idx) setSelectedSheetIdx(idx);
+                                    }}
                                 >
                                     {!isBlank && progressPages.length > 1 && (
                                         <div className="ipdc-sheet-floating-bar">
@@ -2012,6 +1982,7 @@ const IPDClinicalChartsModal = ({
                                         penColor={penColor}
                                         penWidth={penWidth}
                                         zoom={sheetZoom}
+                                        penSessionRef={penSessionRef}
                                         onSaveStrokes={(newStrokes) => handleSaveStrokes(`pn_page_${idx}`, newStrokes)}
                                     />
 
@@ -2101,7 +2072,7 @@ const IPDClinicalChartsModal = ({
                                 </div>
                             ))}
                         </div>
-                    </TabletSheetZoom>
+                    </TabletSheetWorkspace>
                     )}
 
                     {/* Confirmation Modal for Deleting an Unwanted Progress Notes Sheet */}
@@ -2131,6 +2102,12 @@ const IPDClinicalChartsModal = ({
                         TAB 2: DRUG CHART (CONTINUOUS 2-PAGE DOCUMENT)
                        ========================================================= */}
                     {!loading && activeTab === 'drug_chart' && (
+                        <TabletSheetWorkspace
+                            zoom={sheetZoom}
+                            setZoom={setSheetZoom}
+                            activeTool={canUsePenTool ? activeTool : 'type'}
+                            penSessionRef={penSessionRef}
+                        >
                         <div className="ipdc-sheets-stack">
                             {/* ── SHEET 1: PAGE 1 (ALLERGIES, STAT-DOSES & I.V. FLUIDS) ── */}
                             <div className="ipdc-a4-sheet ipdc-sheet-canvas-wrapper">
@@ -2140,6 +2117,8 @@ const IPDClinicalChartsModal = ({
                                     activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
+                                    zoom={sheetZoom}
+                                    penSessionRef={penSessionRef}
                                     onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_1', newStrokes)}
                                 />
                                 {renderExactLetterhead()}
@@ -2157,6 +2136,7 @@ const IPDClinicalChartsModal = ({
                                                 className="dc-inline-allergy-input"
                                                 value={allergyForm.slot1}
                                                 onChange={(e) => {
+                                                    pushUnifiedUndo();
                                                     setDirtyDrugChart(true);
                                                     setAllergyForm(p => ({ ...p, slot1: e.target.value }));
                                                 }}
@@ -2189,6 +2169,7 @@ const IPDClinicalChartsModal = ({
                                                 className="dc-inline-allergy-input"
                                                 value={allergyForm.slot2}
                                                 onChange={(e) => {
+                                                    pushUnifiedUndo();
                                                     setDirtyDrugChart(true);
                                                     setAllergyForm(p => ({ ...p, slot2: e.target.value }));
                                                 }}
@@ -2732,6 +2713,8 @@ const IPDClinicalChartsModal = ({
                                     activeTool={canUsePenTool ? activeTool : 'type'}
                                     penColor={penColor}
                                     penWidth={penWidth}
+                                    zoom={sheetZoom}
+                                    penSessionRef={penSessionRef}
                                     onSaveStrokes={(newStrokes) => handleSaveStrokes('dc_page_2', newStrokes)}
                                 />
                                 {renderDrugPage2PatientStrip()}
@@ -2972,6 +2955,8 @@ const IPDClinicalChartsModal = ({
                                             activeTool={canUsePenTool ? activeTool : 'type'}
                                             penColor={penColor}
                                             penWidth={penWidth}
+                                            zoom={sheetZoom}
+                                            penSessionRef={penSessionRef}
                                             onSaveStrokes={(newStrokes) => handleSaveStrokes(`dc_page_2_cont_${extraPgIdx + 1}`, newStrokes)}
                                         />
                                         {renderDrugPage2PatientStrip()}
@@ -3126,6 +3111,7 @@ const IPDClinicalChartsModal = ({
                                 );
                             })}
                         </div>
+                        </TabletSheetWorkspace>
                     )}
                 </div>
 

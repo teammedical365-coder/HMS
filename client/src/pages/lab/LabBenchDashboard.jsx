@@ -766,7 +766,7 @@ const LabBenchDashboard = () => {
                ===================================================================== */}
             {runModal.open && runModal.sample && (
                 <div className="ltd-modal-overlay" role="dialog" aria-modal="true" aria-label="Analyzer Bench Run">
-                    <div className="ltd-modal-card">
+                    <div className="ltd-modal-card" onClick={(e) => e.stopPropagation()}>
                         <div className="ltd-modal-header">
                             <h3 className="ltd-modal-title">
                                 {runModal.mode === 'reject'
@@ -783,8 +783,8 @@ const LabBenchDashboard = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleModalSubmit}>
-                            <div className="ltd-modal-body">
+                        <form className="ltd-modal-form" onSubmit={handleModalSubmit}>
+                            <div className="ltd-modal-body" data-scrollable="true" data-lenis-prevent="true">
                                 {/* Specimen Summary Box */}
                                 {(() => {
                                     const cap = resolveTubeCapPill(runModal.sample.containerType, runModal.sample.specimenType);

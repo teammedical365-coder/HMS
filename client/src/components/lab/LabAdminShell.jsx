@@ -6,7 +6,7 @@ import { useBranding } from '../../context/BrandingContext';
 import { labAPI } from '../../utils/api';
 import {
     FiGrid, FiFileText, FiCreditCard, FiSearch,
-    FiMenu, FiX, FiLogOut
+    FiMenu, FiX, FiLogOut, FiEdit3, FiCheckSquare, FiAlertOctagon, FiClock
 } from 'react-icons/fi';
 import './LabAdminShell.css';
 
@@ -85,13 +85,48 @@ const SAMPLE_COLLECTION_NAV_ITEMS = [
     }
 ];
 
-// Dedicated Lab Technician sidebar items (Dashboard only)
+// Dedicated Lab Technician sidebar items (Dashboard + Result Entry)
 const LAB_TECHNICIAN_NAV_ITEMS = [
     {
         label: 'Dashboard',
         path: '/lab/bench',
         icon: <FiGrid size={17} />,
+        exact: true,
         matchPaths: ['/lab/bench']
+    },
+    {
+        label: 'Result Entry',
+        path: '/lab/results/entry',
+        icon: <FiEdit3 size={17} />,
+        matchPaths: ['/lab/results/entry']
+    }
+];
+
+// Dedicated Pathologist sidebar items (Strictly permitted Phase 7 verification & history routes)
+const PATHOLOGIST_NAV_ITEMS = [
+    {
+        label: 'Dashboard',
+        path: '/lab/verification',
+        icon: <FiGrid size={17} />,
+        exact: true
+    },
+    {
+        label: 'Verification Queue',
+        path: '/lab/results/verification',
+        icon: <FiCheckSquare size={17} />,
+        matchPaths: ['/lab/results/verification']
+    },
+    {
+        label: 'Critical Alerts',
+        path: '/lab/results/critical-alerts',
+        icon: <FiAlertOctagon size={17} />,
+        matchPaths: ['/lab/results/critical-alerts']
+    },
+    {
+        label: 'Verified Results / History',
+        path: '/lab/results/history',
+        icon: <FiClock size={17} />,
+        matchPaths: ['/lab/results/history', '/lab/results']
     }
 ];
 
@@ -104,6 +139,10 @@ const resolvePortalConfig = (user) => {
     );
     const isTechnicianRole = (
         (roleRaw.includes('technician') || roleRaw.includes('lab tech')) &&
+        !roleRaw.includes('admin')
+    );
+    const isPathologistRole = (
+        roleRaw.includes('pathologist') &&
         !roleRaw.includes('admin')
     );
 
@@ -129,6 +168,19 @@ const resolvePortalConfig = (user) => {
             homePath: '/lab/bench',
             searchFallbackPath: '/lab/bench',
             navItems: LAB_TECHNICIAN_NAV_ITEMS,
+            showTenantFooter: true
+        };
+    }
+
+    if (isPathologistRole) {
+        return {
+            mode: 'pathologist',
+            portalTitle: 'Pathologist',
+            rolePillLabel: 'Pathologist',
+            footerRoleLabel: 'PATHOLOGIST',
+            homePath: '/lab/verification',
+            searchFallbackPath: '/lab/results/verification',
+            navItems: PATHOLOGIST_NAV_ITEMS,
             showTenantFooter: true
         };
     }
@@ -270,21 +322,61 @@ const LabAdminShell = ({ children }) => {
     const actualHospitalName = (brandingHospitalName && brandingHospitalName !== 'Medical 365')
         ? brandingHospitalName
         : (summary?.hospitalName || brandingHospitalName || 'Medical 365');
-    const hospitalLogoUrl = branding?.logoUrl || branding?.logo || summary?.logoUrl || '/assets/logo.png';
+    const customTenantLogo = branding?.logoUrl || branding?.logo || summary?.logoUrl || '';
+    const [logoFallbackStep, setLogoFallbackStep] = useState(0);
 
-    const isItemActive = (item) => {
-        if (item.exact) {
-            return location.pathname === item.path;
+    useEffect(() => {
+        setLogoFallbackStep(0);
+    }, [customTenantLogo]);
+
+    const resolvedLogoSrc = logoFallbackStep === 0
+        ? (customTenantLogo || '/assets/logo.png')
+        : logoFallbackStep === 1
+            ? '/assets/logo.png'
+            : '/logo.png';
+
+    // Single-winner active route matcher (prevents parent + child routes from ever highlighting together)
+    const activeItemPath = (() => {
+        const pathname = location.pathname;
+        let bestPath = null;
+        let bestScore = -1;
+
+        for (const item of portalCfg.navItems) {
+            if (item.exact) {
+                if (pathname === item.path && 1000 > bestScore) {
+                    bestScore = 1000;
+                    bestPath = item.path;
+                }
+                continue;
+            }
+
+            const candidates = Array.isArray(item.matchPaths) && item.matchPaths.length > 0
+                ? item.matchPaths
+                : [item.path];
+
+            for (const mp of candidates) {
+                if (mp === '/lab') {
+                    if (pathname === '/lab' && 900 > bestScore) {
+                        bestScore = 900;
+                        bestPath = item.path;
+                    }
+                } else if (pathname === mp) {
+                    const score = 1000 + mp.length;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestPath = item.path;
+                    }
+                } else if (pathname.startsWith(`${mp}/`)) {
+                    const score = mp.length;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestPath = item.path;
+                    }
+                }
+            }
         }
-        if (Array.isArray(item.matchPaths) && item.matchPaths.some((mp) => (
-            mp === '/lab'
-                ? location.pathname === '/lab'
-                : (location.pathname === mp || location.pathname.startsWith(`${mp}/`))
-        ))) {
-            return true;
-        }
-        return location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
-    };
+        return bestPath;
+    })();
 
     return (
         <LabAdminContext.Provider value={{ summary, loading, refreshing, error, refreshSummary: () => fetchSummary(true) }}>
@@ -292,20 +384,29 @@ const LabAdminShell = ({ children }) => {
                 {/* Fixed Left Sidebar Using Actual Medical365 Hospital Branding */}
                 <aside className={`lms-admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
                     <div className="lms-sidebar-brand">
-                        <NavLink to={portalCfg.homePath} className="lms-brand-identity" onClick={() => setSidebarOpen(false)}>
-                            <img
-                                className="lms-brand-logo"
-                                src={hospitalLogoUrl}
-                                alt={actualHospitalName}
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = '/logo.png';
-                                }}
-                            />
-                            <div className="lms-brand-meta">
-                                <span className="lms-brand-name" title={actualHospitalName}>{actualHospitalName}</span>
-                                <span className="lms-brand-sub">Medical365 HMS</span>
-                            </div>
+                        <NavLink to={portalCfg.homePath} end className={() => 'lms-brand-identity'} onClick={() => setSidebarOpen(false)}>
+                            {logoFallbackStep < 3 ? (
+                                <img
+                                    className={`lms-brand-logo ${!customTenantLogo ? 'lms-brand-logo-default' : ''}`}
+                                    src={resolvedLogoSrc}
+                                    alt={actualHospitalName}
+                                    onError={() => setLogoFallbackStep((prev) => prev + 1)}
+                                    style={!customTenantLogo ? { width: 'auto', maxWidth: '148px', height: '32px', borderRadius: 0, background: 'transparent', border: 'none', padding: 0 } : undefined}
+                                />
+                            ) : (
+                                <span
+                                    className="lms-brand-fallback-mark"
+                                    aria-hidden="true"
+                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '34px', padding: '0 10px', borderRadius: '8px', background: '#2563eb', color: '#fff', fontWeight: 800, fontSize: '12px' }}
+                                >
+                                    M365
+                                </span>
+                            )}
+                            {(customTenantLogo || actualHospitalName !== 'Medical 365') && (
+                                <div className="lms-brand-meta">
+                                    <span className="lms-brand-name" title={actualHospitalName}>{actualHospitalName}</span>
+                                </div>
+                            )}
                         </NavLink>
                         <button
                             type="button"
@@ -319,12 +420,13 @@ const LabAdminShell = ({ children }) => {
 
                     <nav className="lms-sidebar-nav" aria-label={`${portalCfg.portalTitle} Navigation`}>
                         {portalCfg.navItems.map((item) => {
-                            const active = isItemActive(item);
+                            const active = activeItemPath === item.path;
                             return (
                                 <NavLink
                                     key={item.path}
                                     to={item.path}
-                                    className={`lms-nav-link ${active ? 'active' : ''} ${active && item.accentGreen ? 'active-emerald' : ''}`}
+                                    end
+                                    className={() => `lms-nav-link ${active ? 'active' : ''} ${active && item.accentGreen ? 'active-emerald' : ''}`}
                                     onClick={() => setSidebarOpen(false)}
                                 >
                                     <span className="lms-nav-icon">{item.icon}</span>

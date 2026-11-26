@@ -19,6 +19,7 @@ import TPRChartModal from '../../components/ipd/TPRChartModal';
 import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
 import ICUChartModal from '../../components/ipd/ICUChartModal';
+import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
 import './DoctorIPDWorkspace.css';
 
 const DoctorIPDWorkspace = () => {
@@ -33,6 +34,7 @@ const DoctorIPDWorkspace = () => {
     // Modal state for header quick action buttons
     const [tprModalOpen, setTprModalOpen] = useState(false);
     const [clinicalNotesModalOpen, setClinicalNotesModalOpen] = useState(false);
+    const [wristbandModalOpen, setWristbandModalOpen] = useState(false);
     const [clinicalChartsModal, setClinicalChartsModal] = useState({ open: false, tab: 'progress_notes' });
     const [icuChartModalOpen, setIcuChartModalOpen] = useState(false);
 
@@ -221,6 +223,17 @@ const DoctorIPDWorkspace = () => {
                             <button
                                 type="button"
                                 className="doc-ipd-chart-btn tpr"
+                                onClick={() => setWristbandModalOpen(true)}
+                                title="Preview or Reprint IPD Patient Wristband"
+                                style={{ background: '#f0fdfa', borderColor: '#0d9488', color: '#0f766e' }}
+                            >
+                                <FiPrinter size={14} />
+                                <span>Reprint Wristband</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                className="doc-ipd-chart-btn tpr"
                                 onClick={() => setTprModalOpen(true)}
                                 title="Open Dynamic Bedside TPR & Vitals Chart"
                             >
@@ -316,6 +329,13 @@ const DoctorIPDWorkspace = () => {
                         admissionId={admissionId}
                         admission={admission}
                         patient={patient}
+                    />
+
+                    <IPDWristbandModal
+                        isOpen={wristbandModalOpen}
+                        onClose={() => setWristbandModalOpen(false)}
+                        admissionId={admissionId}
+                        admission={admission}
                     />
                 </>
             )}

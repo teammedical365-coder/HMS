@@ -3,6 +3,7 @@ const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
 const MasterAdmission = require('../models/admission.model');
+const MasterIPDWristband = require('../models/ipdWristband.model');
 const BedMaster = require('../models/bed.model');
 const { getTenantModels } = require('../db/tenantModels');
 
@@ -45,6 +46,148 @@ const getAdmission = (req) => {
     if (req.tenantDb) return getTenantModels(req.tenantDb).Admission;
     return MasterAdmission;
 };
+
+const getWristbandModel = (req) => {
+    if (req.tenantDb && getTenantModels(req.tenantDb).IPDWristband) {
+        return getTenantModels(req.tenantDb).IPDWristband;
+    }
+    return MasterIPDWristband;
+};
+
+// Helper: Generate or retrieve the single unique IPD Wristband for an admission (100% idempotent)
+async function ensureAdmissionWristband(req, admissionDoc) {
+    const hospitalId = admissionDoc.hospitalId || req.hospitalId || req.user?.hospitalId;
+    if (!hospitalId || !admissionDoc?._id) return null;
+
+    const WristbandModel = getWristbandModel(req);
+    const MasterUser = require('../models/user.model');
+    const Hospital = require('../models/hospital.model');
+
+    // Fast path: return existing wristband if already generated for this admission
+    const existing = await WristbandModel.findOne({ hospitalId, admissionId: admissionDoc._id });
+    if (existing) return existing;
+
+    const rawPtId = (admissionDoc.patientId && typeof admissionDoc.patientId === 'object' && admissionDoc.patientId._id)
+        ? admissionDoc.patientId._id
+        : admissionDoc.patientId;
+    const rawDocId = (admissionDoc.doctorId && typeof admissionDoc.doctorId === 'object' && admissionDoc.doctorId._id)
+        ? admissionDoc.doctorId._id
+        : admissionDoc.doctorId;
+
+    const [ptUser, hospitalDoc, docUser] = await Promise.all([
+        rawPtId ? MasterUser.findById(rawPtId).select('name mrn patientId uhid age dob gender phone').lean() : null,
+        Hospital.findById(hospitalId).select('name hospitalCode logo branding').lean(),
+        rawDocId ? MasterUser.findById(rawDocId).select('name').lean() : null
+    ]);
+
+    const ptObj = ptUser || (typeof admissionDoc.patientId === 'object' ? admissionDoc.patientId : {}) || {};
+
+    // Compute accurate patient age
+    let ageDisplay = ptObj.age != null && ptObj.age !== '' ? String(ptObj.age) : '';
+    if (!ageDisplay && ptObj.dob) {
+        const dobDate = new Date(ptObj.dob);
+        if (!isNaN(dobDate.getTime())) {
+            ageDisplay = String(Math.max(0, Math.floor((Date.now() - dobDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000))));
+        }
+    }
+
+    const mrn = ptObj.mrn || ptObj.patientId || ptObj.uhid || String(rawPtId || '').slice(-8).toUpperCase();
+    const admDateObj = admissionDoc.admissionDate ? new Date(admissionDoc.admissionDate) : new Date();
+    const ymd = admDateObj.toISOString().slice(0, 10).replace(/-/g, '');
+    const admHex = String(admissionDoc._id).slice(-6).toUpperCase();
+    const hospCode = String(hospitalDoc?.hospitalCode || hospitalDoc?.name || 'M365')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .toUpperCase()
+        .slice(0, 4) || 'M365';
+
+    const ipdNumber = admissionDoc.ipdNumber || `IPD-${ymd}-${admHex}`;
+    const wristbandCode = `WB-${hospCode}-${ymd}-${admHex}`;
+    // Opaque scanner payload (zero PII, zero public URLs — resolves only via authenticated tenant API)
+    const barcodePayload = wristbandCode;
+
+    const doctorNameRaw = docUser?.name || (typeof admissionDoc.doctorId === 'object' ? admissionDoc.doctorId?.name : '') || '';
+    const attendingDoctor = doctorNameRaw
+        ? (/^dr\.?\s*/i.test(doctorNameRaw) ? doctorNameRaw : `Dr. ${doctorNameRaw}`)
+        : '';
+
+    const logoUrl = hospitalDoc?.branding?.logoUrl || hospitalDoc?.logo || '';
+    const hospitalName = hospitalDoc?.branding?.appName || hospitalDoc?.name || 'Medical 365';
+
+    const payload = {
+        hospitalId,
+        admissionId: admissionDoc._id,
+        patientId: rawPtId,
+        wristbandCode,
+        ipdNumber,
+        barcodePayload,
+        patientSnapshot: {
+            fullName: ptObj.name || 'Admitted Patient',
+            mrn,
+            age: ageDisplay,
+            gender: ptObj.gender || '',
+            phone: ptObj.phone || ''
+        },
+        admissionSnapshot: {
+            ipdNumber,
+            ward: admissionDoc.ward || 'IPD Ward',
+            bedNumber: admissionDoc.bedNumber || '',
+            admissionDate: admDateObj,
+            admissionTime: admissionDoc.admissionTime || '',
+            attendingDoctor
+        },
+        hospitalSnapshot: {
+            name: hospitalName,
+            logoUrl
+        },
+        status: admissionDoc.status === 'Discharged' ? 'DISCHARGED' : 'ACTIVE',
+        generatedBy: req.user?._id || req.user?.userId || null,
+        generatedAt: new Date()
+    };
+
+    let wristband = null;
+    try {
+        wristband = await WristbandModel.findOneAndUpdate(
+            { hospitalId, admissionId: admissionDoc._id },
+            { $setOnInsert: payload },
+            { new: true, upsert: true }
+        );
+    } catch (err) {
+        if (err && err.code === 11000) {
+            wristband = await WristbandModel.findOne({ hospitalId, admissionId: admissionDoc._id });
+        } else {
+            throw err;
+        }
+    }
+
+    if (wristband && MasterIPDWristband !== WristbandModel) {
+        try {
+            await MasterIPDWristband.findOneAndUpdate(
+                { hospitalId, admissionId: admissionDoc._id },
+                { $setOnInsert: { ...payload, _id: wristband._id } },
+                { upsert: true }
+            );
+        } catch (_) {}
+    }
+
+    // Persist ipdNumber & wristband reference on Admission if missing
+    if (wristband && (!admissionDoc.ipdNumber || !admissionDoc.wristbandCode)) {
+        try {
+            const Admission = getAdmission(req);
+            await Admission.updateOne(
+                { _id: admissionDoc._id },
+                { $set: { ipdNumber: wristband.ipdNumber, wristbandId: wristband._id, wristbandCode: wristband.wristbandCode } }
+            );
+            if (MasterAdmission !== Admission) {
+                await MasterAdmission.updateOne(
+                    { _id: admissionDoc._id },
+                    { $set: { ipdNumber: wristband.ipdNumber, wristbandId: wristband._id, wristbandCode: wristband.wristbandCode } }
+                );
+            }
+        } catch (_) {}
+    }
+
+    return wristband;
+}
 
 // Helper: combine date and time string into a Date object
 const combineDateTime = (dateVal, timeStr) => {
@@ -346,7 +489,26 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
             });
         }
 
-        res.status(201).json({ success: true, message: 'Patient admitted successfully', admission, data: admission });
+        // Automatically generate the unique IPD Wristband for this new admission (Requirement 6)
+        let wristband = null;
+        try {
+            wristband = await ensureAdmissionWristband(req, admission);
+            if (wristband) {
+                admission.ipdNumber = wristband.ipdNumber;
+                admission.wristbandId = wristband._id;
+                admission.wristbandCode = wristband.wristbandCode;
+            }
+        } catch (wbErr) {
+            console.error('Warning generating IPD wristband on admission:', wbErr.message);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: 'Patient admitted successfully',
+            admission,
+            wristband,
+            data: admission
+        });
     } catch (err) {
         console.error('Admit patient error:', err);
         res.status(500).json({ success: false, message: err.message || 'An internal error occurred' });
@@ -511,6 +673,114 @@ router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
         res.json({ success: true, admissions });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// GET /api/admissions/wristband/scan/:code — Authenticated, tenant-scoped wristband barcode/QR lookup
+router.get('/wristband/scan/:code', verifyAdmissionAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        if (!hospitalId) {
+            return res.status(403).json({ success: false, message: 'Hospital tenant context required' });
+        }
+
+        const rawCode = String(req.params.code || '').trim();
+        if (!rawCode) {
+            return res.status(400).json({ success: false, message: 'Wristband barcode is required' });
+        }
+
+        const WristbandModel = getWristbandModel(req);
+        const wristband = await WristbandModel.findOne({
+            hospitalId,
+            $or: [
+                { wristbandCode: rawCode },
+                { barcodePayload: rawCode },
+                { ipdNumber: rawCode }
+            ]
+        }).lean() || await MasterIPDWristband.findOne({
+            hospitalId,
+            $or: [
+                { wristbandCode: rawCode },
+                { barcodePayload: rawCode },
+                { ipdNumber: rawCode }
+            ]
+        }).lean();
+
+        if (!wristband) {
+            return res.status(404).json({ success: false, message: 'Wristband not found in this hospital tenant' });
+        }
+
+        res.json({ success: true, wristband });
+    } catch (err) {
+        console.error('Wristband scan lookup error:', err);
+        res.status(500).json({ success: false, message: 'Failed to verify wristband barcode' });
+    }
+});
+
+// GET /api/admissions/:id/wristband — Retrieve (or idempotently initialize once for legacy admission) the single IPD wristband
+router.get('/:id/wristband', verifyAdmissionAccess, async (req, res) => {
+    try {
+        const mongoose = require('mongoose');
+        const { id } = req.params;
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid admission ID' });
+        }
+
+        const Admission = getAdmission(req);
+        const admission = await Admission.findOne({ _id: id, ...(hospitalId ? { hospitalId } : {}) })
+            || await MasterAdmission.findOne({ _id: id, ...(hospitalId ? { hospitalId } : {}) });
+
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'IPD admission not found for this hospital' });
+        }
+
+        const wristband = await ensureAdmissionWristband(req, admission);
+        res.json({ success: true, wristband });
+    } catch (err) {
+        console.error('Get admission wristband error:', err);
+        res.status(500).json({ success: false, message: 'Failed to retrieve IPD wristband' });
+    }
+});
+
+// POST /api/admissions/:id/wristband/print — Audit-logs wristband print/reprint WITHOUT creating a new wristband
+router.post('/:id/wristband/print', verifyAdmissionAccess, async (req, res) => {
+    try {
+        const mongoose = require('mongoose');
+        const { id } = req.params;
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid admission ID' });
+        }
+
+        const Admission = getAdmission(req);
+        const admission = await Admission.findOne({ _id: id, ...(hospitalId ? { hospitalId } : {}) })
+            || await MasterAdmission.findOne({ _id: id, ...(hospitalId ? { hospitalId } : {}) });
+
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'IPD admission not found for this hospital' });
+        }
+
+        const ensured = await ensureAdmissionWristband(req, admission);
+        const WristbandModel = getWristbandModel(req);
+        const updated = await WristbandModel.findOneAndUpdate(
+            { _id: ensured._id, hospitalId: admission.hospitalId },
+            {
+                $inc: { printCount: 1 },
+                $set: {
+                    lastPrintedAt: new Date(),
+                    lastPrintedBy: req.user?._id || req.user?.userId || null
+                }
+            },
+            { new: true }
+        );
+
+        res.json({ success: true, wristband: updated || ensured });
+    } catch (err) {
+        console.error('Print wristband audit error:', err);
+        res.status(500).json({ success: false, message: 'Failed to log wristband print' });
     }
 });
 
@@ -743,7 +1013,20 @@ router.put('/:id/transfer', verifyAdmissionAccess, async (req, res) => {
 
         await admission.save();
 
-        // Real-time transfer notification
+        // Keep active wristband ward & bed location synchronized without changing wristband identity
+        try {
+            const WristbandModel = getWristbandModel(req);
+            await WristbandModel.updateOne(
+                { hospitalId, admissionId: admission._id },
+                { $set: { 'admissionSnapshot.ward': targetBed.ward, 'admissionSnapshot.bedNumber': targetBed.bedNumber } }
+            );
+            if (MasterIPDWristband !== WristbandModel) {
+                await MasterIPDWristband.updateOne(
+                    { hospitalId, admissionId: admission._id },
+                    { $set: { 'admissionSnapshot.ward': targetBed.ward, 'admissionSnapshot.bedNumber': targetBed.bedNumber } }
+                );
+            }
+        } catch (_) {}
         const io = req.app.get('io');
         if (io) {
             const lastTh = admission.transferHistory[admission.transferHistory.length - 1];
@@ -845,6 +1128,38 @@ router.put('/:id/discharge', verifyAdmissionAccess, async (req, res) => {
         if (notes) admission.notes = (admission.notes ? admission.notes + '\n' : '') + notes;
 
         await admission.save();
+        if (MasterAdmission !== Admission) {
+            try {
+                await MasterAdmission.updateOne(
+                    { _id: admission._id },
+                    {
+                        $set: {
+                            dischargeDate: admission.dischargeDate,
+                            dischargeTime: admission.dischargeTime,
+                            status: 'Discharged',
+                            selectedFacilities: admission.selectedFacilities,
+                            totalAmount: admission.totalAmount,
+                            notes: admission.notes
+                        }
+                    }
+                );
+            } catch (_) {}
+        }
+
+        // Preserve wristband history on discharge and mark status DISCHARGED
+        try {
+            const WristbandModel = getWristbandModel(req);
+            await WristbandModel.updateOne(
+                { hospitalId, admissionId: admission._id },
+                { $set: { status: 'DISCHARGED' } }
+            );
+            if (MasterIPDWristband !== WristbandModel) {
+                await MasterIPDWristband.updateOne(
+                    { hospitalId, admissionId: admission._id },
+                    { $set: { status: 'DISCHARGED' } }
+                );
+            }
+        } catch (_) {}
 
         // Unlock current bed
         if (admission.bedId) {
@@ -884,17 +1199,26 @@ router.put('/:id/discharge', verifyAdmissionAccess, async (req, res) => {
     }
 });
 
-// PUT /api/admissions/:id/pay — Mark admission as paid
+// PUT /api/admissions/:id/pay — Mark admission as paid (tenant-isolated)
 router.put('/:id/pay', verifyAdmissionAccess, async (req, res) => {
     try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
         const Admission = getAdmission(req);
-        const admission = await Admission.findByIdAndUpdate(
-            req.params.id,
-            { paymentStatus: 'Paid' },
-            { new: true }
-        );
-        if (!admission) return res.status(404).json({ success: false, message: 'Admission not found' });
-        res.json({ success: true, message: 'Admission marked as paid', admission });
+        const existing = await Admission.findOne({ _id: req.params.id, ...(hospitalId ? { hospitalId } : {}) });
+        if (!existing) return res.status(404).json({ success: false, message: 'Admission not found' });
+
+        existing.paidAmount = Number(existing.totalAmount) || 0;
+        existing.paymentStatus = 'Paid';
+        await existing.save();
+
+        if (MasterAdmission !== Admission) {
+            await MasterAdmission.updateOne(
+                { _id: existing._id },
+                { $set: { paidAmount: existing.paidAmount, paymentStatus: 'Paid' } }
+            );
+        }
+
+        res.json({ success: true, message: 'Admission marked as paid', admission: existing });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }

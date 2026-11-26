@@ -1140,6 +1140,11 @@ export const labAPI = {
             const qs = new URLSearchParams(params).toString();
             return (await apiClient.get(`/api/lab/results/verification-queue${qs ? `?${qs}` : ''}`)).data;
         },
+        startReview: async (id) => (await apiClient.post(`/api/lab/results/${id}/start-review`)).data,
+        getHistoryList: async (params = {}) => {
+            const qs = new URLSearchParams(params).toString();
+            return (await apiClient.get(`/api/lab/results/history-list${qs ? `?${qs}` : ''}`)).data;
+        },
         verifyResult: async (id, data = {}) => (await apiClient.post(`/api/lab/results/${id}/verify`, data)).data,
         rejectResult: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/reject`, data)).data,
         requestCorrection: async (id, data) => (await apiClient.post(`/api/lab/results/${id}/request-correction`, data)).data,
@@ -1454,6 +1459,9 @@ export const admissionAPI = {
     getPatientAdmissions: async (patientId) => (await apiClient.get(`/api/admissions/patient/${patientId}`)).data,
     dischargePatient: async (id, data = {}) => (await apiClient.put(`/api/admissions/${id}/discharge`, data)).data,
     markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,
+    getWristband: async (id) => (await apiClient.get(`/api/admissions/${id}/wristband`)).data,
+    recordWristbandPrint: async (id) => (await apiClient.post(`/api/admissions/${id}/wristband/print`, {})).data,
+    scanWristband: async (code) => (await apiClient.get(`/api/admissions/wristband/scan/${encodeURIComponent(code)}`)).data,
 };
 
 // Clinic self-service API (for clinic admin dashboard)

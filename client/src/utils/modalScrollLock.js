@@ -124,17 +124,26 @@ export const initModalScrollLock = () => {
       return;
     }
 
-    // If modal has an inner scroll body (e.g. pm-fullscreen-page containing pm-fullscreen-page-body), use it
-    const activeScrollEl = scrollableModal.classList.contains('pm-fullscreen-page')
-      ? scrollableModal.querySelector('.pm-fullscreen-page-body, [data-scrollable="true"]') || scrollableModal
-      : scrollableModal;
+    // If modal has an inner scroll body (e.g. modal-card containing modal-body), delegate wheel scroll to it
+    const innerBody = scrollableModal.matches('[class*="modal-body"], [data-scrollable="true"]')
+      ? scrollableModal
+      : scrollableModal.querySelector('.pm-fullscreen-page-body, [data-scrollable="true"], [class*="modal-body"]');
 
-    // Inside scrollable modal: prevent scroll chaining when reaching boundaries
+    const activeScrollEl = innerBody || scrollableModal;
+
+    // Inside scrollable modal: allow wheel scrolling inside body and prevent scroll chaining at boundaries
     const { scrollTop, scrollHeight, clientHeight } = activeScrollEl;
     const isScrollingUp = e.deltaY < 0;
     const isScrollingDown = e.deltaY > 0;
 
     if (scrollHeight > clientHeight) {
+      // If wheel event started on header/footer outside innerBody, forward scroll delta to innerBody
+      if (innerBody && !innerBody.contains(e.target)) {
+        e.preventDefault();
+        innerBody.scrollTop += e.deltaY;
+        return;
+      }
+
       const isAtTop = scrollTop <= 0;
       const isAtBottom = Math.ceil(scrollTop + clientHeight) >= scrollHeight;
 

@@ -13,8 +13,10 @@ const MasterLabReport = require('../models/labReport.model');
 const MasterPharmacyOrder = require('../models/pharmacyOrder.model');
 const MasterFacilityCharge = require('../models/facilityCharge.model');
 const MasterAdmission = require('../models/admission.model');
+const MasterSurgeryPlan = require('../models/surgeryPlan.model');
 const RefundRequest = require('../models/refundRequest.model');
 const AuditLog = require('../models/auditLog.model');
+const { getTenantModels } = require('../db/tenantModels');
 
 // ── Access Control ────────────────────────────────────────────────────────────
 const verifyAccountantAccess = (req, res, next) => {
@@ -229,7 +231,226 @@ router.get('/financial-records', verifyToken, verifyAccountantAccess, resolveTen
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 3. GET PATIENT REFUND DATA — calculates refundable amount
+// HELPER: Strict Hospital Refund Eligibility Calculator (Requirement 5)
+//   - Appointment consultation payments are STRICTLY NON-REFUNDABLE
+//   - Pharmacy & Laboratory payments belong to their own department refund workflows
+//   - Only IPD admission, ward/room/bed, facility, surgery, and hospital service payments are refundable
+// ══════════════════════════════════════════════════════════════════════════════
+// Helper: Resolve patient record across MasterUser and Tenant DB User
+async function resolveHospitalPatient(req, hospitalId, patientId) {
+    const hClause = {
+        _id: patientId,
+        $or: [
+            { hospitalId: hospitalId },
+            { hospitalId: { $exists: false } },
+            { hospitalId: null }
+        ]
+    };
+    const tenantModels = req.tenantDb ? getTenantModels(req.tenantDb) : null;
+
+    let patient = await MasterUser.findOne(hClause).select('name phone patientId mrn').lean();
+    if (!patient && tenantModels?.User && tenantModels.User !== MasterUser) {
+        try {
+            patient = await tenantModels.User.findOne(hClause).select('name phone patientId mrn').lean();
+        } catch (_) {}
+    }
+    return patient;
+}
+
+// Helper: Merge master and tenant query results without duplicate _ids
+async function findMergedDocs(masterModel, tenantModel, query, selectStr = null) {
+    let q1 = masterModel.find(query);
+    if (selectStr) q1 = q1.select(selectStr);
+    const masterList = await q1.lean();
+    const merged = [...masterList];
+
+    if (tenantModel && tenantModel !== masterModel) {
+        try {
+            let q2 = tenantModel.find(query);
+            if (selectStr) q2 = q2.select(selectStr);
+            const tenantList = await q2.lean();
+            const seen = new Set(merged.map((d) => String(d._id)));
+            tenantList.forEach((td) => {
+                if (!seen.has(String(td._id))) merged.push(td);
+            });
+        } catch (_) {}
+    }
+    return merged;
+}
+
+async function computeHospitalRefundEligibility(req, hospitalId, patientId) {
+    const patientObjId = new mongoose.Types.ObjectId(patientId);
+    const hFilter = { hospitalId: new mongoose.Types.ObjectId(hospitalId) };
+    const tenantModels = req.tenantDb ? getTenantModels(req.tenantDb) : null;
+
+    // Fetch paid PaymentTransactions from both master and tenant DB (deduplicated)
+    const allTxns = await findMergedDocs(
+        MasterPaymentTransaction,
+        tenantModels?.PaymentTransaction,
+        { ...hFilter, patientId: patientObjId, paymentStatus: { $in: ['Paid', 'paid', 'PAID'] } }
+    );
+    allTxns.sort((a, b) => new Date(b.paymentDate || b.createdAt || 0) - new Date(a.paymentDate || a.createdAt || 0));
+
+    // Collect referenced appointment, pharmacy, and lab IDs in mixed legacy PaymentTransactions so we can deduct their exact amounts
+    const mixedApptIds = new Set();
+    const mixedPharmaIds = new Set();
+    const mixedLabIds = new Set();
+    allTxns.forEach((pt) => {
+        (pt.billedItems?.appointments || []).forEach((id) => mixedApptIds.add(String(id?._id || id)));
+        (pt.billedItems?.pharmacyOrders || []).forEach((id) => mixedPharmaIds.add(String(id?._id || id)));
+        (pt.billedItems?.labReports || []).forEach((id) => mixedLabIds.add(String(id?._id || id)));
+    });
+
+    const [apptDocs, pharmaDocs, labDocs, existingRefunds, paidAdmissions, paidFacilities, paidSurgeries] = await Promise.all([
+        mixedApptIds.size > 0
+            ? findMergedDocs(MasterAppointment, tenantModels?.Appointment, { _id: { $in: Array.from(mixedApptIds) } }, 'amount')
+            : [],
+        mixedPharmaIds.size > 0
+            ? findMergedDocs(MasterPharmacyOrder, tenantModels?.PharmacyOrder, { _id: { $in: Array.from(mixedPharmaIds) } }, 'totalAmount')
+            : [],
+        mixedLabIds.size > 0
+            ? findMergedDocs(MasterLabReport, tenantModels?.LabReport, { _id: { $in: Array.from(mixedLabIds) } }, 'amount price')
+            : [],
+        RefundRequest.find({
+            hospitalId: new mongoose.Types.ObjectId(hospitalId),
+            patientId: patientObjId
+        }).sort({ createdAt: -1 }).lean(),
+        findMergedDocs(MasterAdmission, tenantModels?.Admission, { ...hFilter, patientId: patientObjId }, 'totalAmount paidAmount paymentStatus ward bedNumber admissionDate'),
+        findMergedDocs(MasterFacilityCharge, tenantModels?.FacilityCharge, { ...hFilter, patientId: patientObjId, paymentStatus: { $in: ['Paid', 'paid', 'PAID'] } }, 'totalAmount facilityName createdAt'),
+        findMergedDocs(MasterSurgeryPlan, tenantModels?.SurgeryPlan, { ...hFilter, patientId: patientObjId, paidAmount: { $gt: 0 } }, 'paidAmount surgeryCost surgery createdAt')
+    ]);
+
+    const apptAmtMap = new Map(apptDocs.map((a) => [String(a._id), Number(a.amount) || 0]));
+    const pharmaAmtMap = new Map(pharmaDocs.map((p) => [String(p._id), Number(p.totalAmount) || 0]));
+    const labAmtMap = new Map(labDocs.map((l) => [String(l._id), Number(l.amount || l.price) || 0]));
+
+    // Track already refunded & pending amounts per originalPaymentId and overall
+    let alreadyRefunded = 0;
+    let pendingRefundAmount = 0;
+    const perPaymentClaimed = new Map();
+
+    existingRefunds.forEach((r) => {
+        const amt = Number(r.refundAmount) || 0;
+        if (r.status === 'REFUNDED') {
+            alreadyRefunded += amt;
+        } else if (['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'].includes(r.status)) {
+            pendingRefundAmount += amt;
+        }
+        if (r.originalPaymentId && ['REFUNDED', 'PENDING_APPROVAL', 'APPROVED', 'PROCESSING'].includes(r.status)) {
+            const k = String(r.originalPaymentId);
+            perPaymentClaimed.set(k, (perPaymentClaimed.get(k) || 0) + amt);
+        }
+    });
+
+    // Classify every PaymentTransaction strictly
+    const eligiblePayments = [];
+    const appointmentPaymentIds = new Set();
+    const departmentExcludedIds = new Set();
+    let eligiblePaidFromTxns = 0;
+    let nonRefundableAppointmentPaid = 0;
+
+    for (const pt of allTxns) {
+        const ptIdStr = String(pt._id);
+        const rawAmt = Number(pt.amount) || 0;
+        const b = pt.billedItems || {};
+        const hasAppts = Array.isArray(b.appointments) && b.appointments.length > 0;
+        const hasPharma = Array.isArray(b.pharmacyOrders) && b.pharmacyOrders.length > 0;
+        const hasLab = Array.isArray(b.labReports) && b.labReports.length > 0;
+        const hasHospitalEligible = (
+            (Array.isArray(b.admissions) && b.admissions.length > 0) ||
+            (Array.isArray(b.facilityCharges) && b.facilityCharges.length > 0) ||
+            (Array.isArray(b.surgeryPlans) && b.surgeryPlans.length > 0)
+        );
+
+        const descLower = String(pt.description || '').toLowerCase();
+        const looksLikeApptDesc = (
+            pt.sourceCategory === 'APPOINTMENT' ||
+            pt.department === 'OPD_CONSULTATION' ||
+            (!hasHospitalEligible && /appointment|consultation fee|opd consultation/i.test(descLower))
+        );
+
+        if (pt.department === 'PHARMACY' || pt.department === 'LABORATORY' || ((hasPharma || hasLab) && !hasHospitalEligible && !hasAppts)) {
+            departmentExcludedIds.add(ptIdStr);
+            continue;
+        }
+
+        if ((hasAppts && !hasHospitalEligible) || looksLikeApptDesc) {
+            appointmentPaymentIds.add(ptIdStr);
+            nonRefundableAppointmentPaid += rawAmt;
+            continue;
+        }
+
+        // Mixed or pure hospital service/IPD transaction: compute exact eligible non-appointment portion
+        let eligiblePortion = rawAmt;
+        if (typeof pt.nonAppointmentAmount === 'number' && pt.nonAppointmentAmount >= 0) {
+            eligiblePortion = Math.min(rawAmt, pt.nonAppointmentAmount);
+        } else if (hasAppts || hasPharma || hasLab) {
+            let excludedPortion = 0;
+            (b.appointments || []).forEach((id) => { excludedPortion += (apptAmtMap.get(String(id?._id || id)) || 0); });
+            (b.pharmacyOrders || []).forEach((id) => { excludedPortion += (pharmaAmtMap.get(String(id?._id || id)) || 0); });
+            (b.labReports || []).forEach((id) => { excludedPortion += (labAmtMap.get(String(id?._id || id)) || 0); });
+            if (hasAppts) {
+                nonRefundableAppointmentPaid += (b.appointments || []).reduce((s, id) => s + (apptAmtMap.get(String(id?._id || id)) || 0), 0);
+            }
+            eligiblePortion = Math.max(0, Math.round((rawAmt - excludedPortion) * 100) / 100);
+        }
+
+        if (eligiblePortion <= 0) {
+            appointmentPaymentIds.add(ptIdStr);
+            continue;
+        }
+
+        eligiblePaidFromTxns += eligiblePortion;
+        const alreadyClaimedOnPt = perPaymentClaimed.get(ptIdStr) || 0;
+        const remainingOnPt = Math.max(0, Math.round((eligiblePortion - alreadyClaimedOnPt) * 100) / 100);
+
+        if (remainingOnPt > 0) {
+            eligiblePayments.push({
+                ...pt,
+                amount: remainingOnPt,
+                originalCollectedAmount: rawAmt,
+                eligibleAmount: eligiblePortion,
+                alreadyRefundedOnPayment: alreadyClaimedOnPt,
+                sourceLabel: (b.admissions?.length > 0)
+                    ? 'IPD Admission / Room & Bed'
+                    : (b.facilityCharges?.length > 0)
+                        ? 'Hospital Ward / Facility Charge'
+                        : (b.surgeryPlans?.length > 0)
+                            ? 'OT / Surgery Charge'
+                            : 'Hospital Service Charge'
+            });
+        }
+    }
+
+    // Also account for direct IPD/Facility/Surgery paid records if marked Paid directly without a PaymentTransaction
+    let directModuleEligiblePaid = 0;
+    paidAdmissions.forEach((a) => {
+        const tot = Number(a.totalAmount) || 0;
+        const pd = ['Paid', 'paid', 'PAID'].includes(a.paymentStatus) ? tot : (Number(a.paidAmount) || 0);
+        directModuleEligiblePaid += pd;
+    });
+    paidFacilities.forEach((f) => { directModuleEligiblePaid += (Number(f.totalAmount) || 0); });
+    paidSurgeries.forEach((s) => { directModuleEligiblePaid += (Number(s.paidAmount) || 0); });
+
+    const totalEligibleHospitalPaid = Math.max(eligiblePaidFromTxns, directModuleEligiblePaid);
+    const refundableAmount = Math.max(0, Math.round((totalEligibleHospitalPaid - alreadyRefunded - pendingRefundAmount) * 100) / 100);
+
+    return {
+        totalPaid: totalEligibleHospitalPaid,
+        totalEligibleHospitalPaid,
+        nonRefundableAppointmentPaid,
+        alreadyRefunded,
+        pendingRefundAmount,
+        refundableAmount,
+        payments: eligiblePayments,
+        existingRefunds,
+        appointmentPaymentIds,
+        departmentExcludedIds
+    };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. GET PATIENT REFUND DATA — calculates refundable amount (Excludes Appointments!)
 // ══════════════════════════════════════════════════════════════════════════════
 router.get('/refunds/patient/:patientId', verifyToken, verifyAccountantAccess, resolveTenant, async (req, res) => {
     try {
@@ -241,93 +462,26 @@ router.get('/refunds/patient/:patientId', verifyToken, verifyAccountantAccess, r
             return res.status(400).json({ success: false, message: 'Invalid patient ID' });
         }
 
-        // Verify patient belongs to this hospital
-        const patient = await MasterUser.findOne({
-            _id: patientId,
-            $or: [
-                { hospitalId: hospitalId },
-                { hospitalId: { $exists: false } },
-                { hospitalId: null }
-            ]
-        }).select('name phone patientId mrn').lean();
+        // Verify patient belongs to this hospital (across User & Patient in master & tenant DB)
+        const patient = await resolveHospitalPatient(req, hospitalId, patientId);
 
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this hospital' });
 
-        const hFilter = getStrictHospitalFilter(req);
-        const patientObjId = new mongoose.Types.ObjectId(patientId);
-
-        // Total paid
-        const paidAgg = await MasterPaymentTransaction.aggregate([
-            { $match: { ...hFilter, patientId: patientObjId, paymentStatus: { $in: ['Paid', 'paid', 'PAID'] } } },
-            { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]);
-        const totalPaid = paidAgg[0]?.total || 0;
-
-        // Total charges from appointments + lab + pharmacy + facility + admissions
-        const [apptAgg, labAgg, pharmaAgg, facilityAgg] = await Promise.all([
-            MasterAppointment.aggregate([
-                { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientId, String(patientId)] } }] } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]),
-            MasterLabReport.aggregate([
-                { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientObjId, patientId, String(patientId)] } }] } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]),
-            MasterPharmacyOrder.aggregate([
-                { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientObjId, patientId, String(patientId)] } }] } },
-                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-            ]),
-            MasterFacilityCharge.aggregate([
-                { $match: { ...hFilter, patientId: patientObjId } },
-                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-            ])
-        ]);
-
-        const totalCharges = (apptAgg[0]?.total || 0) + (labAgg[0]?.total || 0) + (pharmaAgg[0]?.total || 0) + (facilityAgg[0]?.total || 0);
-
-        // Already refunded
-        const refundedAgg = await RefundRequest.aggregate([
-            { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), patientId: patientObjId, status: 'REFUNDED' } },
-            { $group: { _id: null, total: { $sum: '$refundAmount' } } }
-        ]);
-        const alreadyRefunded = refundedAgg[0]?.total || 0;
-
-        // Pending refunds (not yet completed but requested)
-        const pendingRefundAgg = await RefundRequest.aggregate([
-            { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), patientId: patientObjId, status: { $in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } } },
-            { $group: { _id: null, total: { $sum: '$refundAmount' } } }
-        ]);
-        const pendingRefundAmount = pendingRefundAgg[0]?.total || 0;
-
-        // Total refundable: patient can be refunded up to total amount paid minus prior and pending refunds
-        const refundableAmount = Math.max(0, totalPaid - alreadyRefunded - pendingRefundAmount);
-        const advanceBalance = Math.max(0, totalPaid - totalCharges - alreadyRefunded - pendingRefundAmount);
-
-        // Payment history
-        const payments = await MasterPaymentTransaction.find({
-            ...hFilter,
-            patientId: patientObjId,
-            paymentStatus: { $in: ['Paid', 'paid', 'PAID'] }
-        }).sort({ paymentDate: -1 }).lean();
-
-        // Existing refund requests
-        const existingRefunds = await RefundRequest.find({
-            hospitalId: new mongoose.Types.ObjectId(hospitalId),
-            patientId: patientObjId
-        }).sort({ createdAt: -1 }).lean();
+        const eligibility = await computeHospitalRefundEligibility(req, hospitalId, patientId);
 
         res.json({
             success: true,
             data: {
                 patient,
-                totalPaid,
-                totalCharges,
-                advanceBalance,
-                alreadyRefunded,
-                pendingRefundAmount,
-                refundableAmount,
-                payments,
-                existingRefunds
+                totalPaid: eligibility.totalEligibleHospitalPaid,
+                nonRefundableAppointmentPaid: eligibility.nonRefundableAppointmentPaid,
+                totalCharges: eligibility.totalEligibleHospitalPaid,
+                advanceBalance: eligibility.refundableAmount,
+                alreadyRefunded: eligibility.alreadyRefunded,
+                pendingRefundAmount: eligibility.pendingRefundAmount,
+                refundableAmount: eligibility.refundableAmount,
+                payments: eligibility.payments,
+                existingRefunds: eligibility.existingRefunds
             }
         });
     } catch (error) {
@@ -337,7 +491,7 @@ router.get('/refunds/patient/:patientId', verifyToken, verifyAccountantAccess, r
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 4. CREATE REFUND REQUEST
+// 4. CREATE REFUND REQUEST (Strict Backend Block on Appointment Refunds)
 // ══════════════════════════════════════════════════════════════════════════════
 router.post('/refunds/request', verifyToken, verifyAccountantAccess, resolveTenant,
     auditLog('REFUND_REQUESTED', (req) => ({
@@ -350,108 +504,171 @@ router.post('/refunds/request', verifyToken, verifyAccountantAccess, resolveTena
             if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context required' });
 
             const { patientId, refundAmount, refundMode, reason, originalPaymentId } = req.body;
+            const numericRefundAmount = Number(refundAmount);
 
             if (!patientId || !refundAmount || !refundMode) {
                 return res.status(400).json({ success: false, message: 'patientId, refundAmount, and refundMode are required' });
+            }
+
+            if (!reason || !String(reason).trim()) {
+                return res.status(400).json({ success: false, message: 'A refund reason is mandatory.' });
             }
 
             if (!['CASH', 'UPI', 'BANK_TRANSFER'].includes(refundMode)) {
                 return res.status(400).json({ success: false, message: 'Invalid refund mode' });
             }
 
-            if (refundAmount <= 0) {
+            if (!Number.isFinite(numericRefundAmount) || numericRefundAmount <= 0) {
                 return res.status(400).json({ success: false, message: 'Refund amount must be positive' });
             }
 
-            // Verify patient belongs to this hospital
-            const patient = await MasterUser.findOne({
-                _id: patientId,
-                $or: [{ hospitalId }, { hospitalId: { $exists: false } }, { hospitalId: null }]
-            }).select('name patientId mrn').lean();
-
-            if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
-
-            const patientObjId = new mongoose.Types.ObjectId(patientId);
-            const hFilter = getStrictHospitalFilter(req);
-
-            // ── SERVER-SIDE RECALCULATION ─────────────────────────────────────
-            const paidAgg = await MasterPaymentTransaction.aggregate([
-                { $match: { ...hFilter, patientId: patientObjId, paymentStatus: { $in: ['Paid', 'paid', 'PAID'] } } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]);
-            const totalPaid = paidAgg[0]?.total || 0;
-
-            const [apptAgg, labAgg, pharmaAgg, facilityAgg] = await Promise.all([
-                MasterAppointment.aggregate([
-                    { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientId, String(patientId)] } }] } },
-                    { $group: { _id: null, total: { $sum: '$amount' } } }
-                ]),
-                MasterLabReport.aggregate([
-                    { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientObjId, patientId, String(patientId)] } }] } },
-                    { $group: { _id: null, total: { $sum: '$amount' } } }
-                ]),
-                MasterPharmacyOrder.aggregate([
-                    { $match: { ...hFilter, $or: [{ userId: patientObjId }, { patientId: { $in: [patientObjId, patientId, String(patientId)] } }] } },
-                    { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-                ]),
-                MasterFacilityCharge.aggregate([
-                    { $match: { ...hFilter, patientId: patientObjId } },
-                    { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-                ])
-            ]);
-            const totalCharges = (apptAgg[0]?.total || 0) + (labAgg[0]?.total || 0) + (pharmaAgg[0]?.total || 0) + (facilityAgg[0]?.total || 0);
-
-            const refundedAgg = await RefundRequest.aggregate([
-                { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), patientId: patientObjId, status: 'REFUNDED' } },
-                { $group: { _id: null, total: { $sum: '$refundAmount' } } }
-            ]);
-            const alreadyRefunded = refundedAgg[0]?.total || 0;
-
-            const pendingRefundAgg = await RefundRequest.aggregate([
-                { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), patientId: patientObjId, status: { $in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } } },
-                { $group: { _id: null, total: { $sum: '$refundAmount' } } }
-            ]);
-            const pendingRefundAmount = pendingRefundAgg[0]?.total || 0;
-
-            // Total refundable: patient cannot receive more than total amount paid minus prior and pending refunds
-            const refundableAmount = Math.max(0, totalPaid - alreadyRefunded - pendingRefundAmount);
-
-            if (refundAmount > refundableAmount) {
+            // Direct API Guard 1: Synthetic appointment payment IDs ("appt_payment_<id>") are strictly forbidden
+            if (originalPaymentId && String(originalPaymentId).startsWith('appt_payment_')) {
                 return res.status(400).json({
                     success: false,
-                    message: `Refund amount (₹${refundAmount}) exceeds maximum refundable balance (₹${refundableAmount})`
+                    message: 'Appointment payments are non-refundable and cannot be refunded.'
                 });
             }
 
-            // Get original transaction ID if payment reference provided
-            let originalTxnId = '';
+            if (!mongoose.Types.ObjectId.isValid(patientId)) {
+                return res.status(400).json({ success: false, message: 'Invalid patientId' });
+            }
+
+            // Verify patient belongs to this hospital (across User & Patient in master & tenant DB)
+            const patient = await resolveHospitalPatient(req, hospitalId, patientId);
+
+            if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+            // Direct API Guard 2: Check if originalPaymentId actually refers to an Appointment, PharmacyOrder, or LabReport ID
             if (originalPaymentId && mongoose.Types.ObjectId.isValid(originalPaymentId)) {
-                const origPayment = await MasterPaymentTransaction.findById(originalPaymentId).lean();
-                if (origPayment) {
-                    originalTxnId = origPayment.transactionId || '';
+                const tenantModels = req.tenantDb ? getTenantModels(req.tenantDb) : null;
+                const [masterAppt, tenantAppt, masterPharma, tenantPharma, masterLab, tenantLab] = await Promise.all([
+                    MasterAppointment.findById(originalPaymentId).select('_id').lean(),
+                    tenantModels?.Appointment && tenantModels.Appointment !== MasterAppointment
+                        ? tenantModels.Appointment.findById(originalPaymentId).select('_id').lean().catch(() => null)
+                        : null,
+                    MasterPharmacyOrder.findById(originalPaymentId).select('_id').lean(),
+                    tenantModels?.PharmacyOrder && tenantModels.PharmacyOrder !== MasterPharmacyOrder
+                        ? tenantModels.PharmacyOrder.findById(originalPaymentId).select('_id').lean().catch(() => null)
+                        : null,
+                    MasterLabReport.findById(originalPaymentId).select('_id').lean(),
+                    tenantModels?.LabReport && tenantModels.LabReport !== MasterLabReport
+                        ? tenantModels.LabReport.findById(originalPaymentId).select('_id').lean().catch(() => null)
+                        : null
+                ]);
+                if (masterAppt || tenantAppt) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Appointment consultation payments are non-refundable.'
+                    });
+                }
+                if (masterPharma || tenantPharma || masterLab || tenantLab) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Pharmacy and Laboratory refunds must be processed through their respective department refund workflows.'
+                    });
                 }
             }
 
+            // ── SERVER-SIDE ELIGIBILITY RECALCULATION (Never trust client) ────
+            const eligibility = await computeHospitalRefundEligibility(req, hospitalId, patientId);
+
+            // Direct API Guard 3: Check if originalPaymentId is a PaymentTransaction for an Appointment or Dept-excluded bill
+            let validatedOriginalPaymentId = null;
+            let originalTxnId = '';
+            let resolvedSourceCategory = 'HOSPITAL_SERVICE';
+
+            if (originalPaymentId) {
+                const origIdStr = String(originalPaymentId);
+                if (eligibility.appointmentPaymentIds.has(origIdStr)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Appointment consultation payments are strictly non-refundable.'
+                    });
+                }
+                if (eligibility.departmentExcludedIds.has(origIdStr)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Pharmacy and Laboratory payments cannot be refunded through the hospital refund workflow.'
+                    });
+                }
+
+                const matchedEligiblePayment = eligibility.payments.find((p) => String(p._id) === origIdStr);
+                if (!matchedEligiblePayment) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Selected payment is not eligible for hospital refund or has already been refunded.'
+                    });
+                }
+                if (numericRefundAmount > matchedEligiblePayment.amount + 0.01) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Refund amount (₹${numericRefundAmount}) exceeds remaining refundable balance (₹${matchedEligiblePayment.amount}) on the selected payment.`
+                    });
+                }
+
+                validatedOriginalPaymentId = matchedEligiblePayment._id;
+                originalTxnId = matchedEligiblePayment.transactionId || '';
+                resolvedSourceCategory = matchedEligiblePayment.sourceLabel || 'HOSPITAL_SERVICE';
+            }
+
+            if (eligibility.refundableAmount <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No eligible non-appointment hospital payments available for refund. Appointment payments are non-refundable.'
+                });
+            }
+
+            if (numericRefundAmount > eligibility.refundableAmount + 0.01) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Refund amount (₹${numericRefundAmount}) exceeds maximum refundable hospital balance (₹${eligibility.refundableAmount})`
+                });
+            }
+
+            const patientObjId = new mongoose.Types.ObjectId(patientId);
             const refundRequest = await RefundRequest.create({
                 hospitalId: new mongoose.Types.ObjectId(hospitalId),
                 patientId: patientObjId,
                 patientName: patient.name || '',
                 patientMRN: patient.patientId || patient.mrn || '',
-                originalPaymentId: originalPaymentId || null,
-                originalPaymentAmount: totalPaid,
-                totalCharges,
-                totalPaid,
-                alreadyRefunded,
-                refundableAmount,
-                refundAmount,
+                originalPaymentId: validatedOriginalPaymentId,
+                originalPaymentAmount: eligibility.totalEligibleHospitalPaid,
+                totalCharges: eligibility.totalEligibleHospitalPaid,
+                totalPaid: eligibility.totalEligibleHospitalPaid,
+                alreadyRefunded: eligibility.alreadyRefunded,
+                refundableAmount: eligibility.refundableAmount,
+                refundAmount: numericRefundAmount,
                 refundMode,
-                reason: reason || '',
+                reason: String(reason).trim(),
+                sourceCategory: resolvedSourceCategory,
                 originalTransactionId: originalTxnId,
                 requestedBy: req.user._id,
                 requestedByName: req.user.name || '',
                 requestedAt: new Date(),
                 status: 'PENDING_APPROVAL'
             });
+
+            // Explicit AuditLog record for refund initiation
+            try {
+                await AuditLog.create({
+                    hospitalId: new mongoose.Types.ObjectId(hospitalId),
+                    userId: req.user._id,
+                    userName: req.user.name || 'Staff',
+                    userRole: String(req.user.role || ''),
+                    action: 'REFUND_INITIATED',
+                    targetModel: 'RefundRequest',
+                    targetId: refundRequest._id,
+                    details: {
+                        patientId,
+                        patientMRN: patient.patientId || patient.mrn || '',
+                        refundAmount: numericRefundAmount,
+                        refundMode,
+                        reason: String(reason).trim(),
+                        sourceCategory: resolvedSourceCategory
+                    }
+                });
+            } catch (_) {}
 
             // Socket notification to Hospital Admin
             const io = req.app.get('io');
@@ -460,7 +677,7 @@ router.post('/refunds/request', verifyToken, verifyAccountantAccess, resolveTena
                     refundId: refundRequest._id,
                     patientName: patient.name,
                     patientMRN: patient.patientId || patient.mrn,
-                    refundAmount,
+                    refundAmount: numericRefundAmount,
                     refundMode,
                     requestedBy: req.user.name,
                     status: 'PENDING_APPROVAL'
@@ -468,7 +685,7 @@ router.post('/refunds/request', verifyToken, verifyAccountantAccess, resolveTena
                 io.to('hospitaladmin').emit('refund_requested', {
                     refundId: refundRequest._id,
                     patientName: patient.name,
-                    refundAmount,
+                    refundAmount: numericRefundAmount,
                     refundMode,
                     status: 'PENDING_APPROVAL'
                 });

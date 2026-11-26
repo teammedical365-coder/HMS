@@ -1,0 +1,241 @@
+/* ==========================================================================
+   TabletSheetWorkspace.css
+   Dedicated medical sheet viewport with:
+   1. Smooth anchored pinch-to-zoom & single-finger touch scroll
+   2. Dedicated right-edge touch-draggable vertical scroll rail (all modes)
+   3. Stationary vertical right-side zoom toolbar (+, 100%, -, Fit to Screen)
+   ========================================================================== */
+
+.tsw-workspace-shell {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #64748b;
+    overscroll-behavior: contain;
+}
+
+/* 1. Main Scrollable Sheet Viewport */
+.tsw-scroll-viewport {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 18px 14px 32px 14px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.55) rgba(15, 23, 42, 0.22);
+}
+
+.tsw-scroll-viewport::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.tsw-scroll-viewport::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.2);
+}
+
+.tsw-scroll-viewport::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+}
+
+/* Block-centered sizer avoids Flexbox negative-scroll left clipping when zoomed > 100% */
+.tsw-zoom-sizer {
+    position: relative;
+    margin: 0 auto;
+    display: block;
+    flex-shrink: 0;
+}
+
+.tsw-zoom-content {
+    width: 794px;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* Ensure sheets inside the fixed 794px logical A4 coordinate frame never collapse */
+.tsw-zoom-content .ipn-sheet-paper {
+    width: 794px;
+    max-width: 794px;
+}
+
+.tsw-zoom-content .ipdc-a4-sheet {
+    width: 794px;
+    max-width: 794px;
+}
+
+/* 2. Dedicated Right-Edge Interactive Vertical Scroll Rail */
+.tsw-scroll-rail {
+    position: relative;
+    width: 26px;
+    flex: 0 0 26px;
+    background: #475569;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 10px 0;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    z-index: 35;
+}
+
+.tsw-scroll-rail.dragging {
+    cursor: grabbing;
+    background: #334155;
+}
+
+.tsw-scroll-rail-track {
+    position: relative;
+    width: 10px;
+    height: 100%;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.38);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.tsw-scroll-rail-thumb {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    min-height: 36px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1.5px solid #0d9488;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+    transition: background-color 0.12s ease, transform 0.12s ease;
+}
+
+.tsw-scroll-rail:hover .tsw-scroll-rail-thumb,
+.tsw-scroll-rail.dragging .tsw-scroll-rail-thumb {
+    background: #ccfbf1;
+    border-color: #0f766e;
+    transform: scaleX(1.18);
+}
+
+.tsw-scroll-rail.is-unscrollable .tsw-scroll-rail-thumb {
+    opacity: 0.45;
+}
+
+/* 3. Extreme-Right Stationary Vertical Zoom Toolbar */
+.tsw-zoom-toolbar {
+    flex: 0 0 60px;
+    width: 60px;
+    background: #f8fafc;
+    border-left: 1px solid #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 6px;
+    z-index: 40;
+    user-select: none;
+    -webkit-user-select: none;
+    box-shadow: -2px 0 10px rgba(15, 23, 42, 0.08);
+}
+
+.tsw-zoom-btn {
+    width: 46px;
+    min-height: 44px;
+    padding: 4px;
+    border-radius: 10px;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.tsw-zoom-btn:hover:not(:disabled) {
+    background: #f0fdfa;
+    border-color: #0d9488;
+    color: #0f766e;
+}
+
+.tsw-zoom-btn:active:not(:disabled) {
+    background: #ccfbf1;
+    transform: scale(0.96);
+}
+
+.tsw-zoom-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.tsw-zoom-pct {
+    width: 48px;
+    min-height: 36px;
+    padding: 4px 2px;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    letter-spacing: -0.01em;
+}
+
+.tsw-zoom-fit-btn {
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1.15;
+    min-height: 48px;
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    color: #0f766e;
+    gap: 1px;
+}
+
+/* Tablet Portrait & Compact Viewport Optimizations */
+@media (max-width: 900px) {
+    .tsw-scroll-viewport {
+        padding: 12px 8px 24px 8px;
+    }
+
+    .tsw-scroll-rail {
+        width: 28px;
+        flex: 0 0 28px;
+    }
+
+    .tsw-zoom-toolbar {
+        width: 56px;
+        flex: 0 0 56px;
+        gap: 8px;
+        padding: 10px 4px;
+    }
+
+    .tsw-zoom-btn {
+        width: 44px;
+        min-height: 44px;
+    }
+
+    .tsw-zoom-pct {
+        width: 46px;
+    }
+}
