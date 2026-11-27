@@ -194,8 +194,16 @@ const RuledSectionEditor = ({
                 notifyParent(newLines);
             };
 
-            recognition.onerror = () => {
+            recognition.onerror = (evt) => {
                 setDictatingLineIdx(null);
+                const code = evt?.error;
+                if (code === 'not-allowed' || code === 'service-not-allowed') {
+                    toast.error('Microphone permission denied. Please allow microphone access in browser settings.');
+                } else if (code === 'audio-capture') {
+                    toast.error('No microphone detected on this device.');
+                } else if (code === 'network') {
+                    toast.error('Speech recognition network issue. Please retry or use AI Voice Scribe.');
+                }
             };
 
             recognitionRef.current = recognition;
@@ -243,7 +251,7 @@ const RuledSectionEditor = ({
                                 }}
                                 title={isDictating ? 'Stop line dictation' : 'Dictate here'}
                             >
-                                <FiMic size={14} />
+                                <FiMic size={13} />
                             </button>
                         )}
                     </div>

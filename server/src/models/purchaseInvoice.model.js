@@ -1,27 +1,63 @@
 const mongoose = require('mongoose');
 
 const purchaseInvoiceSchema = new mongoose.Schema({
+  hospitalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    index: true,
+    default: null
+  },
+  pharmacyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+    default: null
+  },
+  vendorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vendor',
+    default: null
+  },
   invoiceNumber: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
   },
   vendorName: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
   },
   vendorGST: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
   },
   vendorAddress: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
   },
   vendorDL: {
     type: String,
-    default: ''
+    default: '',
+    trim: true
+  },
+  vendorPhone: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  orderRef: {
+    type: String,
+    default: '',
+    trim: true
   },
   invoiceDate: {
+    type: Date,
+    default: null
+  },
+  dueDate: {
     type: Date,
     default: null
   },
@@ -41,11 +77,13 @@ const purchaseInvoiceSchema = new mongoose.Schema({
   uploadedPDF: {
     originalName: { type: String, default: '' },
     generatedName: { type: String, default: '' },
-    size: { type: Number, default: 0 }
+    storagePath: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    fileHash: { type: String, default: '' }
   },
   status: {
     type: String,
-    enum: ['Pending', 'Completed', 'Cancelled'],
+    enum: ['Pending', 'Completed', 'Partially Imported', 'Cancelled'],
     default: 'Pending'
   },
   totalMedicines: {
@@ -53,6 +91,14 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     default: 0
   },
   importedMedicines: {
+    type: Number,
+    default: 0
+  },
+  skippedMedicines: {
+    type: Number,
+    default: 0
+  },
+  failedMedicines: {
     type: Number,
     default: 0
   },
@@ -92,6 +138,22 @@ const purchaseInvoiceSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  isRevisedDuplicate: {
+    type: Boolean,
+    default: false
+  },
+  extractionMeta: {
+    method: { type: String, default: 'native_coordinates' },
+    pageCount: { type: Number, default: 1 },
+    ocrUsed: { type: Boolean, default: false },
+    ocrNotice: { type: String, default: '' },
+    overallConfidence: { type: Number, default: 0 },
+    detectedHeaders: { type: [String], default: [] },
+    columnMappings: { type: mongoose.Schema.Types.Mixed, default: {} },
+    lineSumAmount: { type: Number, default: 0 },
+    mathMismatch: { type: Boolean, default: false },
+    warnings: { type: [String], default: [] }
+  },
   remarks: {
     type: String,
     default: ''
@@ -99,6 +161,10 @@ const purchaseInvoiceSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+purchaseInvoiceSchema.index({ hospitalId: 1, vendorName: 1, invoiceNumber: 1 });
+purchaseInvoiceSchema.index({ hospitalId: 1, createdAt: -1 });
+purchaseInvoiceSchema.index({ hospitalId: 1, 'uploadedPDF.fileHash': 1 });
 
 const PurchaseInvoice = mongoose.model('PurchaseInvoice', purchaseInvoiceSchema);
 

@@ -42,6 +42,13 @@ const vendorSchema = new mongoose.Schema({
         type: String,
         enum: ['Active', 'Inactive'],
         default: 'Active'
+    },
+    invoiceFormatProfile: {
+        columnMappings: { type: Object, default: {} },
+        confirmedCount: { type: Number, default: 0 },
+        lastHeaders: { type: [String], default: [] },
+        lastInvoiceNumber: { type: String, default: '' },
+        updatedAt: { type: Date, default: null }
     }
 }, { timestamps: true });
 

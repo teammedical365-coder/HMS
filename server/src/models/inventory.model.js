@@ -72,7 +72,11 @@ const inventorySchema = new mongoose.Schema({
     discountValue: { type: Number, default: 0 },
     purchaseAmount: { type: Number, default: 0 },
     finalAmount: { type: Number, default: 0 },
-    totalStock: { type: Number, default: 0 }
+    totalStock: { type: Number, default: 0 },
+    hsnCode: { type: String, default: '', trim: true },
+    manufacturer: { type: String, default: '', trim: true },
+    packSize: { type: String, default: '', trim: true },
+    mfgDate: { type: Date, default: null }
 }, { timestamps: true });
 
 // Virtual for total available volume (if multi-dose)

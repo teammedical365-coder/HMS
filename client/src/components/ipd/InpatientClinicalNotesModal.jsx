@@ -10,12 +10,16 @@ import {
 } from '../../utils/inpatientNotesPdf';
 import RuledSectionEditor from './RuledSectionEditor';
 import TabletPenCanvas from './TabletPenCanvas';
-import TabletSheetWorkspace from './TabletSheetWorkspace';
+import TabletSheetWorkspace, { SheetZoomToolbarControls } from './TabletSheetWorkspace';
 import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
+import {
+    computeAiSummarySignature,
+    appendAiSummaryToInpatientNoteState
+} from '../../utils/aiClinicalSheetHelper';
 import {
     FiX, FiPrinter, FiDownload, FiFileText, FiSave,
     FiMessageSquare, FiEdit2, FiClock, FiRotateCcw, FiRotateCw,
-    FiPlus, FiTrash2, FiZap, FiCheck, FiSend
+    FiPlus, FiTrash2, FiZap, FiCheck, FiSend, FiMic
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import './InpatientClinicalNotesModal.css';
@@ -49,6 +53,9 @@ const InpatientClinicalNotesModal = ({
     const [penWidth, setPenWidth] = useState(2.5); // Default Medium (2.5px)
     const [sheetZoom, setSheetZoom] = useState(1);
     const penSessionRef = useRef({ isPenDown: false, lastPenTime: 0, lastPenHoverTime: 0 });
+    const workspaceRef = useRef(null);
+    const submittedAiSigsRef = useRef(new Set());
+    const applyingAiRef = useRef(false);
 
     const [admission, setAdmission] = useState(initialAdmission || null);
     const [latestVitals, setLatestVitals] = useState(null);
@@ -306,26 +313,66 @@ const InpatientClinicalNotesModal = ({
         }));
     };
 
-    // AI Voice Scribe approval & structuring handler
-    const handleApproveVoiceScribe = ({ sections, session }) => {
+    // AI Voice Scribe approval & new sequential sheet builder (NEVER overwrites previous notes)
+    const handleApproveVoiceScribe = async ({ sections, session }) => {
         if (!sections || Object.keys(sections).length === 0) return;
-        commitStateUpdate((prev) => {
-            const next = { ...prev };
-            Object.entries(sections).forEach(([key, val]) => {
-                if (!val) return;
-                if (key === 'generalExamination' && typeof val === 'object') {
-                    next.generalExamination = {
-                        ...(next.generalExamination || {}),
-                        ...val
-                    };
-                } else if (typeof val === 'string' && val.trim()) {
-                    const existing = next[key] ? String(next[key]).trim() : '';
-                    next[key] = existing ? `${existing}\n${val.trim()}` : val.trim();
+        if (applyingAiRef.current) return;
+
+        const sig = computeAiSummarySignature({ sections, session });
+        const existingSheets = Array.isArray(formStateRef.current?.continuationPages)
+            ? formStateRef.current.continuationPages
+            : [];
+        if (submittedAiSigsRef.current.has(sig) || existingSheets.some((cp) => cp.sessionSignature && cp.sessionSignature === sig)) {
+            toast('This AI clinical summary was already added as a sequential sheet.', { icon: 'ℹ️' });
+            return;
+        }
+
+        applyingAiRef.current = true;
+        try {
+            let resolvedVitals = latestVitals;
+            if (effectiveAdmissionId && !isBlank) {
+                const freshRes = await ipdClinicalAPI.getInpatientClinicalNotes(effectiveAdmissionId).catch(() => null);
+                if (freshRes?.latestVitals !== undefined) {
+                    resolvedVitals = freshRes.latestVitals || null;
+                    setLatestVitals(resolvedVitals);
                 }
+            }
+
+            const rawRole = String(user?._roleData?.name || user?.role || '').toLowerCase();
+            const isDoc = /doctor|surgeon|consultant|physician|resident/.test(rawRole) && !/nurse|assistant/.test(rawRole);
+            const authorDoctorName = isDoc && user?.name
+                ? (/^dr\.?\s*/i.test(user.name) ? user.name : `Dr. ${user.name}`)
+                : (formStateRef.current?.consultantName || '');
+
+            const { nextState, createdSheet } = appendAiSummaryToInpatientNoteState(formStateRef.current, {
+                sections,
+                session,
+                latestVitals: resolvedVitals,
+                doctorName: authorDoctorName,
+                entryDateTime: new Date()
             });
-            return next;
-        });
-        toast.success('Approved AI content structured into Clinical Notes!');
+
+            submittedAiSigsRef.current.add(sig);
+            commitStateUpdate(nextState);
+
+            if (effectiveAdmissionId && !isBlank) {
+                const saveRes = await ipdClinicalAPI.saveInpatientClinicalNotes(effectiveAdmissionId, nextState);
+                if (saveRes?.success) {
+                    setSavedNoteDoc(saveRes.clinicalNote);
+                    setHasUnsavedChanges(false);
+                    toast.success(`AI Clinical Summary saved on new Sheet #${createdSheet.sheetNumber} (Page ${createdSheet.pageNumber})`);
+                } else {
+                    toast.success(`AI Clinical Summary added on new Sheet #${createdSheet.sheetNumber} — click Save Notes to persist`);
+                }
+            } else {
+                toast.success(`AI Clinical Summary added on new Sheet #${createdSheet.sheetNumber} (Page ${createdSheet.pageNumber})`);
+            }
+        } catch (err) {
+            console.error('AI Voice Scribe clinical sheet error:', err);
+            toast.error(err.response?.data?.message || 'AI summary added locally; please click Save Notes to retry saving.');
+        } finally {
+            applyingAiRef.current = false;
+        }
     };
 
     // Continuation Page Management
@@ -630,26 +677,33 @@ const InpatientClinicalNotesModal = ({
                             type="button"
                             className="ipn-tool-btn ipn-tool-btn-ai"
                             onClick={() => setIsScribeModalOpen(true)}
-                            title="AI Voice Scribe & Ambient Dictation (Gemini 3.6 Flash)"
+                            title="AI Voice Scribe — Record & generate a new sequential clinical sheet"
                             style={{
                                 background: '#ecfdf5',
                                 borderColor: '#a7f3d0',
                                 color: '#047857',
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '6px'
                             }}
                         >
-                            <FiZap size={13} color="#059669" />
+                            <FiMic size={14} color="#059669" style={{ flexShrink: 0 }} />
                             <span>AI Voice Scribe</span>
                         </button>
                     </div>
+
+                    <SheetZoomToolbarControls
+                        zoom={sheetZoom}
+                        setZoom={setSheetZoom}
+                        workspaceRef={workspaceRef}
+                    />
                 </div>
 
                 {/* Modal Main Body */}
                 <div className="ipn-modal-body">
                     <TabletSheetWorkspace
+                        ref={workspaceRef}
                         zoom={sheetZoom}
                         setZoom={setSheetZoom}
                         activeTool={canUsePenTool ? activeTool : 'type'}
@@ -1049,14 +1103,18 @@ const InpatientClinicalNotesModal = ({
                                 </div>
                             </div>
 
-                            {/* ==================== CONTINUATION PAGES (PAGE 3+) ==================== */}
+                            {/* ==================== CONTINUATION & SEQUENTIAL AI CLINICAL SHEETS (PAGE 3+) ==================== */}
                             {(formState.continuationPages || []).map((cp, idx) => {
                                 const pageNum = cp.pageNumber || idx + 3;
+                                const sheetNum = cp.sheetNumber || idx + 2;
                                 const pageKey = `page${pageNum}`;
+                                const vs = cp.vitalsSnapshot && typeof cp.vitalsSnapshot === 'object' ? cp.vitalsSnapshot : null;
 
                                 return (
                                     <div key={pageNum} className="ipn-sheet-paper">
-                                        <span className="ipn-sheet-badge">PAGE {pageNum} — CONTINUATION SHEET</span>
+                                        <span className="ipn-sheet-badge">
+                                            SHEET #{sheetNum} (PAGE {pageNum}) — {cp.isAiSummarySheet ? 'AI CLINICAL SUMMARY' : 'CONTINUATION SHEET'}
+                                        </span>
                                         <button
                                             type="button"
                                             className="ipn-sheet-delete-btn"
@@ -1097,24 +1155,49 @@ const InpatientClinicalNotesModal = ({
                                             </div>
 
                                             <div className="ipn-doc-title">
-                                                IN PATIENT CLINICAL NOTES — {cp.title || 'CONTINUATION SHEET'} (PAGE {pageNum})
+                                                IN PATIENT CLINICAL NOTES — {cp.title || `SHEET #${sheetNum}`} (PAGE {pageNum})
                                             </div>
 
                                             <div className="ipn-doc-meta-rows">
+                                                <div className="ipn-doc-meta-row">
+                                                    <div className="ipn-doc-field" style={{ flex: 2.6 }}><span>Patient&apos;s Name :</span><span className="ipn-doc-field-val">{formState.patientName}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>Regd. No. :</span><span className="ipn-doc-field-val">{formState.regdNo}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>IPD No. :</span><span className="ipn-doc-field-val">{formState.ipdNo}</span></div>
+                                                </div>
                                                 <div className="ipn-doc-meta-row" style={{ marginBottom: 0 }}>
-                                                    <div className="ipn-doc-field" style={{ flex: 1.1 }}><span>Date :</span><span className="ipn-doc-field-val">{formState.noteDate}</span></div>
-                                                    <div className="ipn-doc-field" style={{ flex: 1 }}><span>Time :</span><span className="ipn-doc-field-val">{formState.noteTime}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1.1 }}><span>Date :</span><span className="ipn-doc-field-val">{cp.noteDate || formState.noteDate}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 1 }}><span>Time :</span><span className="ipn-doc-field-val">{cp.noteTime || formState.noteTime}</span></div>
                                                     <div className="ipn-doc-field" style={{ flex: 1.3 }}><span>Ward :</span><span className="ipn-doc-field-val">{formState.ward}</span></div>
                                                     <div className="ipn-doc-field" style={{ flex: 1.2 }}><span>Bed No. :</span><span className="ipn-doc-field-val">{formState.bedNo}</span></div>
-                                                    <div className="ipn-doc-field" style={{ flex: 2 }}><span>Consultant :</span><span className="ipn-doc-field-val">{formState.consultantName}</span></div>
+                                                    <div className="ipn-doc-field" style={{ flex: 2 }}><span>Consultant :</span><span className="ipn-doc-field-val">{cp.consultantName || formState.consultantName}</span></div>
                                                 </div>
                                             </div>
 
-                                            <div className="ipn-doc-sec-hdr">CLINICAL OBSERVATIONS &amp; NOTES (CONTINUED)</div>
+                                            {vs && (
+                                                <>
+                                                    <div className="ipn-doc-sec-hdr">
+                                                        {vs.recordedAtDisplay
+                                                            ? `LATEST RECORDED VITALS (Recorded: ${vs.recordedAtDisplay})`
+                                                            : 'LATEST RECORDED VITALS'}
+                                                    </div>
+                                                    <div className="ipn-doc-gen-grid">
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">BP</span><span style={{ fontWeight: 600 }}>{vs.bp || '—'}</span></div>
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Pulse</span><span style={{ fontWeight: 600 }}>{vs.pulse || '—'}</span></div>
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Temp.</span><span style={{ fontWeight: 600 }}>{vs.temp || '—'}</span></div>
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">SpO2</span><span style={{ fontWeight: 600 }}>{vs.spo2 || '—'}</span></div>
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">RR</span><span style={{ fontWeight: 600 }}>{vs.rr || '—'}</span></div>
+                                                        <div className="ipn-doc-gen-cell"><span className="ipn-doc-gen-lbl">Pain</span><span style={{ fontWeight: 600 }}>{vs.pain || '—'}</span></div>
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            <div className="ipn-doc-sec-hdr" style={vs ? { borderTop: 'none' } : undefined}>
+                                                {cp.isAiSummarySheet ? 'AI CLINICAL SUMMARY & OBSERVATIONS' : 'CLINICAL OBSERVATIONS & NOTES (CONTINUED)'}
+                                            </div>
                                             <RuledSectionEditor
                                                 sectionKey={`cont_${pageNum}`}
                                                 text={cp.notes || ''}
-                                                lineCount={26}
+                                                lineCount={vs ? 22 : 26}
                                                 onChange={(val) => handleContinuationNotesChange(idx, val)}
                                                 placeholder="Continue writing clinical notes, daily progress or orders directly on these ruled lines…"
                                             />
@@ -1122,7 +1205,7 @@ const InpatientClinicalNotesModal = ({
                                             <div className="ipn-doc-footer-sign">
                                                 <div className="ipn-doc-field" style={{ flex: 2.3 }}>
                                                     <span>Name of Consultant :</span>
-                                                    <div className="ipn-doc-field-val">{formState.footer?.consultantName}</div>
+                                                    <div className="ipn-doc-field-val">{cp.consultantName || formState.footer?.consultantName}</div>
                                                 </div>
                                                 <div className="ipn-doc-field" style={{ flex: 1.4 }}>
                                                     <span>Signature :</span>
@@ -1130,11 +1213,11 @@ const InpatientClinicalNotesModal = ({
                                                 </div>
                                                 <div className="ipn-doc-field" style={{ flex: 0.9 }}>
                                                     <span>Date :</span>
-                                                    <div className="ipn-doc-field-val">{formState.footer?.signDate}</div>
+                                                    <div className="ipn-doc-field-val">{cp.noteDate || formState.footer?.signDate}</div>
                                                 </div>
                                                 <div className="ipn-doc-field" style={{ flex: 0.8 }}>
                                                     <span>Time :</span>
-                                                    <div className="ipn-doc-field-val">{formState.footer?.signTime}</div>
+                                                    <div className="ipn-doc-field-val">{cp.noteTime || formState.footer?.signTime}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1153,6 +1236,7 @@ const InpatientClinicalNotesModal = ({
                     patientName={ptBannerDetails.name}
                     uhid={ptBannerDetails.uhid}
                     ipdNumber={ptBannerDetails.ipdNumber}
+                    latestVitals={latestVitals}
                 />
             </div>
         </div>

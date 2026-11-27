@@ -169,7 +169,8 @@ const ClinicalVoiceScribeModal = ({
     onApproveAndInsert,
     patientName = '',
     uhid = '',
-    ipdNumber = ''
+    ipdNumber = '',
+    latestVitals = null
 }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
@@ -178,6 +179,8 @@ const ClinicalVoiceScribeModal = ({
     const [interimTranscript, setInterimTranscript] = useState('');
     const [hasRecorded, setHasRecorded] = useState(false);
     const [isStructuring, setIsStructuring] = useState(false);
+    const [isApproving, setIsApproving] = useState(false);
+    const [micError, setMicError] = useState('');
     const [inputLanguage, setInputLanguage] = useState('auto');
     const [outputLanguage, setOutputLanguage] = useState('English');
 
@@ -190,6 +193,7 @@ const ClinicalVoiceScribeModal = ({
     const streamRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerRef = useRef(null);
+    const sessionIdRef = useRef('');
 
     // Reset or cleanup on close
     useEffect(() => {
@@ -210,10 +214,17 @@ const ClinicalVoiceScribeModal = ({
             setTranscript('');
             setInterimTranscript('');
             setHasRecorded(false);
+            setIsApproving(false);
+            setMicError('');
             setProposedSections({});
             setSelectedSections({});
+            sessionIdRef.current = '';
             return;
         }
+
+        sessionIdRef.current = `scribe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        setIsApproving(false);
+        setMicError('');
 
         // Setup SpeechRecognition for real-time live transcript preview if available
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -287,6 +298,13 @@ const ClinicalVoiceScribeModal = ({
     };
 
     const handleStartRecording = async () => {
+        setMicError('');
+        if (!navigator?.mediaDevices?.getUserMedia) {
+            const msg = 'Microphone recording is not available in this browser context. You can still type or paste clinical notes below to summarize.';
+            setMicError(msg);
+            toast.error(msg);
+            return;
+        }
         try {
             // Request actual microphone audio
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -302,9 +320,14 @@ const ClinicalVoiceScribeModal = ({
                 else if (MediaRecorder.isTypeSupported('audio/ogg')) mime = 'audio/ogg';
             }
 
-            const recorder = new MediaRecorder(stream, { mimeType: mime });
+            const recorder = mime && typeof MediaRecorder !== 'undefined'
+                ? new MediaRecorder(stream, { mimeType: mime })
+                : new MediaRecorder(stream);
             recorder.ondataavailable = (e) => {
                 if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+            recorder.onerror = () => {
+                setMicError('Audio recording interrupted. You can retry or summarize the captured transcript below.');
             };
             recorder.start(250);
             mediaRecorderRef.current = recorder;
@@ -316,10 +339,20 @@ const ClinicalVoiceScribeModal = ({
             setIsRecording(true);
             setIsPaused(false);
             setHasRecorded(true);
-            toast.success('AI Voice Scribe recording with Gemini AI… speak naturally');
+            toast.success('AI Voice Scribe recording… speak naturally');
         } catch (err) {
             console.error('Microphone recording start error:', err);
-            toast.error(err.message || 'Microphone access denied. Please grant microphone permissions.');
+            const errName = err?.name || '';
+            let friendlyMsg = 'Microphone access denied. Please allow microphone permission in your browser settings.';
+            if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+                friendlyMsg = 'No microphone detected on this device. Please connect a microphone or type notes below.';
+            } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+                friendlyMsg = 'Microphone is currently busy in another application. Close other audio apps and retry.';
+            } else if (err?.message && !/permission|denied/i.test(err.message) && errName !== 'NotAllowedError') {
+                friendlyMsg = err.message;
+            }
+            setMicError(friendlyMsg);
+            toast.error(friendlyMsg);
         }
     };
 
@@ -479,7 +512,8 @@ const ClinicalVoiceScribeModal = ({
         onClose();
     };
 
-    const handleApprove = () => {
+    const handleApprove = async () => {
+        if (isApproving) return;
         const approvedData = {};
         Object.keys(selectedSections).forEach((key) => {
             if (selectedSections[key] && proposedSections[key]) {
@@ -488,22 +522,26 @@ const ClinicalVoiceScribeModal = ({
         });
 
         if (Object.keys(approvedData).length === 0) {
-            toast.error('Please select at least one section to insert into the document.');
+            toast.error('Please select at least one section to insert into the new clinical sheet.');
             return;
         }
 
-        // Pass structured sections and raw session metadata to parent
-        onApproveAndInsert({
-            sections: approvedData,
-            session: {
-                recordedAt: new Date(),
-                durationSeconds: seconds,
-                rawTranscript: transcript
-            }
-        });
-
-        toast.success('Approved AI content inserted into document lines');
-        onClose();
+        setIsApproving(true);
+        try {
+            const stableSessionId = sessionIdRef.current || `scribe_${Date.now()}`;
+            await onApproveAndInsert({
+                sections: approvedData,
+                session: {
+                    sessionId: stableSessionId,
+                    recordedAt: new Date().toISOString(),
+                    durationSeconds: seconds,
+                    rawTranscript: transcript
+                }
+            });
+            onClose();
+        } finally {
+            setIsApproving(false);
+        }
     };
 
     const toggleSection = (key) => {
@@ -644,15 +682,15 @@ const ClinicalVoiceScribeModal = ({
                         <div className="cvs-controls-row">
                             {!isRecording ? (
                                 <button type="button" className="cvs-ctl-btn cvs-btn-start" onClick={handleStartRecording} disabled={isStructuring}>
-                                    <FiMic /> Start AI Voice Scribe
+                                    <FiMic size={16} /> <span>Start AI Voice Scribe</span>
                                 </button>
                             ) : (
                                 <>
                                     <button type="button" className="cvs-ctl-btn cvs-btn-pause" onClick={handlePauseResume} disabled={isStructuring}>
-                                        {isPaused ? <><FiPlay /> Resume</> : <><FiPause /> Pause</>}
+                                        {isPaused ? <><FiPlay size={16} /> <span>Resume</span></> : <><FiPause size={16} /> <span>Pause</span></>}
                                     </button>
                                     <button type="button" className="cvs-ctl-btn cvs-btn-stop" onClick={handleStopRecording} disabled={isStructuring}>
-                                        <FiSquare /> Stop &amp; Structure Clinical Note
+                                        <FiSquare size={15} /> <span>Stop &amp; Structure Clinical Note</span>
                                     </button>
                                 </>
                             )}
@@ -660,6 +698,26 @@ const ClinicalVoiceScribeModal = ({
                                 Cancel
                             </button>
                         </div>
+
+                        {micError && (
+                            <div style={{
+                                width: '100%',
+                                marginTop: '4px',
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                color: '#b91c1c',
+                                fontSize: '12.5px',
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}>
+                                <FiAlertCircle size={15} style={{ flexShrink: 0 }} />
+                                <span>{micError}</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Professional AI Summarization Loading Animation Overlay */}
@@ -782,19 +840,19 @@ const ClinicalVoiceScribeModal = ({
                 <div className="cvs-footer">
                     <div className="cvs-footer-hint">
                         <FiAlertCircle color="#0284c7" />
-                        <span>AI drafts are never finalized automatically. Human review is strictly enforced.</span>
+                        <span>Creates a new sequential clinical sheet with recorded vitals — previous notes are never overwritten.</span>
                     </div>
                     <div className="cvs-footer-actions">
-                        <button type="button" className="cvs-btn-discard" onClick={handleDiscardAndClose} disabled={isStructuring}>
+                        <button type="button" className="cvs-btn-discard" onClick={handleDiscardAndClose} disabled={isStructuring || isApproving}>
                             <FiTrash2 style={{ marginRight: '4px' }} /> Discard Draft
                         </button>
                         <button
                             type="button"
                             className="cvs-btn-approve"
                             onClick={handleApprove}
-                            disabled={isStructuring || Object.keys(proposedSections).length === 0}
+                            disabled={isStructuring || isApproving || Object.keys(proposedSections).length === 0}
                         >
-                            <FiCheck /> Approve &amp; Insert into Clinical Notes
+                            <FiCheck /> {isApproving ? 'Creating New Sheet…' : 'Approve & Create New Clinical Sheet'}
                         </button>
                     </div>
                 </div>

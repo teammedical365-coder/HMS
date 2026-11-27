@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
 import { pharmacyAPI } from '../../utils/api';
 import PurchaseInvoiceHistory from './PurchaseInvoiceHistory';
+import SmartInvoiceImportPanel from '../../components/pharmacy/SmartInvoiceImportPanel';
 import './PharmacyInventory.css';
 
 const PharmacyInventory = () => {
@@ -469,48 +470,17 @@ const PharmacyInventory = () => {
 
                 {activeTab === 'inventory' ? (
                     <>
-                        <div style={{ background: '#f0f9ff', padding: '20px', borderRadius: '10px', marginTop: '20px', border: '1px solid #bae6fd', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '16px', color: '#0369a1' }}>📄 Upload Purchase Invoice</h3>
-                                    <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#0284c7' }}>Upload a PDF invoice to automatically extract and import medicines (Max 10MB)</p>
-                                </div>
-                                {pendingInvoice && invoiceStats.remaining === 0 && (
-                                    <button type="button" onClick={handleClearInvoice} style={{ padding: '8px 16px', background: '#0284c7', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                                        Upload New Invoice
-                                    </button>
-                                )}
-                            </div>
-
-                            {successMessage && <div style={{ padding: '10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold' }}>✔ {successMessage}</div>}
-
-                            {(!pendingInvoice || invoiceStats.remaining === 0) ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <input type="file" accept=".doc,.docx,.pdf,.jpg,.jpeg,.png,.webp" onChange={handlePdfUpload} disabled={uploadingPdf} style={{ padding: '10px', background: 'white', borderRadius: '6px', border: '1px solid #7dd3fc', width: '300px' }} />
-                                    {uploadingPdf && <span style={{ color: '#0284c7', fontSize: '14px', fontWeight: 'bold' }}>{importLoadingState}</span>}
-                                    {pdfError && <span style={{ color: '#dc2626', fontSize: '14px', fontWeight: 'bold' }}>{pdfError}</span>}
-                                </div>
-                            ) : (
-                                <div style={{ padding: '15px', background: 'white', borderRadius: '8px', border: '1px solid #e0f2fe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <h4 style={{ margin: '0 0 5px', color: '#0c4a6e', fontSize: '15px' }}>✔ Invoice Uploaded Successfully</h4>
-                                        <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#0369a1' }}>
-                                            <span><strong>Medicines Found:</strong> {invoiceStats.total}</span>
-                                            <span><strong>Remaining:</strong> {invoiceStats.remaining}</span>
-                                            <span><strong>Imported:</strong> {invoiceStats.imported}</span>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button type="button" onClick={handleClearInvoice} style={{ padding: '8px 16px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                            Cancel / Clear
-                                        </button>
-                                        <button type="button" onClick={() => setShowInvoiceDetails(true)} style={{ padding: '8px 16px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                            View Invoice Details
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <SmartInvoiceImportPanel
+                            vendors={vendors}
+                            onImportCompleted={() => {
+                                fetchInventory();
+                                fetchVendors();
+                            }}
+                            onSwitchToManual={() => {
+                                const el = document.querySelector('.pharma-form');
+                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                        />
 
                         <form onSubmit={handleAddMedicine} className="pharma-form" style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', marginTop: '20px', border: '1px solid #e2e8f0' }}>
                             <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: '#334155' }}>{isEditing ? 'Edit Medicine' : 'Add New Medicine'}</h3>

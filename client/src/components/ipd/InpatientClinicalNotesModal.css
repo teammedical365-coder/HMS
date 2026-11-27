@@ -100,6 +100,7 @@
 }
 
 .ipn-modal-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -178,20 +179,22 @@
 
 /* MS Word-like In-Document Editing Toolbar */
 .ipn-doc-toolbar {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 16px;
+    padding: 8px 16px;
     background: #f1f5f9;
     border-bottom: 1px solid #cbd5e1;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 8px 12px;
 }
 
 .ipn-toolbar-group {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
 }
 
 .ipn-tool-btn {
@@ -624,25 +627,38 @@
     transform: translateY(-50%);
     width: 24px;
     height: 24px;
+    min-width: 24px;
+    min-height: 24px;
     background: #ffffff;
     border: 1.5px solid #0284c7;
     border-radius: 50%;
     padding: 0;
+    line-height: 1;
     font-size: 11px;
     cursor: pointer;
     color: #0284c7;
     opacity: 0;
     transition: opacity 0.15s, background 0.15s, color 0.15s;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     box-shadow: 0 1px 4px rgba(2, 132, 199, 0.2);
     z-index: 5;
 }
 
+.ipn-line-mic-trigger svg {
+    width: 13px;
+    height: 13px;
+    min-width: 13px;
+    min-height: 13px;
+    flex-shrink: 0;
+    display: block;
+    stroke-width: 2.2;
+}
+
 .ipn-doc-ruled-line-interactive:hover .ipn-line-mic-trigger,
 .ipn-doc-ruled-line-interactive.focused .ipn-line-mic-trigger {
-    opacity: 0.9;
+    opacity: 0.95;
 }
 
 .ipn-line-mic-trigger:hover {
@@ -657,7 +673,12 @@
     background: #dc2626;
     color: #ffffff;
     border-color: #dc2626;
-    animation: cvsPulse 1.2s infinite;
+    animation: ipnMicPulse 1.1s infinite alternate;
+}
+
+@keyframes ipnMicPulse {
+    from { transform: translateY(-50%) scale(1); }
+    to { transform: translateY(-50%) scale(1.12); box-shadow: 0 0 8px rgba(220, 38, 38, 0.55); }
 }
 
 .ipn-doc-split-row {

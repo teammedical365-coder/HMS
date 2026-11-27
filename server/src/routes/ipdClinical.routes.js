@@ -2061,7 +2061,14 @@ const saveInpatientClinicalNoteHandler = async (req, res) => {
         if (Array.isArray(payload.continuationPages)) {
             noteDoc.continuationPages = payload.continuationPages.map((cp, idx) => ({
                 pageNumber: Number(cp.pageNumber) || (idx + 3),
+                sheetNumber: Number(cp.sheetNumber) || (idx + 2),
                 title: cleanStr(cp.title) || `CONTINUATION SHEET (PAGE ${idx + 3})`,
+                noteDate: cleanStr(cp.noteDate),
+                noteTime: cleanStr(cp.noteTime),
+                consultantName: cleanStr(cp.consultantName),
+                vitalsSnapshot: cp.vitalsSnapshot && typeof cp.vitalsSnapshot === 'object' ? cp.vitalsSnapshot : null,
+                isAiSummarySheet: Boolean(cp.isAiSummarySheet),
+                sessionSignature: cleanStr(cp.sessionSignature),
                 notes: strVal(cp.notes || cp.content || ''),
                 createdAt: cp.createdAt || new Date(),
                 updatedAt: new Date()
@@ -2415,7 +2422,7 @@ router.get('/admissions/:admissionId/progress-notes', verifyToken, resolveTenant
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { Admission, InpatientProgressNote, Bed, User } = getModels(req);
+        const { Admission, InpatientProgressNote, IPDVitals, Bed, User } = getModels(req);
         const admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
         if (!admission) {
             return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
@@ -2431,16 +2438,22 @@ router.get('/admissions/:admissionId/progress-notes', verifyToken, resolveTenant
             admission.bedId = await Bed.findById(admission.bedId).select('bedNumber ward bedType').lean().catch(() => null) || admission.bedId;
         }
 
-        const progressNotes = await InpatientProgressNote.find({
-            hospitalId,
-            admissionId: admission._id
-        })
-            .sort({ recordedAt: 1, createdAt: 1 })
-            .lean();
+        const [progressNotes, latestVitals] = await Promise.all([
+            InpatientProgressNote.find({
+                hospitalId,
+                admissionId: admission._id
+            })
+                .sort({ recordedAt: 1, createdAt: 1 })
+                .lean(),
+            IPDVitals
+                ? IPDVitals.findOne({ hospitalId, admissionId: admission._id }).sort({ recordedAt: -1 }).lean().catch(() => null)
+                : Promise.resolve(null)
+        ]);
 
         res.json({
             success: true,
             progressNotes,
+            latestVitals: latestVitals || null,
             handwritingStrokes: admission.handwritingStrokes || {},
             admission
         });

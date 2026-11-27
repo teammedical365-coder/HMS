@@ -211,14 +211,29 @@
 .cvs-ctl-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 7px;
     padding: 9px 18px;
     border-radius: 8px;
     font-size: 13.5px;
     font-weight: 700;
+    line-height: 1.2;
     cursor: pointer;
     border: none;
     transition: all 0.15s ease;
+}
+
+.cvs-ctl-btn svg,
+.cvs-btn-summarize svg,
+.cvs-btn-approve svg,
+.cvs-btn-discard svg,
+.cvs-icon-badge svg {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    flex-shrink: 0;
+    display: block;
 }
 
 .cvs-btn-start {

@@ -104,9 +104,11 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
         currentRows = [];
     };
 
-    const sortedNotes = [...(Array.isArray(notes) ? notes : [])].sort(
-        (a, b) => new Date(a.recordedAt || a.createdAt || 0) - new Date(b.recordedAt || b.createdAt || 0)
-    );
+    const sortedNotes = [...(Array.isArray(notes) ? notes : [])].sort((a, b) => {
+        const sheetDiff = (parseInt(a?.sheetNo, 10) || 1) - (parseInt(b?.sheetNo, 10) || 1);
+        if (sheetDiff !== 0) return sheetDiff;
+        return new Date(a?.recordedAt || a?.createdAt || 0) - new Date(b?.recordedAt || b?.createdAt || 0);
+    });
 
     const wrapParagraph = (text, maxChars = 94) => {
         const result = [];
@@ -196,12 +198,14 @@ export const paginateProgressNotes = (notes = [], rowsPerPage = PROGRESS_ROWS_PE
             isSigRow: true
         });
 
+        // Honor explicit target sheetNo first so new sequential clinical sheets never merge into prior sheets
+        const targetSheetNo = parseInt(entry.sheetNo, 10) || 1;
+        while (pages.length < targetSheetNo - 1) {
+            pushCurrentPage();
+        }
+
         // Position rows: if note has explicit target rowIndex on page, pad blank rows up to it
         if (typeof entry.rowIndex === 'number' && entry.rowIndex >= 0) {
-            const targetSheetNo = parseInt(entry.sheetNo, 10) || 1;
-            while (pages.length < targetSheetNo - 1) {
-                pushCurrentPage();
-            }
             while (currentRows.length < entry.rowIndex && currentRows.length < rowsPerPage) {
                 currentRows.push({ dateTimeText: '', noteText: '', isMeta: false, noteId: null });
             }

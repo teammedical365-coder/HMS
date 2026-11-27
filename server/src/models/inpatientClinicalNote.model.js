@@ -47,10 +47,17 @@ const inpatientClinicalNoteSchema = new mongoose.Schema({
         signTime: { type: String, default: '', trim: true }
     },
 
-    // Continuation Pages (MS Word-style automatic continuation sheets beyond 2 pages)
+    // Continuation Pages (MS Word-style continuation & sequential AI clinical summary sheets)
     continuationPages: [{
         pageNumber: { type: Number, default: 3 },
+        sheetNumber: { type: Number, default: 2 },
         title: { type: String, default: 'CONTINUATION SHEET' },
+        noteDate: { type: String, default: '' },
+        noteTime: { type: String, default: '' },
+        consultantName: { type: String, default: '' },
+        vitalsSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+        isAiSummarySheet: { type: Boolean, default: false },
+        sessionSignature: { type: String, default: '' },
         notes: { type: String, default: '' },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now }

@@ -203,6 +203,7 @@ export const downloadInpatientClinicalNotesPdf = async ({
     const boxWidth = boxRight - boxLeft; // 190mm
     const boxTopY = 16.5;
     const boxBottomY = 285.5;
+    const boxHeight = boxBottomY - boxTopY;
 
     const ptDetails = resolvePatientChartDetails({ patient, admission, isBlank });
     const data = buildDefaultClinicalNoteState({ patient, admission, latestVitals, clinicalNote, isBlank });
@@ -236,67 +237,69 @@ export const downloadInpatientClinicalNotesPdf = async ({
         doc.rect(boxLeft, boxTopY, boxWidth, boxBottomY - boxTopY);
     };
 
+    // Reusable Letterhead renderer inside top of frame (16.5mm -> 42.5mm)
+    const drawHospitalHeader = () => {
+        const headerDividerY = 42.5;
+        if (isAccredited) {
+            if (accredImg) {
+                try {
+                    const aspect = accredImg.naturalWidth && accredImg.naturalHeight
+                        ? accredImg.naturalWidth / accredImg.naturalHeight
+                        : 1.25;
+                    const hMm = 15.5;
+                    const wMm = Math.min(24, hMm * aspect);
+                    doc.addImage(accredImg.dataUrl || accredImg, 'PNG', boxLeft + 7, 19.5, wMm, hMm);
+                    if (certNumber) {
+                        doc.setTextColor(185, 28, 28);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(6.2);
+                        doc.text(certNumber, boxLeft + 7 + wMm / 2, 38.2, { align: 'center' });
+                    }
+                } catch (_) {}
+            } else if (certNumber) {
+                doc.setTextColor(185, 28, 28);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.text(certNumber, boxLeft + 7, 28);
+            }
+        }
+
+        const rightLogoEdge = boxRight - 8;
+        let hospLogoRendered = false;
+        if (hospImg) {
+            try {
+                const maxH = 17.5;
+                const maxW = 86;
+                const aspect = hospImg.naturalWidth && hospImg.naturalHeight
+                    ? hospImg.naturalWidth / hospImg.naturalHeight
+                    : 2.2;
+                let drawH = maxH;
+                let drawW = drawH * aspect;
+                if (drawW > maxW) {
+                    drawW = maxW;
+                    drawH = drawW / aspect;
+                }
+                doc.addImage(hospImg.dataUrl || hospImg, 'PNG', rightLogoEdge - drawW, 19 + (maxH - drawH) / 2, drawW, drawH);
+                hospLogoRendered = true;
+            } catch (_) {}
+        }
+        if (!hospLogoRendered) {
+            doc.setFont('times', 'bold');
+            doc.setFontSize(19);
+            doc.setTextColor(15, 23, 42);
+            doc.text(hospitalName, rightLogoEdge, 29.5, { align: 'right', maxWidth: 96 });
+        }
+
+        doc.setDrawColor(17, 24, 39);
+        doc.setLineWidth(0.32);
+        doc.line(boxLeft, headerDividerY, boxRight, headerDividerY);
+        return headerDividerY;
+    };
+
     // ==================== PAGE 1 ====================
     drawTopBluePatientBanner();
     drawOuterFrame();
-
-    // Letterhead inside top of frame (16.5mm -> 42.5mm)
-    const headerDividerY = 42.5;
-    if (isAccredited) {
-        if (accredImg) {
-            try {
-                const aspect = accredImg.naturalWidth && accredImg.naturalHeight
-                    ? accredImg.naturalWidth / accredImg.naturalHeight
-                    : 1.25;
-                const hMm = 15.5;
-                const wMm = Math.min(24, hMm * aspect);
-                doc.addImage(accredImg.dataUrl || accredImg, 'PNG', boxLeft + 7, 19.5, wMm, hMm);
-                if (certNumber) {
-                    doc.setTextColor(185, 28, 28);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(6.2);
-                    doc.text(certNumber, boxLeft + 7 + wMm / 2, 38.2, { align: 'center' });
-                }
-            } catch (_) {}
-        } else if (certNumber) {
-            doc.setTextColor(185, 28, 28);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.5);
-            doc.text(certNumber, boxLeft + 7, 28);
-        }
-    }
-
-    // Right hospital logo ONLY (fallback to hospital name ONLY when logo missing)
-    const rightLogoEdge = boxRight - 8;
-    let hospLogoRendered = false;
-    if (hospImg) {
-        try {
-            const maxH = 17.5;
-            const maxW = 86;
-            const aspect = hospImg.naturalWidth && hospImg.naturalHeight
-                ? hospImg.naturalWidth / hospImg.naturalHeight
-                : 2.2;
-            let drawH = maxH;
-            let drawW = drawH * aspect;
-            if (drawW > maxW) {
-                drawW = maxW;
-                drawH = drawW / aspect;
-            }
-            doc.addImage(hospImg.dataUrl || hospImg, 'PNG', rightLogoEdge - drawW, 19 + (maxH - drawH) / 2, drawW, drawH);
-            hospLogoRendered = true;
-        } catch (_) {}
-    }
-    if (!hospLogoRendered) {
-        doc.setFont('times', 'bold');
-        doc.setFontSize(19);
-        doc.setTextColor(15, 23, 42);
-        doc.text(hospitalName, rightLogoEdge, 29.5, { align: 'right', maxWidth: 96 });
-    }
-
-    // Horizontal line separating letterhead
-    doc.setDrawColor(17, 24, 39);
-    doc.setLineWidth(0.32);
-    doc.line(boxLeft, headerDividerY, boxRight, headerDividerY);
+    drawHospitalHeader();
 
     // Centered Underlined Title: "IN PATIENT CLINICAL NOTES"
     doc.setFont('helvetica', 'bold');
@@ -581,43 +584,95 @@ export const downloadInpatientClinicalNotesPdf = async ({
             let contY = drawHospitalHeader();
 
             // Continuation Title
+            const sheetNum = cp.sheetNumber || (cpIdx + 2);
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10.5);
+            doc.setFontSize(10.2);
             doc.setTextColor(15, 23, 42);
-            const titleText = `IN PATIENT CLINICAL NOTES — ${cp.title || 'CONTINUATION SHEET'} (PAGE ${pageNum})`;
-            const titleW = doc.getTextWidth(titleText);
-            doc.text(titleText, (pageWidth - titleW) / 2, contY + 5.5);
+            const titleText = `IN PATIENT CLINICAL NOTES — ${cp.title || `SHEET #${sheetNum}`} (PAGE ${pageNum})`;
+            const contTitleW = doc.getTextWidth(titleText);
+            doc.text(titleText, (pageWidth - contTitleW) / 2, contY + 5.5);
             doc.setDrawColor(15, 23, 42);
             doc.setLineWidth(0.3);
-            doc.line((pageWidth - titleW) / 2, contY + 6.5, (pageWidth + titleW) / 2, contY + 6.5);
-            contY += 8.5;
+            doc.line((pageWidth - contTitleW) / 2, contY + 6.5, (pageWidth + contTitleW) / 2, contY + 6.5);
+            contY += 11.5;
 
-            // Demographic meta row
-            drawInlineField('Date', data.noteDate, boxLeft + 2, boxLeft + 35, contY);
-            drawInlineField('Time', data.noteTime, boxLeft + 37, boxLeft + 70, contY);
-            drawInlineField('Ward', data.ward, boxLeft + 72, boxLeft + 105, contY);
-            drawInlineField('Bed No.', data.bedNo, boxLeft + 107, boxLeft + 140, contY);
-            drawInlineField('Consultant', data.consultantName, boxLeft + 142, boxRight - 2, contY);
-            contY += 7.2;
+            // Demographic & sheet meta rows
+            drawInlineField("Patient's Name", data.patientName, boxLeft + 2, boxLeft + 110, contY);
+            drawInlineField('Regd. No.', data.regdNo, boxLeft + 112, boxLeft + 150, contY);
+            drawInlineField('IPD No.', data.ipdNo, boxLeft + 152, boxRight - 2, contY);
+            contY += 6.5;
 
-            // 26 ruled observation lines
+            drawInlineField('Date', cp.noteDate || data.noteDate, boxLeft + 2, boxLeft + 36, contY);
+            drawInlineField('Time', cp.noteTime || data.noteTime, boxLeft + 38, boxLeft + 70, contY);
+            drawInlineField('Ward/Bed', [data.ward, data.bedNo].filter(Boolean).join(' / '), boxLeft + 72, boxLeft + 124, contY);
+            drawInlineField('Consultant', cp.consultantName || data.consultantName, boxLeft + 126, boxRight - 2, contY);
+            contY += 4.5;
+
+            // Optional Recorded Vitals Grid for AI Clinical Summary Sheets
+            let ruledLinesCount = 26;
+            if (cp.vitalsSnapshot && typeof cp.vitalsSnapshot === 'object') {
+                const vs = cp.vitalsSnapshot;
+                doc.setFillColor(214, 217, 222);
+                doc.setDrawColor(30, 30, 30);
+                doc.setLineWidth(0.32);
+                doc.rect(boxLeft, contY, boxWidth, 6.0, 'FD');
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8.6);
+                doc.setTextColor(15, 23, 42);
+                const vitTitle = vs.recordedAtDisplay
+                    ? `LATEST RECORDED VITALS (Recorded: ${vs.recordedAtDisplay})`
+                    : 'LATEST RECORDED VITALS';
+                doc.text(vitTitle, boxLeft + 2.2, contY + 4.2);
+                contY += 6.0;
+
+                const vRows = [
+                    [
+                        { label: 'BP', val: vs.bp || '—' },
+                        { label: 'Pulse', val: vs.pulse || '—' },
+                        { label: 'Temp.', val: vs.temp || '—' }
+                    ],
+                    [
+                        { label: 'SpO2', val: vs.spo2 || '—' },
+                        { label: 'RR', val: vs.rr || '—' },
+                        { label: 'Pain', val: vs.pain || '—' }
+                    ]
+                ];
+                vRows.forEach((rCells) => {
+                    rCells.forEach((cell, cIdx) => {
+                        const cX = boxLeft + cIdx * colW;
+                        doc.setDrawColor(45, 55, 72);
+                        doc.setLineWidth(0.25);
+                        doc.rect(cX, contY, colW, 6.2);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(8.3);
+                        doc.setTextColor(17, 24, 39);
+                        doc.text(cell.label, cX + 2.2, contY + 4.2);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(`:  ${cell.val}`, cX + 16, contY + 4.2, { maxWidth: colW - 18 });
+                    });
+                    contY += 6.2;
+                });
+                ruledLinesCount = 22;
+            }
+
+            // Ruled observation lines
             contY = drawRuledTextSection({
                 doc,
                 x: boxLeft,
                 y: contY,
                 width: boxWidth,
-                title: 'CLINICAL OBSERVATIONS & NOTES (CONTINUED)',
+                title: cp.isAiSummarySheet ? 'AI CLINICAL SUMMARY & OBSERVATIONS' : 'CLINICAL OBSERVATIONS & NOTES (CONTINUED)',
                 text: cp.notes || '',
-                lineCount: 26,
-                lineHeightMm: 6.8
+                lineCount: ruledLinesCount,
+                lineHeightMm: 6.6
             });
 
             // Footer
-            const contFooterY = Math.min(boxBottomY - 4.5, Math.max(contY + 7, boxBottomY - 5));
-            drawInlineField('Name of Consultant', data.footer?.consultantName, boxLeft + 2.5, boxLeft + 92, contFooterY);
+            const contFooterY = Math.min(boxBottomY - 4.5, Math.max(contY + 6, boxBottomY - 5));
+            drawInlineField('Name of Consultant', cp.consultantName || data.footer?.consultantName, boxLeft + 2.5, boxLeft + 92, contFooterY);
             drawInlineField('Signature', data.footer?.signature, boxLeft + 94, boxLeft + 140, contFooterY);
-            drawInlineField('Date', data.footer?.signDate, boxLeft + 141.5, boxLeft + 170, contFooterY);
-            drawInlineField('Time', data.footer?.signTime, boxLeft + 171, boxRight - 2.5, contFooterY);
+            drawInlineField('Date', cp.noteDate || data.footer?.signDate, boxLeft + 141.5, boxLeft + 170, contFooterY);
+            drawInlineField('Time', cp.noteTime || data.footer?.signTime, boxLeft + 171, boxRight - 2.5, contFooterY);
 
             drawOuterFrame();
             drawVectorStrokes(data.handwritingStrokes?.[`page${pageNum}`]);
@@ -859,26 +914,43 @@ export const printInpatientClinicalNotes = ({
                             </div>
                         </div>
 
-                        <div class="ipn-title">IN PATIENT CLINICAL NOTES — ${escapeHtml(cp.title || 'CONTINUATION SHEET')} (PAGE ${cp.pageNumber || idx + 3})</div>
+                        <div class="ipn-title">IN PATIENT CLINICAL NOTES — ${escapeHtml(cp.title || `SHEET #${cp.sheetNumber || (idx + 2)}`)} (PAGE ${cp.pageNumber || idx + 3})</div>
 
                         <div class="ipn-meta-rows">
+                            <div class="ipn-meta-row" style="margin-bottom:2mm;">
+                                <div class="ipn-field" style="flex:2.6"><span>Patient&apos;s Name</span><span class="ipn-field-val">${escapeHtml(data.patientName)}</span></div>
+                                <div class="ipn-field" style="flex:1.2"><span>Regd. No.</span><span class="ipn-field-val">${escapeHtml(data.regdNo)}</span></div>
+                                <div class="ipn-field" style="flex:1.2"><span>IPD No.</span><span class="ipn-field-val">${escapeHtml(data.ipdNo)}</span></div>
+                            </div>
                             <div class="ipn-meta-row" style="margin-bottom:0;">
-                                <div class="ipn-field" style="flex:1.1"><span>Date</span><span class="ipn-field-val">${escapeHtml(data.noteDate)}</span></div>
-                                <div class="ipn-field" style="flex:1"><span>Time</span><span class="ipn-field-val">${escapeHtml(data.noteTime)}</span></div>
+                                <div class="ipn-field" style="flex:1.1"><span>Date</span><span class="ipn-field-val">${escapeHtml(cp.noteDate || data.noteDate)}</span></div>
+                                <div class="ipn-field" style="flex:1"><span>Time</span><span class="ipn-field-val">${escapeHtml(cp.noteTime || data.noteTime)}</span></div>
                                 <div class="ipn-field" style="flex:1.3"><span>Ward</span><span class="ipn-field-val">${escapeHtml(data.ward)}</span></div>
                                 <div class="ipn-field" style="flex:1.2"><span>Bed No.</span><span class="ipn-field-val">${escapeHtml(data.bedNo)}</span></div>
-                                <div class="ipn-field" style="flex:2"><span>Consultant</span><span class="ipn-field-val">${escapeHtml(data.consultantName)}</span></div>
+                                <div class="ipn-field" style="flex:2"><span>Consultant</span><span class="ipn-field-val">${escapeHtml(cp.consultantName || data.consultantName)}</span></div>
                             </div>
                         </div>
 
-                        <div class="ipn-sec-hdr">CLINICAL OBSERVATIONS &amp; NOTES (CONTINUED)</div>
-                        ${buildPrintRuledLinesHtml(cp.notes || '', 26)}
+                        ${cp.vitalsSnapshot ? `
+                            <div class="ipn-sec-hdr">${escapeHtml(cp.vitalsSnapshot.recordedAtDisplay ? `LATEST RECORDED VITALS (Recorded: ${cp.vitalsSnapshot.recordedAtDisplay})` : 'LATEST RECORDED VITALS')}</div>
+                            <div class="ipn-gen-grid">
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">BP</span><span>${escapeHtml(cp.vitalsSnapshot.bp || '—')}</span></div>
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">Pulse</span><span>${escapeHtml(cp.vitalsSnapshot.pulse || '—')}</span></div>
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">Temp.</span><span>${escapeHtml(cp.vitalsSnapshot.temp || '—')}</span></div>
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">SpO2</span><span>${escapeHtml(cp.vitalsSnapshot.spo2 || '—')}</span></div>
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">RR</span><span>${escapeHtml(cp.vitalsSnapshot.rr || '—')}</span></div>
+                                <div class="ipn-gen-cell"><span class="ipn-gen-lbl">Pain</span><span>${escapeHtml(cp.vitalsSnapshot.pain || '—')}</span></div>
+                            </div>
+                        ` : ''}
+
+                        <div class="ipn-sec-hdr">${cp.isAiSummarySheet ? 'AI CLINICAL SUMMARY &amp; OBSERVATIONS' : 'CLINICAL OBSERVATIONS &amp; NOTES (CONTINUED)'}</div>
+                        ${buildPrintRuledLinesHtml(cp.notes || '', cp.vitalsSnapshot ? 22 : 26)}
 
                         <div class="ipn-footer-sign">
-                            <div class="ipn-field" style="flex:2.4"><span>Name of Consultant</span><span class="ipn-field-val">${escapeHtml(data.footer?.consultantName || '')}</span></div>
+                            <div class="ipn-field" style="flex:2.4"><span>Name of Consultant</span><span class="ipn-field-val">${escapeHtml(cp.consultantName || data.footer?.consultantName || '')}</span></div>
                             <div class="ipn-field" style="flex:1.4"><span>Signature</span><span class="ipn-field-val">${escapeHtml(data.footer?.signature || '')}</span></div>
-                            <div class="ipn-field" style="flex:0.9"><span>Date</span><span class="ipn-field-val">${escapeHtml(data.footer?.signDate || '')}</span></div>
-                            <div class="ipn-field" style="flex:0.8"><span>Time</span><span class="ipn-field-val">${escapeHtml(data.footer?.signTime || '')}</span></div>
+                            <div class="ipn-field" style="flex:0.9"><span>Date</span><span class="ipn-field-val">${escapeHtml(cp.noteDate || data.footer?.signDate || '')}</span></div>
+                            <div class="ipn-field" style="flex:0.8"><span>Time</span><span class="ipn-field-val">${escapeHtml(cp.noteTime || data.footer?.signTime || '')}</span></div>
                         </div>
                     </div>
                 </div>

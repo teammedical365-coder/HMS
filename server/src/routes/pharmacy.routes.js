@@ -1,49 +1,119 @@
 const express = require('express');
 const router = express.Router();
-const Inventory = require('../models/inventory.model');
-const PurchaseInvoice = require('../models/purchaseInvoice.model');
-const { verifyToken, verifyAdmin } = require('../middleware/auth.middleware');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const mongoose = require('mongoose');
 const multer = require('multer');
-const { parseInvoice } = require('../utils/invoiceParser');
+const Inventory = require('../models/inventory.model');
+const Medicine = require('../models/medicine.model');
+const PurchaseInvoice = require('../models/purchaseInvoice.model');
+const PurchaseInvoiceMedicine = require('../models/purchaseInvoiceMedicine.model');
+const Vendor = require('../models/vendor.model');
+const { verifyToken, verifyAdmin } = require('../middleware/auth.middleware');
+const { parseInvoice, validatePdfBuffer, InvoiceParseError } = require('../utils/invoiceParser');
+const { processInvoiceDocument } = require('../services/pharmacyInvoiceExtractor.service');
+
+const MAX_INVOICE_BYTES = 10 * 1024 * 1024; // 10MB
+const INVOICES_ROOT_DIR = path.resolve(__dirname, '../../uploads/invoices');
+
+const getTenantScope = (req) => {
+    if (req.user?.hospitalId) {
+        return { hospitalId: req.user.hospitalId };
+    }
+    return { pharmacyId: req.user.id };
+};
+
+const getTenantFolderName = (req) => {
+    const raw = req.user?.hospitalId || req.user?.id || 'default';
+    return String(raw).replace(/[^a-zA-Z0-9_-]/g, '') || 'default';
+};
+
+const resolveSafeInvoiceFilePath = (invoice) => {
+    const relPath = invoice?.uploadedPDF?.storagePath;
+    if (relPath) {
+        const resolved = path.resolve(INVOICES_ROOT_DIR, relPath);
+        if (resolved.startsWith(INVOICES_ROOT_DIR) && fs.existsSync(resolved)) {
+            return resolved;
+        }
+    }
+    const genName = invoice?.uploadedPDF?.generatedName;
+    if (genName) {
+        const legacyPath = path.resolve(INVOICES_ROOT_DIR, path.basename(genName));
+        if (legacyPath.startsWith(INVOICES_ROOT_DIR) && fs.existsSync(legacyPath)) {
+            return legacyPath;
+        }
+    }
+    return null;
+};
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    limits: { fileSize: MAX_INVOICE_BYTES },
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);
         } else {
-            cb(new Error('Only PDF files are allowed!'), false);
+            cb(new InvoiceParseError('UNSUPPORTED_FORMAT', 'Only PDF files are allowed for vendor invoice import.'), false);
         }
     }
 });
 
-const fs = require('fs');
-const path = require('path');
 const invoiceStorage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const dir = path.join(__dirname, '../../uploads/invoices');
-        if (!fs.existsSync(dir)){
+        const dir = path.join(INVOICES_ROOT_DIR, getTenantFolderName(req));
+        if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
         cb(null, dir);
     },
     filename: function (req, file, cb) {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        const safeBase = path.basename(file.originalname || 'invoice.pdf')
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .slice(-60);
+        const uid = crypto.randomBytes(6).toString('hex');
+        cb(null, `${Date.now()}-${uid}-${safeBase.endsWith('.pdf') ? safeBase : `${safeBase}.pdf`}`);
     }
 });
 
 const uploadInvoice = multer({
     storage: invoiceStorage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+    limits: { fileSize: MAX_INVOICE_BYTES },
     fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/pdf') {
+        const isPdfMime = file.mimetype === 'application/pdf' || file.mimetype === 'application/x-pdf';
+        const isPdfExt = /\.pdf$/i.test(file.originalname || '');
+        if (isPdfMime || isPdfExt) {
             cb(null, true);
         } else {
-            cb(new Error('Only PDF files are allowed!'), false);
+            cb(new InvoiceParseError('UNSUPPORTED_FORMAT', 'Unsupported file format. Please upload a PDF (.pdf) invoice file.'), false);
         }
     }
 });
+
+const handleInvoiceUploadMiddleware = (req, res, next) => {
+    uploadInvoice.single('invoice')(req, res, (err) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({
+                    success: false,
+                    code: 'FILE_TOO_LARGE',
+                    message: 'Uploaded PDF exceeds the maximum allowed size of 10MB.'
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                code: err.code || 'UPLOAD_ERROR',
+                message: 'File upload failed. Please select a valid PDF file under 10MB.'
+            });
+        }
+        return res.status(400).json({
+            success: false,
+            code: err.code || 'UNSUPPORTED_FORMAT',
+            message: err.message || 'Only PDF files are supported.'
+        });
+    });
+};
 
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
@@ -191,7 +261,6 @@ router.put('/inventory/:id', verifyToken, async (req, res) => {
 });
 
 // --- VENDOR MANAGEMENT ---
-const Vendor = require('../models/vendor.model');
 
 const validateVendorPayload = (data) => {
     const { vendorName, phone, gstin } = data;
@@ -384,81 +453,148 @@ router.get('/analytics/collections', verifyToken, async (req, res) => {
     }
 });
 
-// --- PURCHASE INVOICE MODULE ---
+// --- PURCHASE INVOICE MODULE (SMART VENDOR PDF IMPORT) ---
 
-// POST Upload Purchase Invoice
-router.post('/purchase-invoice/upload', verifyToken, uploadInvoice.single('invoice'), async (req, res) => {
+const cleanupUploadedFile = (filePath) => {
+    if (filePath && fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (_) {}
+    }
+};
+
+// POST Upload Purchase Invoice (Layered Native Coordinate + OCR Fallback + Smart Normalization + Validation)
+router.post('/purchase-invoice/upload', verifyToken, handleInvoiceUploadMiddleware, async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file uploaded or invalid file format.' });
+            return res.status(400).json({
+                success: false,
+                code: 'NO_FILE',
+                message: 'No PDF file was uploaded. Please choose a vendor invoice PDF.'
+            });
         }
 
+        const tenantScope = getTenantScope(req);
+        const hospitalId = req.user.hospitalId || null;
+        const pharmacyId = req.user.id || null;
+        const tenantFolder = getTenantFolderName(req);
+
         const originalName = req.file.originalname;
-        const generatedName = req.file.filename || `${Date.now()}-${originalName}`;
+        const generatedName = req.file.filename || `${Date.now()}-invoice.pdf`;
+        const storagePath = `${tenantFolder}/${generatedName}`;
         const size = req.file.size;
 
         const uploadDate = new Date();
         const uploadTime = uploadDate.toTimeString().split(' ')[0];
 
-        // 1. Parse PDF immediately
         let fileBuffer;
-        let parsedData;
         try {
             fileBuffer = fs.readFileSync(req.file.path);
-            if (!fileBuffer || fileBuffer.length === 0) {
-                throw new Error("Uploaded PDF file is empty or corrupt.");
-            }
-            parsedData = await parseInvoice(fileBuffer);
-            
-            if (!parsedData || !parsedData.invoice || !Array.isArray(parsedData.medicines)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Could not extract valid medicine items from this PDF layout.'
-                });
-            }
+            validatePdfBuffer(fileBuffer, { maxBytes: MAX_INVOICE_BYTES });
+        } catch (valErr) {
+            cleanupUploadedFile(req.file.path);
+            return res.status(400).json({
+                success: false,
+                code: valErr.code || 'INVALID_PDF',
+                message: valErr.message || 'Invalid PDF file.'
+            });
+        }
+
+        const fileHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+        // Load tenant Vendors, existing Inventory & master Medicines for smart format adaptation & candidate suggestions
+        const [vendorsList, existingInventory, masterMedicines] = await Promise.all([
+            hospitalId ? Vendor.find({ hospitalId }).lean() : Promise.resolve([]),
+            Inventory.find(tenantScope).select('_id name salt category unit unitsPerStrip batchNumber stock buyingPrice sellingPrice expiryDate').lean(),
+            Medicine.find({}).select('_id name genericName category').lean()
+        ]);
+
+        let processed;
+        try {
+            const allowOcrFallback = req.body?.useOcr !== 'false';
+            processed = await processInvoiceDocument({
+                buffer: fileBuffer,
+                hospitalId,
+                user: req.user,
+                vendors: vendorsList,
+                existingInventory,
+                masterMedicines,
+                allowOcrFallback
+            });
         } catch (parseErr) {
-            console.error("PDF Parsing Error:", parseErr);
-            // Cleanup the file before returning error
-            if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-            return res.status(400).json({ success: false, message: parseErr.message || 'Failed to parse invoice PDF' });
+            cleanupUploadedFile(req.file.path);
+            const code = parseErr?.code || 'PDF_PARSE_ERROR';
+            const userMsg = parseErr instanceof InvoiceParseError
+                ? parseErr.message
+                : 'Unable to process this PDF invoice. Please check the file or enter medicines manually.';
+            return res.status(400).json({
+                success: false,
+                code,
+                message: userMsg
+            });
         }
 
-        const { vendorName, vendorAddress, vendorDL, invoiceNumber, invoiceDate, grandTotal, taxableAmount, discount, cgst, sgst, igst } = parsedData.invoice;
-        const totalMedicines = parsedData.invoice.totalMedicines || parsedData.medicines.length;
-        const purchaseQty = parsedData.invoice.purchaseQty || 0;
-        const freeQty = parsedData.invoice.freeQty || 0;
+        const invMeta = processed.invoice || {};
+        const medicinesList = Array.isArray(processed.medicines) ? processed.medicines : [];
 
-        // 2. Prevent Duplicate Invoice
-        if (vendorName && invoiceNumber) {
-            const existingInvoice = await PurchaseInvoice.findOne({ vendorName, invoiceNumber });
-            if (existingInvoice) {
-                // Remove the uploaded file since it's a duplicate
-                try {
-                    fs.unlinkSync(req.file.path);
-                } catch (unlinkErr) {
-                    console.error("Failed to delete file:", unlinkErr);
+        // Tenant-scoped duplicate detection (Invoice Number + Vendor OR Identical PDF Hash)
+        const allowRevised = req.body?.allowRevised === 'true' || req.body?.allowRevised === true;
+        let existingDuplicate = null;
+        if (invMeta.invoiceNumber && invMeta.vendorName) {
+            existingDuplicate = await PurchaseInvoice.findOne({
+                ...tenantScope,
+                status: { $ne: 'Cancelled' },
+                invoiceNumber: new RegExp(`^${invMeta.invoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+                vendorName: new RegExp(`^${invMeta.vendorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+            }).lean();
+        }
+        if (!existingDuplicate) {
+            existingDuplicate = await PurchaseInvoice.findOne({
+                ...tenantScope,
+                status: { $ne: 'Cancelled' },
+                'uploadedPDF.fileHash': fileHash
+            }).lean();
+        }
+
+        if (existingDuplicate && !allowRevised) {
+            cleanupUploadedFile(req.file.path);
+            return res.status(409).json({
+                success: false,
+                code: 'DUPLICATE_INVOICE',
+                message: `Duplicate invoice detected: Invoice ${existingDuplicate.invoiceNumber || invMeta.invoiceNumber || '(Same PDF)'} from ${existingDuplicate.vendorName || invMeta.vendorName || 'this vendor'} already exists (${existingDuplicate.status}).`,
+                existingInvoice: {
+                    _id: existingDuplicate._id,
+                    invoiceNumber: existingDuplicate.invoiceNumber,
+                    vendorName: existingDuplicate.vendorName,
+                    status: existingDuplicate.status,
+                    uploadDate: existingDuplicate.uploadDate,
+                    importedMedicines: existingDuplicate.importedMedicines,
+                    totalMedicines: existingDuplicate.totalMedicines
                 }
-                return res.status(400).json({ success: false, message: 'Invoice Already Exists.' });
-            }
+            });
         }
 
-        // 3. Create Database Record
         const newInvoice = new PurchaseInvoice({
-            vendorName,
-            vendorGST: parsedData.invoice.vendorGST,
-            vendorAddress,
-            vendorDL,
-            invoiceNumber,
-            invoiceDate: invoiceDate ? new Date(invoiceDate) : null,
-            grandTotal,
-            taxableAmount,
-            discount,
-            cgst,
-            sgst,
-            igst,
-            totalMedicines,
-            purchaseQty,
-            freeQty,
+            hospitalId,
+            pharmacyId,
+            vendorId: invMeta.vendorId || null,
+            vendorName: invMeta.vendorName || '',
+            vendorGST: invMeta.vendorGST || '',
+            vendorAddress: invMeta.vendorAddress || '',
+            vendorDL: invMeta.vendorDL || '',
+            vendorPhone: invMeta.vendorPhone || '',
+            orderRef: invMeta.orderRef || '',
+            invoiceNumber: invMeta.invoiceNumber || '',
+            invoiceDate: invMeta.invoiceDate ? new Date(invMeta.invoiceDate) : null,
+            grandTotal: invMeta.grandTotal || 0,
+            taxableAmount: invMeta.taxableAmount || 0,
+            discountAmount: invMeta.discountAmount || 0,
+            cgst: invMeta.cgst || 0,
+            sgst: invMeta.sgst || 0,
+            igst: invMeta.igst || 0,
+            totalMedicines: medicinesList.length,
+            purchaseQty: invMeta.purchaseQty || 0,
+            freeQty: invMeta.freeQty || 0,
+            isRevisedDuplicate: Boolean(existingDuplicate && allowRevised),
+            extractionMeta: processed.extractionMeta || {},
             uploadedBy: {
                 name: req.user.name || 'Unknown',
                 email: req.user.email || 'Unknown',
@@ -467,86 +603,675 @@ router.post('/purchase-invoice/upload', verifyToken, uploadInvoice.single('invoi
             uploadedPDF: {
                 originalName,
                 generatedName,
-                size
+                storagePath,
+                size,
+                fileHash
             },
             uploadDate,
             uploadTime,
             status: 'Pending',
             importedMedicines: 0,
-            remainingMedicines: totalMedicines
+            skippedMedicines: 0,
+            failedMedicines: 0,
+            remainingMedicines: medicinesList.length
         });
 
         await newInvoice.save();
 
+        // Store extracted review lines in PurchaseInvoiceMedicine so partial progress & audits persist securely in MongoDB
+        if (medicinesList.length > 0) {
+            const lineDocs = medicinesList.map((m, idx) => ({
+                hospitalId,
+                invoiceId: newInvoice._id,
+                rowNumber: m.rowNumber || (idx + 1),
+                medicineName: m.medicineName,
+                rawMedicineName: m.rawMedicineName || m.medicineName,
+                salt: m.salt || '',
+                category: m.category || 'General',
+                manufacturer: m.manufacturer || '',
+                packSize: m.packSize || '',
+                unit: m.unit || 'Tablets',
+                unitsPerStrip: Number(m.unitsPerStrip) || 1,
+                hsnCode: m.hsnCode || '',
+                batch: m.batch || '',
+                expiryRaw: m.expiryRaw || '',
+                expiry: m.expiry && !Number.isNaN(new Date(m.expiry).getTime()) ? new Date(m.expiry) : null,
+                mfgDate: m.mfgDate && !Number.isNaN(new Date(m.mfgDate).getTime()) ? new Date(m.mfgDate) : null,
+                purchaseQty: m.purchaseQty !== undefined ? m.purchaseQty : null,
+                freeQty: Number(m.freeQty) || 0,
+                totalQty: (Number(m.purchaseQty) || 0) + (Number(m.freeQty) || 0),
+                purchaseRate: m.purchaseRate !== undefined ? m.purchaseRate : null,
+                mrp: m.mrp !== undefined ? m.mrp : null,
+                gst: m.gst !== undefined ? m.gst : null,
+                cgst: m.cgst !== undefined ? m.cgst : null,
+                sgst: m.sgst !== undefined ? m.sgst : null,
+                igst: m.igst !== undefined ? m.igst : null,
+                discount: m.discount !== undefined ? m.discount : null,
+                discountType: m.discountType || 'Percentage',
+                amount: m.amount !== undefined ? m.amount : null,
+                confidence: Number(m.confidence) || 0,
+                fieldConfidence: m.fieldConfidence || {},
+                warnings: Array.isArray(m.warnings) ? m.warnings : [],
+                originalExtracted: m.originalExtracted || null,
+                matchedInventoryId: m.matchedInventoryId || null,
+                importAction: m.importAction || 'create_new',
+                status: 'Pending'
+            }));
+            await PurchaseInvoiceMedicine.insertMany(lineDocs);
+        }
+
         res.status(201).json({
             success: true,
-            message: 'Invoice uploaded successfully',
+            message: medicinesList.length > 0
+                ? `Extracted ${medicinesList.length} medicine item(s) across ${processed.extractionMeta?.pageCount || 1} page(s).`
+                : 'PDF uploaded, but no medicine table rows were auto-detected. You can add rows manually in the review table.',
             invoice: newInvoice,
-            medicines: parsedData.medicines
+            medicines: medicinesList,
+            matchedVendor: processed.matchedVendor || null,
+            vendors: vendorsList,
+            extractionMeta: processed.extractionMeta || {}
         });
     } catch (error) {
-        // If parsing fails or any other error, remove the uploaded file
-        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-            try {
-                fs.unlinkSync(req.file.path);
-            } catch (unlinkErr) {
-                console.error("Failed to delete file:", unlinkErr);
-            }
-        }
-        console.error("Upload Invoice Error:", error);
-        res.status(500).json({ success: false, message: error.message || 'Failed to upload invoice.' });
+        cleanupUploadedFile(req.file?.path);
+        console.error('Upload Invoice Error:', error);
+        res.status(500).json({
+            success: false,
+            code: 'UPLOAD_FAILED',
+            message: 'Failed to process the uploaded invoice PDF. Please verify the file and try again.'
+        });
     }
 });
 
-// POST process purchase invoice (bulk import)
+// GET Authenticated & Tenant-Isolated PDF File Stream for Inline Invoice Preview
+router.get('/purchase-invoice/:id/file', verifyToken, async (req, res) => {
+    try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
+        }
+        const invoice = await PurchaseInvoice.findOne({ _id: req.params.id, ...getTenantScope(req) }).lean();
+        if (!invoice) {
+            return res.status(404).json({ success: false, message: 'Invoice not found or access denied' });
+        }
+
+        const resolvedPath = resolveSafeInvoiceFilePath(invoice);
+        if (!resolvedPath) {
+            return res.status(404).json({ success: false, message: 'Invoice PDF file is not available on disk.' });
+        }
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${path.basename(invoice.uploadedPDF?.originalName || 'invoice.pdf')}"`);
+        return res.sendFile(resolvedPath);
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to stream invoice PDF preview.' });
+    }
+});
+
+// POST Confirm & Bulk Import Reviewed Medicines in a Controlled Operation
+router.post('/purchase-invoice/:id/bulk-import', verifyToken, async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
+    }
+
+    const tenantScope = getTenantScope(req);
+    const hospitalId = req.user.hospitalId || null;
+    const pharmacyId = req.user.id || null;
+
+    let session = null;
+    try {
+        const invoice = await PurchaseInvoice.findOne({ _id: req.params.id, ...tenantScope });
+        if (!invoice) {
+            return res.status(404).json({ success: false, message: 'Invoice not found or access denied.' });
+        }
+        if (invoice.status === 'Completed') {
+            return res.status(409).json({
+                success: false,
+                code: 'ALREADY_IMPORTED',
+                message: 'This purchase invoice has already been imported.'
+            });
+        }
+
+        const {
+            rows = [],
+            invoiceMeta = {},
+            saveVendorMapping = true,
+            allowRevised = false
+        } = req.body || {};
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return res.status(400).json({ success: false, message: 'No review rows submitted for import.' });
+        }
+
+        // Update confirmed header metadata (preserving user edits)
+        const finalVendorName = String(invoiceMeta.vendorName ?? invoice.vendorName ?? '').trim();
+        const finalInvoiceNo = String(invoiceMeta.invoiceNumber ?? invoice.invoiceNumber ?? '').trim();
+        const finalVendorGST = String(invoiceMeta.vendorGST ?? invoice.vendorGST ?? '').trim().toUpperCase();
+        const finalVendorDL = String(invoiceMeta.vendorDL ?? invoice.vendorDL ?? '').trim();
+
+        // Guard against importing a duplicate completed invoice under edited Invoice Number + Vendor
+        if (finalVendorName && finalInvoiceNo && !allowRevised) {
+            const dupCompleted = await PurchaseInvoice.findOne({
+                ...tenantScope,
+                _id: { $ne: invoice._id },
+                status: 'Completed',
+                invoiceNumber: new RegExp(`^${finalInvoiceNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+                vendorName: new RegExp(`^${finalVendorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+            }).lean();
+            if (dupCompleted) {
+                return res.status(409).json({
+                    success: false,
+                    code: 'DUPLICATE_COMPLETED_INVOICE',
+                    message: `Invoice ${finalInvoiceNo} from ${finalVendorName} was already imported earlier.`
+                });
+            }
+        }
+
+        // Resolve or create Vendor within tenant scope & update learned column mappings
+        let vendorDoc = null;
+        if (invoiceMeta.vendorId && mongoose.Types.ObjectId.isValid(invoiceMeta.vendorId)) {
+            vendorDoc = await Vendor.findOne({ _id: invoiceMeta.vendorId, ...(hospitalId ? { hospitalId } : {}) });
+        }
+        if (!vendorDoc && hospitalId && (finalVendorGST || finalVendorName)) {
+            if (finalVendorGST) {
+                vendorDoc = await Vendor.findOne({ hospitalId, gstin: finalVendorGST });
+            }
+            if (!vendorDoc && finalVendorName) {
+                vendorDoc = await Vendor.findOne({
+                    hospitalId,
+                    vendorName: new RegExp(`^${finalVendorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+                });
+            }
+            if (!vendorDoc && finalVendorName) {
+                // Create clean vendor record if valid
+                const cleanGstin = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(finalVendorGST) ? finalVendorGST : '';
+                vendorDoc = await Vendor.create({
+                    hospitalId,
+                    vendorName: finalVendorName,
+                    gstin: cleanGstin,
+                    dlNumber: finalVendorDL
+                });
+            }
+        }
+
+        if (vendorDoc && saveVendorMapping && invoice.extractionMeta?.columnMappings) {
+            const existingMap = (vendorDoc.invoiceFormatProfile && vendorDoc.invoiceFormatProfile.columnMappings) || {};
+            const mergedMap = { ...existingMap, ...invoice.extractionMeta.columnMappings };
+            vendorDoc.invoiceFormatProfile = {
+                columnMappings: mergedMap,
+                confirmedCount: Number(vendorDoc.invoiceFormatProfile?.confirmedCount || 0) + 1,
+                lastHeaders: Array.isArray(invoice.extractionMeta?.detectedHeaders) ? invoice.extractionMeta.detectedHeaders : [],
+                lastInvoiceNumber: finalInvoiceNo || vendorDoc.invoiceFormatProfile?.lastInvoiceNumber || '',
+                updatedAt: new Date()
+            };
+            await vendorDoc.save();
+        }
+
+        // Attempt optional MongoDB replica-set transaction; cleanly fall back to tracked rollback if standalone MongoDB
+        let useTransaction = false;
+        try {
+            session = await mongoose.startSession();
+            session.startTransaction();
+            useTransaction = true;
+        } catch (_) {
+            if (session) { try { await session.endSession(); } catch (__) {} session = null; }
+            useTransaction = false;
+        }
+
+        const createdInventoryIds = [];
+        const priorInventorySnapshots = [];
+
+        const rollbackStandaloneOps = async () => {
+            if (createdInventoryIds.length > 0) {
+                await Inventory.deleteMany({ _id: { $in: createdInventoryIds }, ...tenantScope }).catch(() => {});
+            }
+            for (const snap of priorInventorySnapshots) {
+                const { _id, ...restoreData } = snap.data || {};
+                if (snap._id) {
+                    await Inventory.replaceOne({ _id: snap._id, ...tenantScope }, restoreData).catch(() => {});
+                }
+            }
+        };
+
+        const runBulkOps = async (dbSession) => {
+            createdInventoryIds.length = 0;
+            priorInventorySnapshots.length = 0;
+            const sessOpt = dbSession ? { session: dbSession } : {};
+            const importedRows = [];
+            const skippedRows = [];
+            const failedRows = [];
+            const persistedLineDocs = [];
+
+            let totalImportedPurchaseQty = 0;
+            let totalImportedFreeQty = 0;
+            let totalTaxable = 0;
+            let totalDiscount = 0;
+            let totalCgstAmt = 0;
+            let totalSgstAmt = 0;
+            let totalNetAmt = 0;
+
+            const effectivePurchaseDate = invoiceMeta.invoiceDate && !Number.isNaN(new Date(invoiceMeta.invoiceDate).getTime())
+                ? new Date(invoiceMeta.invoiceDate)
+                : (invoice.invoiceDate || new Date());
+
+            for (let idx = 0; idx < rows.length; idx += 1) {
+                const r = rows[idx] || {};
+                const rowNo = Number(r.rowNumber) || (idx + 1);
+                const medName = String(r.medicineName || '').trim();
+                const isIncluded = r.included !== false && r.importAction !== 'skip';
+
+                if (!isIncluded) {
+                    skippedRows.push({ rowNumber: rowNo, medicineName: medName || '(Unnamed)', reason: 'Excluded by reviewer' });
+                    persistedLineDocs.push({
+                        hospitalId,
+                        invoiceId: invoice._id,
+                        rowNumber: rowNo,
+                        medicineName: medName || 'Skipped Item',
+                        rawMedicineName: r.rawMedicineName || medName,
+                        batch: String(r.batch || '').trim(),
+                        status: 'Skipped',
+                        importAction: 'skip'
+                    });
+                    continue;
+                }
+
+                // Strictly validate confirmed row fields without inventing missing data
+                const rowErrors = [];
+                if (!medName || medName.length < 2) rowErrors.push('Medicine name is required');
+                const pQty = Number(r.purchaseQty);
+                const fQty = Number(r.freeQty) || 0;
+                if (!Number.isFinite(pQty) || pQty < 0 || (pQty === 0 && fQty <= 0)) {
+                    rowErrors.push('Valid quantity (> 0) is required');
+                }
+                const rate = Number(r.purchaseRate);
+                if (!Number.isFinite(rate) || rate < 0 || (r.purchaseRate === '' || r.purchaseRate === null || r.purchaseRate === undefined)) {
+                    rowErrors.push('Valid purchase rate is required');
+                }
+                const mrpVal = (r.mrp === '' || r.mrp === null || r.mrp === undefined) ? null : Number(r.mrp);
+                if (mrpVal !== null && (!Number.isFinite(mrpVal) || mrpVal < 0)) {
+                    rowErrors.push('MRP must be a valid non-negative number');
+                }
+
+                let parsedExpiry = null;
+                if (r.expiry && String(r.expiry).trim()) {
+                    const d = new Date(r.expiry);
+                    if (Number.isNaN(d.getTime())) {
+                        rowErrors.push('Invalid expiry date');
+                    } else {
+                        parsedExpiry = d;
+                    }
+                }
+
+                let parsedMfg = null;
+                if (r.mfgDate && String(r.mfgDate).trim()) {
+                    const md = new Date(r.mfgDate);
+                    if (!Number.isNaN(md.getTime())) parsedMfg = md;
+                }
+
+                if (rowErrors.length > 0) {
+                    failedRows.push({
+                        rowNumber: rowNo,
+                        medicineName: medName || '(Unnamed)',
+                        batch: r.batch || '',
+                        errors: rowErrors
+                    });
+                    persistedLineDocs.push({
+                        hospitalId,
+                        invoiceId: invoice._id,
+                        rowNumber: rowNo,
+                        medicineName: medName || 'Invalid Item',
+                        rawMedicineName: r.rawMedicineName || medName,
+                        batch: String(r.batch || '').trim(),
+                        expiry: parsedExpiry,
+                        purchaseQty: Number.isFinite(pQty) ? pQty : null,
+                        freeQty: fQty,
+                        purchaseRate: Number.isFinite(rate) ? rate : null,
+                        mrp: mrpVal,
+                        status: 'Failed',
+                        errorMessage: rowErrors.join('; ')
+                    });
+                    continue;
+                }
+
+                const unit = r.unit || 'Tablets';
+                let unitsPerStrip = Number(r.unitsPerStrip) || 1;
+                const packTotal = pQty + fQty;
+                const stockToAdd = ['Strip', 'Capsules', 'Tablets'].includes(unit) && unitsPerStrip > 1
+                    ? packTotal * unitsPerStrip
+                    : packTotal;
+
+                const discType = r.discountType === 'Flat Amount' ? 'Flat Amount' : 'Percentage';
+                const discVal = Number(r.discount) || 0;
+                const gstPct = (r.gst !== '' && r.gst !== null && r.gst !== undefined) ? Number(r.gst) || 0 : ((Number(r.cgst) || 0) + (Number(r.sgst) || 0));
+                const cgstPct = (r.cgst !== '' && r.cgst !== null && r.cgst !== undefined) ? Number(r.cgst) || 0 : Number((gstPct / 2).toFixed(2));
+                const sgstPct = (r.sgst !== '' && r.sgst !== null && r.sgst !== undefined) ? Number(r.sgst) || 0 : Number((gstPct / 2).toFixed(2));
+
+                const gross = pQty * rate;
+                const discAmt = discType === 'Flat Amount' ? discVal : gross * (discVal / 100);
+                const taxable = Math.max(0, gross - discAmt);
+                const cgstAmt = taxable * (cgstPct / 100);
+                const sgstAmt = taxable * (sgstPct / 100);
+                const lineFinalAmount = Number((taxable + cgstAmt + sgstAmt).toFixed(2));
+
+                totalImportedPurchaseQty += pQty;
+                totalImportedFreeQty += fQty;
+                totalTaxable += taxable;
+                totalDiscount += discAmt;
+                totalCgstAmt += cgstAmt;
+                totalSgstAmt += sgstAmt;
+                totalNetAmt += lineFinalAmount;
+
+                const batchStr = String(r.batch || '').trim();
+                const targetVendorName = vendorDoc?.vendorName || finalVendorName || 'Vendor';
+
+                // Check duplicate-invoice-row guard
+                const alreadyInThisInv = await Inventory.findOne({
+                    ...tenantScope,
+                    purchaseInvoiceId: invoice._id,
+                    name: medName,
+                    batchNumber: batchStr
+                }, null, sessOpt);
+
+                if (alreadyInThisInv) {
+                    skippedRows.push({
+                        rowNumber: rowNo,
+                        medicineName: medName,
+                        batch: batchStr,
+                        reason: 'Already imported in this invoice'
+                    });
+                    continue;
+                }
+
+                // Link to explicit user-confirmed existing Inventory item ONLY if same batch or user selected 'link_existing'
+                let invDoc = null;
+                if (r.importAction === 'link_existing' && r.matchedInventoryId && mongoose.Types.ObjectId.isValid(r.matchedInventoryId)) {
+                    const candidate = await Inventory.findOne({ _id: r.matchedInventoryId, ...tenantScope }, null, sessOpt);
+                    if (candidate && (!candidate.batchNumber || !batchStr || candidate.batchNumber === batchStr)) {
+                        invDoc = candidate;
+                    }
+                }
+                if (!invDoc && batchStr) {
+                    invDoc = await Inventory.findOne({
+                        ...tenantScope,
+                        name: medName,
+                        batchNumber: batchStr
+                    }, null, sessOpt);
+                }
+
+                if (invDoc) {
+                    if (!useTransaction) {
+                        priorInventorySnapshots.push({ _id: invDoc._id, data: invDoc.toObject() });
+                    }
+                    invDoc.stock = (Number(invDoc.stock) || 0) + stockToAdd;
+                    invDoc.totalStock = (Number(invDoc.totalStock) || 0) + stockToAdd;
+                    invDoc.buyingPrice = rate || invDoc.buyingPrice;
+                    if (mrpVal !== null && mrpVal > 0) invDoc.sellingPrice = mrpVal;
+                    invDoc.pricingConfig = {
+                        ...(invDoc.pricingConfig || {}),
+                        purchasePrice: rate || invDoc.pricingConfig?.purchasePrice || 0,
+                        mrp: mrpVal !== null ? mrpVal : (invDoc.pricingConfig?.mrp || invDoc.sellingPrice || 0),
+                        sellingPrice: mrpVal !== null ? mrpVal : (invDoc.pricingConfig?.sellingPrice || invDoc.sellingPrice || 0)
+                    };
+                    if (parsedExpiry && !invDoc.expiryDate) invDoc.expiryDate = parsedExpiry;
+                    if (r.salt && !invDoc.salt) invDoc.salt = String(r.salt).trim();
+                    if (r.hsnCode && !invDoc.hsnCode) invDoc.hsnCode = String(r.hsnCode).trim();
+                    if (r.manufacturer && !invDoc.manufacturer) invDoc.manufacturer = String(r.manufacturer).trim();
+                    if (r.packSize && !invDoc.packSize) invDoc.packSize = String(r.packSize).trim();
+                    invDoc.cgst = cgstPct;
+                    invDoc.sgst = sgstPct;
+                    invDoc.cgstPercent = cgstPct;
+                    invDoc.sgstPercent = sgstPct;
+                    invDoc.purchaseQty = (Number(invDoc.purchaseQty) || 0) + pQty;
+                    invDoc.freeQty = (Number(invDoc.freeQty) || 0) + fQty;
+                    invDoc.purchaseInvoiceId = invoice._id;
+                    invDoc.vendor = targetVendorName;
+                    if (vendorDoc?._id) invDoc.vendorId = vendorDoc._id;
+                    await invDoc.save(sessOpt);
+                } else {
+                    invDoc = new Inventory({
+                        pharmacyId,
+                        hospitalId,
+                        name: medName,
+                        salt: String(r.salt || '').trim(),
+                        category: String(r.category || 'General').trim() || 'General',
+                        manufacturer: String(r.manufacturer || '').trim(),
+                        packSize: String(r.packSize || '').trim(),
+                        hsnCode: String(r.hsnCode || '').trim(),
+                        mfgDate: parsedMfg,
+                        batchNumber: batchStr,
+                        expiryDate: parsedExpiry,
+                        purchaseDate: effectivePurchaseDate,
+                        stock: stockToAdd,
+                        totalStock: stockToAdd,
+                        unit,
+                        unitsPerStrip,
+                        buyingPrice: rate,
+                        sellingPrice: mrpVal !== null ? mrpVal : 0,
+                        pricingConfig: {
+                            purchasePrice: rate,
+                            landingCost: pQty > 0 ? Number((lineFinalAmount / pQty).toFixed(2)) : rate,
+                            mrp: mrpVal !== null ? mrpVal : 0,
+                            sellingPrice: mrpVal !== null ? mrpVal : 0
+                        },
+                        cgst: cgstPct,
+                        sgst: sgstPct,
+                        cgstPercent: cgstPct,
+                        sgstPercent: sgstPct,
+                        purchaseQty: pQty,
+                        freeQty: fQty,
+                        discountType: discType,
+                        discountValue: discVal,
+                        purchaseAmount: Number(gross.toFixed(2)),
+                        finalAmount: lineFinalAmount,
+                        purchaseInvoiceId: invoice._id,
+                        vendor: targetVendorName,
+                        vendorId: vendorDoc?._id || null
+                    });
+                    await invDoc.save(sessOpt);
+                    createdInventoryIds.push(invDoc._id);
+                }
+
+                importedRows.push({
+                    rowNumber: rowNo,
+                    inventoryId: invDoc._id,
+                    medicineName: invDoc.name,
+                    batch: invDoc.batchNumber,
+                    stockAdded: stockToAdd,
+                    action: r.importAction === 'link_existing' ? 'Updated Existing Stock' : 'Created New Batch'
+                });
+
+                persistedLineDocs.push({
+                    hospitalId,
+                    invoiceId: invoice._id,
+                    rowNumber: rowNo,
+                    medicineName: medName,
+                    rawMedicineName: r.rawMedicineName || medName,
+                    salt: String(r.salt || '').trim(),
+                    category: String(r.category || 'General').trim(),
+                    manufacturer: String(r.manufacturer || '').trim(),
+                    packSize: String(r.packSize || '').trim(),
+                    unit,
+                    unitsPerStrip,
+                    hsnCode: String(r.hsnCode || '').trim(),
+                    batch: batchStr,
+                    expiryRaw: r.expiryRaw || '',
+                    expiry: parsedExpiry,
+                    mfgDate: parsedMfg,
+                    purchaseQty: pQty,
+                    freeQty: fQty,
+                    totalQty: stockToAdd,
+                    purchaseRate: rate,
+                    mrp: mrpVal,
+                    gst: gstPct,
+                    cgst: cgstPct,
+                    sgst: sgstPct,
+                    discount: discVal,
+                    discountType: discType,
+                    amount: Number(r.amount) || lineFinalAmount,
+                    confidence: Number(r.confidence) || 100,
+                    originalExtracted: r.originalExtracted || null,
+                    matchedInventoryId: r.matchedInventoryId || null,
+                    importAction: r.importAction || 'create_new',
+                    inventoryId: invDoc._id,
+                    status: 'Imported'
+                });
+            }
+
+            // Replace pending PurchaseInvoiceMedicine lines cleanly with final persisted results
+            await PurchaseInvoiceMedicine.deleteMany({ invoiceId: invoice._id }, sessOpt);
+            if (persistedLineDocs.length > 0) {
+                await PurchaseInvoiceMedicine.insertMany(persistedLineDocs, sessOpt);
+            }
+
+            invoice.vendorName = finalVendorName || invoice.vendorName;
+            invoice.vendorGST = finalVendorGST || invoice.vendorGST;
+            invoice.vendorDL = finalVendorDL || invoice.vendorDL;
+            invoice.invoiceNumber = finalInvoiceNo || invoice.invoiceNumber;
+            if (vendorDoc?._id) invoice.vendorId = vendorDoc._id;
+            if (invoiceMeta.invoiceDate && !Number.isNaN(new Date(invoiceMeta.invoiceDate).getTime())) {
+                invoice.invoiceDate = new Date(invoiceMeta.invoiceDate);
+            }
+            invoice.totalMedicines = rows.length;
+            invoice.importedMedicines = importedRows.length;
+            invoice.skippedMedicines = skippedRows.length;
+            invoice.failedMedicines = failedRows.length;
+            invoice.remainingMedicines = failedRows.length;
+            invoice.purchaseQty = totalImportedPurchaseQty;
+            invoice.freeQty = totalImportedFreeQty;
+            if (totalNetAmt > 0 && !invoice.grandTotal) {
+                invoice.taxableAmount = Number(totalTaxable.toFixed(2));
+                invoice.discountAmount = Number(totalDiscount.toFixed(2));
+                invoice.cgst = Number(totalCgstAmt.toFixed(2));
+                invoice.sgst = Number(totalSgstAmt.toFixed(2));
+                invoice.grandTotal = Number(totalNetAmt.toFixed(2));
+            }
+            invoice.status = failedRows.length === 0
+                ? 'Completed'
+                : (importedRows.length > 0 ? 'Partially Imported' : 'Pending');
+
+            await invoice.save(sessOpt);
+
+            return {
+                importedRows,
+                skippedRows,
+                failedRows,
+                createdInventoryIds,
+                priorInventorySnapshots,
+                invoice
+            };
+        };
+
+        let result;
+        if (useTransaction && session) {
+            try {
+                result = await runBulkOps(session);
+                await session.commitTransaction();
+            } catch (txErr) {
+                await session.abortTransaction().catch(() => {});
+                // Fallback only if standalone MongoDB doesn't support replica-set transactions
+                if (/transaction numbers are only allowed|replica set/i.test(txErr.message || '')) {
+                    useTransaction = false;
+                    try {
+                        result = await runBulkOps(null);
+                    } catch (standaloneErr) {
+                        await rollbackStandaloneOps();
+                        throw standaloneErr;
+                    }
+                } else {
+                    throw txErr;
+                }
+            } finally {
+                await session.endSession().catch(() => {});
+                session = null;
+            }
+        } else {
+            try {
+                result = await runBulkOps(null);
+            } catch (standaloneErr) {
+                await rollbackStandaloneOps();
+                throw standaloneErr;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Bulk import complete: ${result.importedRows.length} imported, ${result.skippedRows.length} skipped, ${result.failedRows.length} failed.`,
+            summary: {
+                total: rows.length,
+                imported: result.importedRows.length,
+                skipped: result.skippedRows.length,
+                failed: result.failedRows.length
+            },
+            results: {
+                importedRows: result.importedRows,
+                skippedRows: result.skippedRows,
+                failedRows: result.failedRows
+            },
+            invoice: result.invoice
+        });
+    } catch (error) {
+        if (session) {
+            try { await session.abortTransaction(); } catch (_) {}
+            try { await session.endSession(); } catch (_) {}
+        }
+        console.error('Bulk Import Invoice Error:', error);
+        res.status(500).json({
+            success: false,
+            code: 'BULK_IMPORT_FAILED',
+            message: error.message || 'Bulk import failed without modifying finalized records.'
+        });
+    }
+});
+
+// POST process purchase invoice (legacy 1-click process preserved & hardened with tenant isolation)
 router.post('/purchase-invoice/:id/process', verifyToken, async (req, res) => {
     try {
-        const invoice = await PurchaseInvoice.findById(req.params.id);
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
+        }
+        const tenantScope = getTenantScope(req);
+        const invoice = await PurchaseInvoice.findOne({ _id: req.params.id, ...tenantScope });
         if (!invoice) {
-            return res.status(404).json({ success: false, message: 'Invoice not found' });
+            return res.status(404).json({ success: false, message: 'Invoice not found or access denied' });
         }
         if (invoice.status === 'Completed') {
             return res.status(400).json({ success: false, message: 'Invoice already processed' });
         }
 
-        const filePath = path.join(__dirname, '../../uploads/invoices', invoice.uploadedPDF.generatedName);
-        if (!fs.existsSync(filePath)) {
+        const filePath = resolveSafeInvoiceFilePath(invoice);
+        if (!filePath) {
             return res.status(404).json({ success: false, message: 'Invoice PDF file not found on server' });
         }
 
         const fileBuffer = fs.readFileSync(filePath);
         const parsedData = await parseInvoice(fileBuffer);
-        
+
         if (!parsedData || !parsedData.medicines || !Array.isArray(parsedData.medicines)) {
             return res.status(400).json({ success: false, message: 'Invalid or empty parsed data from invoice PDF' });
         }
-        
+
         const pharmacyId = req.user.id;
         const hospitalId = req.user.hospitalId;
 
         let importedCount = 0;
         let trueGrandTotal = 0;
-        
+
         for (const med of parsedData.medicines) {
-            // Check if it exists
-            const query = { 
-                name: med.medicineName, 
-                batchNumber: med.batch || ''
+            const query = {
+                name: med.medicineName,
+                batchNumber: med.batch || '',
+                ...tenantScope
             };
-            if (hospitalId) {
-                query.hospitalId = hospitalId;
-            } else {
-                query.pharmacyId = pharmacyId;
-            }
 
             let item = await Inventory.findOne(query);
 
-            const purchaseQty = med.purchaseQty || 0;
-            const freeQty = med.freeQty || 0;
+            const purchaseQty = Number(med.purchaseQty) || 0;
+            const freeQty = Number(med.freeQty) || 0;
             const totalQty = purchaseQty + freeQty;
-            const buyingPrice = med.purchaseRate || 0;
-            
-            trueGrandTotal += (purchaseQty * buyingPrice);
+            const buyingPrice = Number(med.purchaseRate) || 0;
+
+            trueGrandTotal += Number(med.amount) || (purchaseQty * buyingPrice);
+
+            const cgstVal = med.gst ? Number((Number(med.gst) / 2).toFixed(2)) : (Number(med.cgst) || 0);
+            const sgstVal = med.gst ? Number((Number(med.gst) / 2).toFixed(2)) : (Number(med.sgst) || 0);
 
             if (item) {
                 item.stock += totalQty;
@@ -559,28 +1284,32 @@ router.post('/purchase-invoice/:id/process', verifyToken, async (req, res) => {
                     pharmacyId,
                     hospitalId,
                     name: med.medicineName,
+                    salt: med.salt || '',
+                    category: med.category || 'General',
+                    hsnCode: med.hsnCode || '',
+                    packSize: med.packSize || '',
+                    manufacturer: med.manufacturer || '',
+                    unit: med.unit || 'Tablets',
+                    unitsPerStrip: Number(med.unitsPerStrip) || 1,
                     batchNumber: med.batch || '',
                     stock: totalQty,
-                    buyingPrice: buyingPrice,
+                    buyingPrice,
                     sellingPrice: med.mrp || 0,
-                    cgst: med.gst / 2 || 0,
-                    sgst: med.gst / 2 || 0,
-                    purchaseQty: purchaseQty,
-                    freeQty: freeQty,
+                    cgst: cgstVal,
+                    sgst: sgstVal,
+                    cgstPercent: cgstVal,
+                    sgstPercent: sgstVal,
+                    purchaseQty,
+                    freeQty,
                     discountType: med.discountType || 'Percentage',
-                    discountValue: med.discountValue || med.discount || 0,
+                    discountValue: med.discount || 0,
                     purchaseInvoiceId: invoice._id,
                     vendor: invoice.vendorName || 'Unknown Vendor'
                 });
-                
+
                 if (med.expiry) {
-                    const parts = med.expiry.split(/[\/\-]/);
-                    if (parts.length === 2) {
-                        let month = parseInt(parts[0]);
-                        let year = parseInt(parts[1]);
-                        if (year < 100) year += 2000;
-                        item.expiryDate = new Date(year, month - 1, 1);
-                    }
+                    const d = new Date(med.expiry);
+                    if (!Number.isNaN(d.getTime())) item.expiryDate = d;
                 }
                 await item.save();
             }
@@ -590,37 +1319,39 @@ router.post('/purchase-invoice/:id/process', verifyToken, async (req, res) => {
         invoice.importedMedicines = invoice.totalMedicines || importedCount;
         invoice.remainingMedicines = 0;
         invoice.status = 'Completed';
-        invoice.grandTotal = trueGrandTotal;
+        if (!invoice.grandTotal) invoice.grandTotal = Number(trueGrandTotal.toFixed(2));
         await invoice.save();
 
         res.json({ success: true, message: 'Invoice processed successfully', importedCount, trueGrandTotal });
     } catch (error) {
-        console.error("Process Invoice Error:", error);
+        console.error('Process Invoice Error:', error);
         res.status(500).json({ success: false, message: error.message || 'Failed to process invoice' });
     }
 });
 
-// GET all purchase invoices
+// GET all purchase invoices (strictly tenant-isolated)
 router.get('/purchase-invoice', verifyToken, async (req, res) => {
     try {
-        const invoices = await PurchaseInvoice.find().sort({ createdAt: -1 });
-        
-        // Fallback calculation for older invoices with 0 grandTotal
-        for (let inv of invoices) {
+        const tenantScope = getTenantScope(req);
+        const invoices = await PurchaseInvoice.find(tenantScope).sort({ createdAt: -1 });
+
+        for (const inv of invoices) {
             if (!inv.grandTotal && inv.status === 'Completed') {
-                const items = await Inventory.find({ purchaseInvoiceId: inv._id });
+                const items = await Inventory.find({ purchaseInvoiceId: inv._id, ...tenantScope });
                 let calculatedTotal = 0;
-                for (let med of items) {
+                for (const med of items) {
                     const qty = med.purchaseQty || 0;
                     const price = med.buyingPrice || 0;
                     const discount = med.discountValue || 0;
-                    const afterDiscount = (qty * price) - discount;
-                    const taxAmt = afterDiscount * ((med.cgst || 0) + (med.sgst || 0)) / 100;
+                    const afterDiscount = med.discountType === 'Flat Amount'
+                        ? (qty * price) - discount
+                        : (qty * price) * (1 - discount / 100);
+                    const taxAmt = afterDiscount * ((med.cgstPercent || med.cgst || 0) + (med.sgstPercent || med.sgst || 0)) / 100;
                     calculatedTotal += afterDiscount + taxAmt;
                 }
                 if (calculatedTotal > 0) {
-                    inv.grandTotal = calculatedTotal;
-                    await PurchaseInvoice.updateOne({ _id: inv._id }, { $set: { grandTotal: calculatedTotal } });
+                    inv.grandTotal = Number(calculatedTotal.toFixed(2));
+                    await PurchaseInvoice.updateOne({ _id: inv._id }, { $set: { grandTotal: inv.grandTotal } });
                 }
             }
         }
@@ -631,44 +1362,63 @@ router.get('/purchase-invoice', verifyToken, async (req, res) => {
     }
 });
 
-// GET single purchase invoice by ID
+// GET single purchase invoice by ID (strictly tenant-isolated)
 router.get('/purchase-invoice/:id', verifyToken, async (req, res) => {
     try {
-        const invoice = await PurchaseInvoice.findById(req.params.id);
-        if (!invoice) {
-            return res.status(404).json({ success: false, message: 'Invoice not found' });
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
         }
-        
+        const tenantScope = getTenantScope(req);
+        const invoice = await PurchaseInvoice.findOne({ _id: req.params.id, ...tenantScope });
+        if (!invoice) {
+            return res.status(404).json({ success: false, message: 'Invoice not found or access denied' });
+        }
+
         let importedMedicines = [];
+        const savedLines = await PurchaseInvoiceMedicine.find({ invoiceId: invoice._id }).sort({ rowNumber: 1 }).lean();
+
         if (invoice.status === 'Completed') {
-            importedMedicines = await Inventory.find({ purchaseInvoiceId: invoice._id });
+            importedMedicines = await Inventory.find({ purchaseInvoiceId: invoice._id, ...tenantScope }).lean();
+            if (importedMedicines.length === 0 && savedLines.length > 0) {
+                importedMedicines = savedLines;
+            }
+        } else if (savedLines.length > 0) {
+            importedMedicines = savedLines.map((m) => ({
+                ...m,
+                name: m.medicineName,
+                batchNumber: m.batch,
+                buyingPrice: m.purchaseRate,
+                sellingPrice: m.mrp,
+                discountValue: m.discount || 0
+            }));
         } else {
-            // For pending invoices, we can re-parse the PDF to return the medicines to display
-            const filePath = path.join(__dirname, '../../uploads/invoices', invoice.uploadedPDF.generatedName);
-            if (fs.existsSync(filePath)) {
+            const filePath = resolveSafeInvoiceFilePath(invoice);
+            if (filePath) {
                 const fileBuffer = fs.readFileSync(filePath);
                 try {
                     const parsedData = await parseInvoice(fileBuffer);
-                    importedMedicines = parsedData.medicines.map(m => ({
+                    importedMedicines = (parsedData.medicines || []).map((m) => ({
                         name: m.medicineName,
+                        medicineName: m.medicineName,
+                        salt: m.salt || '',
                         batchNumber: m.batch,
                         purchaseQty: m.purchaseQty,
                         freeQty: m.freeQty,
                         buyingPrice: m.purchaseRate,
                         sellingPrice: m.mrp,
-                        totalAmount: m.purchaseQty * m.purchaseRate,
+                        totalAmount: m.amount || ((m.purchaseQty || 0) * (m.purchaseRate || 0)),
                         expiryDate: m.expiry,
                         discountValue: m.discount || 0,
-                        cgst: m.gst ? m.gst / 2 : 0,
-                        sgst: m.gst ? m.gst / 2 : 0
+                        cgst: m.cgst ?? (m.gst ? m.gst / 2 : 0),
+                        sgst: m.sgst ?? (m.gst ? m.gst / 2 : 0)
                     }));
-                } catch(e) { console.error('Parse error on GET:', e); }
+                } catch (e) { console.error('Parse error on GET:', e.message); }
             }
         }
-        
-        // Add medicines array to response for the modal to use
+
         const invoiceData = invoice.toObject();
         invoiceData.importedMedicinesList = importedMedicines;
+        invoiceData.reviewLines = savedLines;
 
         res.json({ success: true, data: invoiceData });
     } catch (error) {
@@ -676,15 +1426,20 @@ router.get('/purchase-invoice/:id', verifyToken, async (req, res) => {
     }
 });
 
-// DELETE purchase invoice (Admin only)
+// DELETE purchase invoice (Admin only, tenant-isolated)
 router.delete('/purchase-invoice/:id', verifyAdmin, async (req, res) => {
     try {
-        // Admin validation logic (assuming user role exists or can be verified, here just verifyToken is applied)
-        // If there's an isAdmin middleware or we check req.user.role, we can add it here.
-        const invoice = await PurchaseInvoice.findByIdAndDelete(req.params.id);
-        if (!invoice) {
-            return res.status(404).json({ success: false, message: 'Invoice not found' });
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid invoice ID' });
         }
+        const tenantScope = getTenantScope(req);
+        const invoice = await PurchaseInvoice.findOneAndDelete({ _id: req.params.id, ...tenantScope });
+        if (!invoice) {
+            return res.status(404).json({ success: false, message: 'Invoice not found or unauthorized' });
+        }
+        await PurchaseInvoiceMedicine.deleteMany({ invoiceId: invoice._id });
+        const resolvedPath = resolveSafeInvoiceFilePath(invoice);
+        cleanupUploadedFile(resolvedPath);
         res.json({ success: true, message: 'Invoice deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

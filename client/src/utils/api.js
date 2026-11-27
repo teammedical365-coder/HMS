@@ -1206,6 +1206,8 @@ export const pharmacyAPI = {
         return (await apiClient.get(url)).data;
     },
     uploadPurchaseInvoice: async (formData) => (await apiClient.post('/api/pharmacy/purchase-invoice/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
+    bulkImportPurchaseInvoice: async (id, data) => (await apiClient.post(`/api/pharmacy/purchase-invoice/${id}/bulk-import`, data)).data,
+    getPurchaseInvoiceFileBlob: async (id) => (await apiClient.get(`/api/pharmacy/purchase-invoice/${id}/file`, { responseType: 'blob' })).data,
     processPurchaseInvoice: async (id) => (await apiClient.post(`/api/pharmacy/purchase-invoice/${id}/process`)).data,
     getPurchaseInvoices: async () => (await apiClient.get('/api/pharmacy/purchase-invoice')).data,
     getPurchaseInvoiceById: async (id) => (await apiClient.get(`/api/pharmacy/purchase-invoice/${id}`)).data,

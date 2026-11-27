@@ -61,7 +61,13 @@ import {
     FiZap
 } from 'react-icons/fi';
 import TabletPenCanvas from './TabletPenCanvas';
-import TabletSheetWorkspace from './TabletSheetWorkspace';
+import TabletSheetWorkspace, { SheetZoomToolbarControls } from './TabletSheetWorkspace';
+import ClinicalVoiceScribeModal from './ClinicalVoiceScribeModal';
+import {
+    computeAiSummarySignature,
+    formatAiSummarySheetText,
+    computeNextProgressSheetNumber
+} from '../../utils/aiClinicalSheetHelper';
 import toast from 'react-hot-toast';
 import './IPDClinicalChartsModal.css';
 
@@ -108,6 +114,8 @@ const IPDClinicalChartsModal = ({
 
     const [admission, setAdmission] = useState(initialAdmission || null);
     const [tenantHospital, setTenantHospital] = useState(null);
+    const [latestVitals, setLatestVitals] = useState(null);
+    const [isScribeModalOpen, setIsScribeModalOpen] = useState(false);
 
     // Progress Notes State
     const [progressNotes, setProgressNotes] = useState([]);
@@ -115,6 +123,9 @@ const IPDClinicalChartsModal = ({
     const [sheetZoom, setSheetZoom] = useState(1);
     const [selectedSheetIdx, setSelectedSheetIdx] = useState(0);
     const [sheetToDelete, setSheetToDelete] = useState(null);
+    const workspaceRef = useRef(null);
+    const submittedAiSigsRef = useRef(new Set());
+    const applyingAiRef = useRef(false);
 
     // Master Inline Editor Toolbar state
     const [activeTool, setActiveTool] = useState('type'); // 'type' | 'pen' | 'eraser'
@@ -393,6 +404,9 @@ const IPDClinicalChartsModal = ({
 
             if (pnRes?.progressNotes) {
                 setProgressNotes(pnRes.progressNotes);
+            }
+            if (pnRes?.latestVitals !== undefined) {
+                setLatestVitals(pnRes.latestVitals || null);
             }
 
             const incomingStrokes = pnRes?.handwritingStrokes || dcRes?.handwritingStrokes || resolvedAdm?.handwritingStrokes || null;
@@ -684,7 +698,15 @@ const IPDClinicalChartsModal = ({
             };
 
             recognition.onerror = (e) => {
-                console.warn('Line dictation error:', e?.error);
+                const errCode = e?.error;
+                console.warn('Line dictation error:', errCode);
+                if (errCode === 'not-allowed' || errCode === 'service-not-allowed') {
+                    toast.error('Microphone permission denied. Please allow microphone access in browser settings.');
+                } else if (errCode === 'audio-capture') {
+                    toast.error('No microphone detected. Please connect a microphone and try again.');
+                } else if (errCode === 'network') {
+                    toast.error('Speech recognition network error. Try AI Voice Scribe or check connection.');
+                }
                 setDictatingKey(null);
                 lineDictationRef.current = null;
             };
@@ -897,6 +919,105 @@ const IPDClinicalChartsModal = ({
     };
 
     // ==================== AI VOICE SCRIBE & INLINE EDITING HANDLERS ====================
+    const handleApproveVoiceScribe = async ({ sections, session }) => {
+        if (!sections || Object.keys(sections).length === 0) return;
+        if (applyingAiRef.current) return;
+
+        const signature = computeAiSummarySignature({ sections, session });
+        if (submittedAiSigsRef.current.has(signature)) {
+            toast('This AI clinical summary was already added as a sheet.', { icon: 'ℹ️' });
+            return;
+        }
+
+        applyingAiRef.current = true;
+        try {
+            let resolvedVitals = latestVitals;
+            if (isValidAdmission && !isBlank) {
+                const freshPn = await ipdClinicalAPI.getProgressNotes(effectiveAdmissionId).catch(() => null);
+                if (freshPn?.latestVitals !== undefined) {
+                    resolvedVitals = freshPn.latestVitals || null;
+                    setLatestVitals(resolvedVitals);
+                }
+            }
+
+            // Preserve any unsaved draft notes on earlier sheets before appending the new sequential sheet
+            let workingNotes = [...(progressNotesRef.current || [])];
+            if (isValidAdmission && !isBlank) {
+                const unsavedDrafts = workingNotes.filter((n) => n.isNew && n.note && n.note.trim());
+                if (unsavedDrafts.length > 0) {
+                    const persistedMap = new Map();
+                    for (const draft of unsavedDrafts) {
+                        const savedDraftRes = await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
+                            recordedAt: draft.recordedAt || new Date().toISOString(),
+                            sheetNo: draft.sheetNo || '1',
+                            rowIndex: typeof draft.rowIndex === 'number' ? draft.rowIndex : null,
+                            note: draft.note.trim()
+                        });
+                        if (savedDraftRes?.progressNote) {
+                            persistedMap.set(draft._id, savedDraftRes.progressNote);
+                        }
+                    }
+                    workingNotes = workingNotes.map((n) => persistedMap.get(n._id) || n);
+                }
+            }
+
+            const now = new Date();
+            const nextSheetNo = computeNextProgressSheetNumber(workingNotes, penStrokesRef.current);
+            const sheetNoteText = formatAiSummarySheetText({
+                sections,
+                latestVitals: resolvedVitals,
+                entryDateTime: now,
+                includeVitalsLine: true
+            });
+
+            pushUnifiedUndo();
+            submittedAiSigsRef.current.add(signature);
+
+            if (isValidAdmission && !isBlank) {
+                const res = await ipdClinicalAPI.addProgressNote(effectiveAdmissionId, {
+                    recordedAt: now.toISOString(),
+                    sheetNo: String(nextSheetNo),
+                    rowIndex: 0,
+                    note: sheetNoteText
+                });
+                if (!res?.success || !res?.progressNote) {
+                    submittedAiSigsRef.current.delete(signature);
+                    throw new Error(res?.message || 'Failed to save AI clinical summary sheet');
+                }
+                const updatedNotes = [...workingNotes, res.progressNote];
+                progressNotesRef.current = updatedNotes;
+                setProgressNotes(updatedNotes);
+                setDirtyNotes(false);
+                setLastSavedProgressTime(now);
+                setSelectedSheetIdx(Math.max(0, nextSheetNo - 1));
+                toast.success(`AI Clinical Summary saved on new Sheet #${nextSheetNo}`);
+            } else {
+                const authorInfo = getAuthorInfo();
+                const localEntry = {
+                    _id: `ai_sheet_${Date.now()}_${nextSheetNo}`,
+                    recordedAt: now.toISOString(),
+                    sheetNo: String(nextSheetNo),
+                    rowIndex: 0,
+                    note: sheetNoteText,
+                    authorName: authorInfo.authorName,
+                    authorRole: authorInfo.authorRole,
+                    isNew: true
+                };
+                const updatedNotes = [...workingNotes, localEntry];
+                progressNotesRef.current = updatedNotes;
+                setProgressNotes(updatedNotes);
+                setDirtyNotes(true);
+                setSelectedSheetIdx(Math.max(0, nextSheetNo - 1));
+                toast.success(`AI Clinical Summary added on new Sheet #${nextSheetNo}`);
+            }
+        } catch (err) {
+            console.error('AI Voice Scribe sheet creation error:', err);
+            toast.error(err.response?.data?.message || err.message || 'Failed to create new clinical summary sheet');
+        } finally {
+            applyingAiRef.current = false;
+        }
+    };
+
     const handleSaveStrokes = (pageKey, newStrokes) => {
         pushUnifiedUndo();
         const clonedPageStrokes = JSON.parse(JSON.stringify(newStrokes || []));
@@ -1752,9 +1873,10 @@ const IPDClinicalChartsModal = ({
                     </button>
                 </div>
 
-                {/* ── Master Document Editing Toolbar (Word-like inline editing) ── */}
+                {/* ── Master Document Editing Toolbar (Word-like inline editing + Top Zoom Controls) ── */}
                 {!isBlank && (
                     <div className="ipdc-doc-toolbar">
+                        <div className="ipdc-toolbar-main">
                         <div className="ipdc-toolbar-group">
                             <button
                                 type="button"
@@ -1872,6 +1994,15 @@ const IPDClinicalChartsModal = ({
                                         <FiTrash2 size={12} />
                                         <span>Delete Sheet</span>
                                     </button>
+                                    <button
+                                        type="button"
+                                        className="ipdc-tool-btn ipdc-tool-btn-ai"
+                                        onClick={() => setIsScribeModalOpen(true)}
+                                        title="AI Voice Scribe — Record & generate a new sequential clinical summary sheet"
+                                    >
+                                        <FiMic size={14} style={{ flexShrink: 0 }} />
+                                        <span>AI Voice Scribe</span>
+                                    </button>
                                 </>
                             )}
 
@@ -1931,6 +2062,26 @@ const IPDClinicalChartsModal = ({
                                 </div>
                             )}
                         </div>
+                        </div>
+
+                        <SheetZoomToolbarControls
+                            zoom={sheetZoom}
+                            setZoom={setSheetZoom}
+                            workspaceRef={workspaceRef}
+                        />
+                    </div>
+                )}
+
+                {isBlank && (
+                    <div className="ipdc-doc-toolbar">
+                        <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569' }}>
+                            Blank Clinical Format Preview
+                        </span>
+                        <SheetZoomToolbarControls
+                            zoom={sheetZoom}
+                            setZoom={setSheetZoom}
+                            workspaceRef={workspaceRef}
+                        />
                     </div>
                 )}
 
@@ -1943,6 +2094,7 @@ const IPDClinicalChartsModal = ({
                        ========================================================= */}
                     {!loading && activeTab === 'progress_notes' && (
                         <TabletSheetWorkspace
+                            ref={workspaceRef}
                             zoom={sheetZoom}
                             setZoom={setSheetZoom}
                             activeTool={canUsePenTool ? activeTool : 'type'}
@@ -2103,6 +2255,7 @@ const IPDClinicalChartsModal = ({
                        ========================================================= */}
                     {!loading && activeTab === 'drug_chart' && (
                         <TabletSheetWorkspace
+                            ref={workspaceRef}
                             zoom={sheetZoom}
                             setZoom={setSheetZoom}
                             activeTool={canUsePenTool ? activeTool : 'type'}
@@ -3484,6 +3637,15 @@ const IPDClinicalChartsModal = ({
                         </div>
                     </div>
                 )}
+                <ClinicalVoiceScribeModal
+                    isOpen={isScribeModalOpen}
+                    onClose={() => setIsScribeModalOpen(false)}
+                    onApproveAndInsert={handleApproveVoiceScribe}
+                    patientName={ptDetails.name}
+                    uhid={ptDetails.uhid}
+                    ipdNumber={ptDetails.ipdNumber}
+                    latestVitals={latestVitals}
+                />
             </div>
         </div>,
         document.body

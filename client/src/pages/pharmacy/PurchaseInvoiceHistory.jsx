@@ -68,6 +68,17 @@ const PurchaseInvoiceHistory = () => {
         }
     };
 
+    const handleOpenAuthenticatedPdf = async (invoice) => {
+        try {
+            const blob = await pharmacyAPI.getPurchaseInvoiceFileBlob(invoice._id);
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Unable to download invoice PDF');
+        }
+    };
+
     const handleView = async (invoice) => {
         setLoading(true);
         try {
@@ -212,7 +223,7 @@ const PurchaseInvoiceHistory = () => {
                                                     </button>
                                                 )}
                                                 {inv.uploadedPDF?.generatedName && (
-                                                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`/uploads/invoices/${inv.uploadedPDF.generatedName}`, '_blank'); }} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => {e.currentTarget.style.color = '#10b981'; e.currentTarget.style.borderColor = '#10b981';}} onMouseLeave={(e) => {e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0';}} title="Download PDF">
+                                                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenAuthenticatedPdf(inv); }} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={(e) => {e.currentTarget.style.color = '#10b981'; e.currentTarget.style.borderColor = '#10b981';}} onMouseLeave={(e) => {e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0';}} title="Download PDF">
                                                         <FiDownload size={16} />
                                                     </button>
                                                 )}
@@ -312,7 +323,7 @@ const PurchaseInvoiceHistory = () => {
                         <div style={{ padding: '20px 32px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 {selectedInvoice.uploadedPDF?.generatedName && (
-                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(`/uploads/invoices/${selectedInvoice.uploadedPDF.generatedName}`, '_blank'); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'white', color: '#10b981', border: '1px solid #10b981', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
+                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenAuthenticatedPdf(selectedInvoice); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'white', color: '#10b981', border: '1px solid #10b981', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
                                         <FiDownload /> Download Original PDF
                                     </button>
                                 )}

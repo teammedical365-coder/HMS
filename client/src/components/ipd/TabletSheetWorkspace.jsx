@@ -1,11 +1,20 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, {
+    useState,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useCallback,
+    forwardRef,
+    useImperativeHandle
+} from 'react';
 import './TabletSheetWorkspace.css';
 
-const MIN_ZOOM = 0.6;
-const MAX_ZOOM = 2.0;
-const PINCH_STEP = 0.04; // Controlled 4% step (strictly within required 3-5% per step)
-const MANUAL_STEP = 0.10; // Smooth 10% step for manual + / - buttons
+export const MIN_ZOOM = 0.45;
+export const MAX_ZOOM = 2.0;
+const PINCH_MAX_DELTA = 0.04; // Smooth proportional pinch capped at 4% per frame
+const MANUAL_STEP = 0.05; // Gentle 5% step for manual + / - buttons
 const LOGICAL_SHEET_WIDTH = 794;
+const LOGICAL_SHEET_HEIGHT = 1123;
 
 export function clampSheetZoom(value) {
     const num = Number(value);
@@ -14,13 +23,96 @@ export function clampSheetZoom(value) {
     return Math.round(clamped * 100) / 100;
 }
 
-const TabletSheetWorkspace = ({
+/**
+ * Reusable Horizontal Zoom Controls Group for the Top Document Toolbar.
+ * Renders: [ − ] [ 100% ] [ + ] [ Fit to Screen ]
+ */
+export const SheetZoomToolbarControls = ({ zoom = 1, setZoom, workspaceRef }) => {
+    const safeZoom = clampSheetZoom(zoom);
+
+    const onZoomOut = () => {
+        if (workspaceRef?.current?.zoomOut) {
+            workspaceRef.current.zoomOut();
+        } else if (setZoom) {
+            setZoom(clampSheetZoom(safeZoom - MANUAL_STEP));
+        }
+    };
+
+    const onZoomIn = () => {
+        if (workspaceRef?.current?.zoomIn) {
+            workspaceRef.current.zoomIn();
+        } else if (setZoom) {
+            setZoom(clampSheetZoom(safeZoom + MANUAL_STEP));
+        }
+    };
+
+    const onResetZoom = () => {
+        if (workspaceRef?.current?.resetZoom) {
+            workspaceRef.current.resetZoom();
+        } else if (setZoom) {
+            setZoom(1);
+        }
+    };
+
+    const onFitToScreen = () => {
+        if (workspaceRef?.current?.fitToScreen) {
+            workspaceRef.current.fitToScreen();
+        } else if (setZoom) {
+            setZoom(1);
+        }
+    };
+
+    return (
+        <div className="tsw-top-zoom-group" role="group" aria-label="Sheet zoom controls">
+            <button
+                type="button"
+                className="tsw-top-zoom-btn"
+                onClick={onZoomOut}
+                disabled={safeZoom <= MIN_ZOOM + 0.001}
+                aria-label="Zoom Out"
+                title="Zoom Out (−)"
+            >
+                −
+            </button>
+            <button
+                type="button"
+                className="tsw-top-zoom-pct"
+                onClick={onResetZoom}
+                aria-live="polite"
+                title="Click to reset zoom to 100%"
+            >
+                {Math.round(safeZoom * 100)}%
+            </button>
+            <button
+                type="button"
+                className="tsw-top-zoom-btn"
+                onClick={onZoomIn}
+                disabled={safeZoom >= MAX_ZOOM - 0.001}
+                aria-label="Zoom In"
+                title="Zoom In (+)"
+            >
+                +
+            </button>
+            <button
+                type="button"
+                className="tsw-top-zoom-fit"
+                onClick={onFitToScreen}
+                aria-label="Fit to Screen"
+                title="Fit entire clinical sheet inside viewing area"
+            >
+                Fit to Screen
+            </button>
+        </div>
+    );
+};
+
+const TabletSheetWorkspace = forwardRef(({
     children,
     zoom: propZoom,
     setZoom: propSetZoom,
     activeTool = 'type',
     penSessionRef = null
-}) => {
+}, ref) => {
     const [internalZoom, setInternalZoom] = useState(1);
     const rawZoom = propZoom !== undefined ? propZoom : internalZoom;
     const safeZoom = clampSheetZoom(rawZoom);
@@ -37,16 +129,16 @@ const TabletSheetWorkspace = ({
     const activeToolRef = useRef(activeTool);
     activeToolRef.current = activeTool;
 
-    const [naturalSize, setNaturalSize] = useState({ width: LOGICAL_SHEET_WIDTH, height: 1123 });
-    const naturalSizeRef = useRef({ width: LOGICAL_SHEET_WIDTH, height: 1123 });
+    const [naturalSize, setNaturalSize] = useState({ width: LOGICAL_SHEET_WIDTH, height: LOGICAL_SHEET_HEIGHT });
+    const naturalSizeRef = useRef({ width: LOGICAL_SHEET_WIDTH, height: LOGICAL_SHEET_HEIGHT });
 
     // Anchor target applied synchronously before browser paint in useLayoutEffect
     const pendingAnchorRef = useRef(null);
 
-    // Touch gesture tracking (2-finger pinch-zoom + 1-finger scroll in Pen/Eraser mode)
+    // Touch gesture tracking (2-finger smooth pinch-zoom + 1-finger scroll in Pen/Eraser mode)
     const gestureRef = useRef({
         mode: 'idle', // 'idle' | 'pinch' | 'pan'
-        lastStepDist: 0,
+        lastDist: 0,
         lastMidX: 0,
         lastMidY: 0,
         panStartX: 0,
@@ -160,6 +252,8 @@ const TabletSheetWorkspace = ({
             docY,
             vx,
             vy,
+            extraPanDx,
+            extraPanDy,
             targetZoom: nextZoom
         };
 
@@ -179,8 +273,8 @@ const TabletSheetWorkspace = ({
             const sizerOffsetLeft = sizer.offsetLeft || 0;
             const sizerOffsetTop = sizer.offsetTop || 0;
 
-            const desiredScrollLeft = sizerOffsetLeft + anchor.docX * z - anchor.vx;
-            const desiredScrollTop = sizerOffsetTop + anchor.docY * z - anchor.vy;
+            const desiredScrollLeft = sizerOffsetLeft + anchor.docX * z - anchor.vx - (anchor.extraPanDx || 0);
+            const desiredScrollTop = sizerOffsetTop + anchor.docY * z - anchor.vy - (anchor.extraPanDy || 0);
 
             const maxScrollLeft = Math.max(0, vp.scrollWidth - vp.clientWidth);
             const maxScrollTop = Math.max(0, vp.scrollHeight - vp.clientHeight);
@@ -195,7 +289,7 @@ const TabletSheetWorkspace = ({
         syncScrollMetrics();
     }, [safeZoom, naturalSize, syncScrollMetrics]);
 
-    // Touch gesture handlers on the scrollable viewport (2-finger pinch-zoom + 1-finger scroll in Pen/Eraser mode)
+    // Touch gesture handlers on the scrollable viewport (2-finger smooth pinch-zoom + 1-finger scroll in Pen/Eraser mode)
     useEffect(() => {
         const vp = viewportRef.current;
         if (!vp) return;
@@ -214,7 +308,6 @@ const TabletSheetWorkspace = ({
             const out = [];
             for (let i = 0; i < touchList.length; i += 1) {
                 const t = touchList[i];
-                // Filter out Apple Pencil / stylus touches on WebKit iPadOS so stylus + palm never mimics 2-finger pinch
                 if (t.touchType === 'stylus') continue;
                 out.push(t);
             }
@@ -222,7 +315,6 @@ const TabletSheetWorkspace = ({
         };
 
         const onTouchStart = (e) => {
-            // If stylus is actively writing/erasing, block palm touch scrolling/zooming completely
             if (isStylusActiveOrRecent()) {
                 gestureRef.current.mode = 'idle';
                 if (activeToolRef.current !== 'type' && e.cancelable) {
@@ -244,15 +336,13 @@ const TabletSheetWorkspace = ({
                 gestureRef.current = {
                     ...gestureRef.current,
                     mode: 'pinch',
-                    lastStepDist: Math.max(20, dist),
+                    lastDist: Math.max(20, dist),
                     lastMidX: midX,
                     lastMidY: midY
                 };
                 return;
             }
 
-            // In Pen or Eraser mode, <canvas> uses touch-action: none to keep 0ms stylus latency.
-            // Enable smooth 1-finger touch scrolling here when stylus is NOT active!
             if (fingers.length === 1 && activeToolRef.current !== 'type') {
                 gestureRef.current = {
                     ...gestureRef.current,
@@ -279,7 +369,7 @@ const TabletSheetWorkspace = ({
 
             const fingers = getFingerTouches(e.touches);
 
-            // 1. Two-finger controlled pinch-to-zoom (3-5% step) + two-finger pan
+            // 1. Two-finger smooth proportional pinch-to-zoom + two-finger pan
             if (fingers.length === 2) {
                 if (e.cancelable) e.preventDefault();
 
@@ -291,9 +381,9 @@ const TabletSheetWorkspace = ({
 
                 if (!Number.isFinite(dist) || dist < 12) return;
 
-                if (gestureRef.current.mode !== 'pinch' || gestureRef.current.lastStepDist <= 0) {
+                if (gestureRef.current.mode !== 'pinch' || gestureRef.current.lastDist <= 0) {
                     gestureRef.current.mode = 'pinch';
-                    gestureRef.current.lastStepDist = Math.max(20, dist);
+                    gestureRef.current.lastDist = Math.max(20, dist);
                     gestureRef.current.lastMidX = midX;
                     gestureRef.current.lastMidY = midY;
                     return;
@@ -304,15 +394,15 @@ const TabletSheetWorkspace = ({
                 gestureRef.current.lastMidX = midX;
                 gestureRef.current.lastMidY = midY;
 
-                const baseDist = gestureRef.current.lastStepDist;
-                const ratioDelta = (dist - baseDist) / baseDist;
-                const absPxDelta = Math.abs(dist - baseDist);
+                const baseDist = gestureRef.current.lastDist;
+                const scaleFactor = dist / baseDist;
+                const rawDelta = zoomRef.current * (scaleFactor - 1);
 
-                // Trigger controlled 4% zoom step once pinch distance changes by ~3.8%+
-                if (Math.abs(ratioDelta) >= 0.038 && absPxDelta >= 6) {
-                    const step = ratioDelta > 0 ? PINCH_STEP : -PINCH_STEP;
-                    gestureRef.current.lastStepDist = Math.max(20, dist);
-                    applyAnchoredZoom(zoomRef.current + step, midX, midY, panDx, panDy);
+                // Smoothly apply zoom once pinch changes by >= 1%, capped at 4% per frame to prevent sudden jumps
+                if (Math.abs(rawDelta) >= 0.01) {
+                    const boundedDelta = Math.max(-PINCH_MAX_DELTA, Math.min(PINCH_MAX_DELTA, rawDelta));
+                    gestureRef.current.lastDist = Math.max(20, dist);
+                    applyAnchoredZoom(zoomRef.current + boundedDelta, midX, midY, panDx, panDy);
                 } else if (Math.abs(panDx) > 0.5 || Math.abs(panDy) > 0.5) {
                     vp.scrollLeft -= panDx;
                     vp.scrollTop -= panDy;
@@ -329,7 +419,6 @@ const TabletSheetWorkspace = ({
                     curY - gestureRef.current.panStartY
                 );
 
-                // Small 5px touch slop prevents resting palms/taps from jittering scroll
                 if (!gestureRef.current.panMoved && totalMove < 5) {
                     return;
                 }
@@ -351,28 +440,37 @@ const TabletSheetWorkspace = ({
             const fingers = getFingerTouches(e.touches);
             if (fingers.length < 2 && gestureRef.current.mode === 'pinch') {
                 gestureRef.current.mode = 'idle';
-                gestureRef.current.lastStepDist = 0;
+                gestureRef.current.lastDist = 0;
             }
             if (fingers.length === 0) {
                 gestureRef.current.mode = 'idle';
             }
         };
 
+        // Also support Ctrl + Wheel smooth anchored zoom on desktop/trackpad
+        const onWheel = (e) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            if (e.cancelable) e.preventDefault();
+            const step = e.deltaY < 0 ? MANUAL_STEP : -MANUAL_STEP;
+            applyAnchoredZoom(zoomRef.current + step, e.clientX, e.clientY);
+        };
+
         vp.addEventListener('touchstart', onTouchStart, { passive: false });
         vp.addEventListener('touchmove', onTouchMove, { passive: false });
         vp.addEventListener('touchend', onTouchEnd);
         vp.addEventListener('touchcancel', onTouchEnd);
+        vp.addEventListener('wheel', onWheel, { passive: false });
 
         return () => {
             vp.removeEventListener('touchstart', onTouchStart);
             vp.removeEventListener('touchmove', onTouchMove);
             vp.removeEventListener('touchend', onTouchEnd);
             vp.removeEventListener('touchcancel', onTouchEnd);
+            vp.removeEventListener('wheel', onWheel);
         };
     }, [applyAnchoredZoom, penSessionRef]);
 
-    // Manual Zoom Controls (Vertical Right-Side Toolbar)
-    const handleZoomIn = () => {
+    const handleZoomIn = useCallback(() => {
         const vp = viewportRef.current;
         const rect = vp ? vp.getBoundingClientRect() : null;
         applyAnchoredZoom(
@@ -380,9 +478,9 @@ const TabletSheetWorkspace = ({
             rect ? rect.left + rect.width / 2 : undefined,
             rect ? rect.top + rect.height / 2 : undefined
         );
-    };
+    }, [applyAnchoredZoom]);
 
-    const handleZoomOut = () => {
+    const handleZoomOut = useCallback(() => {
         const vp = viewportRef.current;
         const rect = vp ? vp.getBoundingClientRect() : null;
         applyAnchoredZoom(
@@ -390,31 +488,65 @@ const TabletSheetWorkspace = ({
             rect ? rect.left + rect.width / 2 : undefined,
             rect ? rect.top + rect.height / 2 : undefined
         );
-    };
+    }, [applyAnchoredZoom]);
 
-    const handleFitToScreen = () => {
+    const handleResetZoom = useCallback(() => {
         const vp = viewportRef.current;
+        const rect = vp ? vp.getBoundingClientRect() : null;
+        applyAnchoredZoom(
+            1,
+            rect ? rect.left + rect.width / 2 : undefined,
+            rect ? rect.top + rect.height / 2 : undefined
+        );
+    }, [applyAnchoredZoom]);
+
+    const handleFitToScreen = useCallback(() => {
+        const vp = viewportRef.current;
+        const content = contentRef.current;
         if (!vp) {
             updateZoomState(1);
             return;
         }
-        const availW = Math.max(280, vp.clientWidth - 28);
-        const natW = naturalSizeRef.current.width || LOGICAL_SHEET_WIDTH;
-        const fitZoom = availW >= natW
-            ? 1
-            : clampSheetZoom(Math.floor((availW / natW) * 100) / 100);
+
+        // Measure a single A4 sheet inside the stack so Fit to Screen fits the entire sheet cleanly
+        const sheets = content
+            ? Array.from(content.querySelectorAll('.ipdc-a4-sheet, .ipn-sheet-paper'))
+            : [];
+        const activeSheet = (content && content.querySelector('.is-active-sheet')) || sheets[0] || null;
+
+        const sheetW = (activeSheet && activeSheet.offsetWidth) || naturalSizeRef.current.width || LOGICAL_SHEET_WIDTH;
+        const sheetH = (activeSheet && activeSheet.offsetHeight) || LOGICAL_SHEET_HEIGHT;
+
+        const availW = Math.max(240, vp.clientWidth - 32);
+        const availH = Math.max(240, vp.clientHeight - 28);
+
+        const scaleX = availW / sheetW;
+        const scaleY = availH / sheetH;
+        const rawFit = Math.min(scaleX, scaleY, 1.0);
+        const fitZoom = clampSheetZoom(Math.floor(rawFit * 100) / 100);
+
+        const targetOffsetTop = activeSheet ? activeSheet.offsetTop : 0;
 
         pendingAnchorRef.current = null;
         zoomRef.current = fitZoom;
         updateZoomState(fitZoom);
 
         requestAnimationFrame(() => {
-            if (viewportRef.current) {
-                viewportRef.current.scrollLeft = 0;
+            const curVp = viewportRef.current;
+            if (curVp) {
+                curVp.scrollLeft = 0;
+                curVp.scrollTop = Math.max(0, Math.round(targetOffsetTop * fitZoom));
                 syncScrollMetrics();
             }
         });
-    };
+    }, [updateZoomState, syncScrollMetrics]);
+
+    useImperativeHandle(ref, () => ({
+        zoomIn: handleZoomIn,
+        zoomOut: handleZoomOut,
+        resetZoom: handleResetZoom,
+        fitToScreen: handleFitToScreen
+    }), [handleZoomIn, handleZoomOut, handleResetZoom, handleFitToScreen]);
 
     // Dedicated Right-Edge Vertical Scroll Rail Handlers (Works in Pen, Eraser & Type modes)
     const scrollRailToClientY = (clientY, isInitialJump = false) => {
@@ -495,7 +627,7 @@ const TabletSheetWorkspace = ({
     };
 
     const scaledWidth = Math.round((naturalSize.width || LOGICAL_SHEET_WIDTH) * safeZoom);
-    const scaledHeight = Math.round((naturalSize.height || 1123) * safeZoom);
+    const scaledHeight = Math.round((naturalSize.height || LOGICAL_SHEET_HEIGHT) * safeZoom);
 
     return (
         <div className="tsw-workspace-shell">
@@ -553,45 +685,10 @@ const TabletSheetWorkspace = ({
                     />
                 </div>
             </div>
-
-            {/* 3. Extreme-Right Vertical Zoom Toolbar (+, 100%, -, Fit to Screen) */}
-            <aside className="tsw-zoom-toolbar" aria-label="Sheet zoom controls">
-                <button
-                    type="button"
-                    className="tsw-zoom-btn"
-                    onClick={handleZoomIn}
-                    disabled={safeZoom >= MAX_ZOOM - 0.001}
-                    aria-label="Zoom In"
-                    title="Zoom In (+)"
-                >
-                    +
-                </button>
-                <div className="tsw-zoom-pct" aria-live="polite" title="Current Zoom Percentage">
-                    {Math.round(safeZoom * 100)}%
-                </div>
-                <button
-                    type="button"
-                    className="tsw-zoom-btn"
-                    onClick={handleZoomOut}
-                    disabled={safeZoom <= MIN_ZOOM + 0.001}
-                    aria-label="Zoom Out"
-                    title="Zoom Out (−)"
-                >
-                    −
-                </button>
-                <button
-                    type="button"
-                    className="tsw-zoom-btn tsw-zoom-fit-btn"
-                    onClick={handleFitToScreen}
-                    aria-label="Fit to Screen"
-                    title="Fit to Screen"
-                >
-                    <span>Fit to</span>
-                    <span>Screen</span>
-                </button>
-            </aside>
         </div>
     );
-};
+});
+
+TabletSheetWorkspace.displayName = 'TabletSheetWorkspace';
 
 export default TabletSheetWorkspace;

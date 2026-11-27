@@ -1242,7 +1242,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         
         // Check if patient already has an active admission
         const activeAdm = hospitalizedPatients.find(p => 
-            (p.patientId?._id === patientId || p.patientId === patientId) && p.status === 'ADMITTED'
+            (String(p.patientId?._id || p.patientId) === String(patientId)) && String(p.status || '').toLowerCase() === 'admitted'
         );
         setExistingActiveAdmission(activeAdm || null);
 
@@ -1280,7 +1280,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         // Prevent duplicate concurrent admission
         const activeAdm = hospitalizedPatients.find(p => 
-            (p.patientId?._id === patientId || p.patientId === patientId) && p.status === 'ADMITTED'
+            (String(p.patientId?._id || p.patientId) === String(patientId)) && String(p.status || '').toLowerCase() === 'admitted'
         );
         if (activeAdm) {
             toast.error('This patient already has an active admission.');
@@ -3443,15 +3443,27 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                     <FiEye size={13} />
                                                     <span>Profile</span>
                                                 </button>
-                                                <button
-                                                    className="rec-tbl-btn rec-btn-profile"
-                                                    title="Preview / Reprint IPD Wristband"
-                                                    onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
-                                                    style={{ background: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
-                                                >
-                                                    <FiPrinter size={13} />
-                                                    <span>Wristband</span>
-                                                </button>
+                                                {String(adm.status || '').toLowerCase() === 'admitted' ? (
+                                                    <button
+                                                        className="rec-tbl-btn rec-btn-profile"
+                                                        title="View / Print active IPD Wristband"
+                                                        onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
+                                                        style={{ background: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
+                                                    >
+                                                        <FiPrinter size={13} />
+                                                        <span>Wristband</span>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        className="rec-tbl-btn rec-btn-profile"
+                                                        title="View historical wristband record (patient discharged — not an active admission)"
+                                                        onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
+                                                        style={{ background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }}
+                                                    >
+                                                        <FiEye size={13} />
+                                                        <span>Wristband History</span>
+                                                    </button>
+                                                )}
                                                 {adm.status === 'Admitted' ? (
                                                     <>
                                                         <button 
@@ -4778,6 +4790,20 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                         >
                                                             {pMrn}
                                                         </span>
+                                                        {(adm.ipdNumber || adm.wristbandCode) && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '5px' }}>
+                                                                {adm.ipdNumber && (
+                                                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: '6px', padding: '1px 6px', width: 'fit-content' }}>
+                                                                        IPD: {adm.ipdNumber}
+                                                                    </span>
+                                                                )}
+                                                                {adm.wristbandCode && (
+                                                                    <span title="Active IPD Wristband" style={{ fontSize: '0.66rem', fontWeight: 700, color: '#334155', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1px 6px', width: 'fit-content', fontFamily: 'monospace' }}>
+                                                                        🪪 {adm.wristbandCode}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td>
                                                         <div className="rec-hosp-bed-cell">
@@ -4827,12 +4853,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                             </button>
                                                             <button
                                                                 className="rec-tbl-btn rec-btn-profile"
-                                                                title="Preview / Reprint IPD Wristband"
+                                                                title="View / Print IPD Wristband"
                                                                 onClick={() => setWristbandModal({ open: true, admissionId: adm._id, admission: adm, initialWristband: null })}
                                                                 style={{ background: '#f0fdfa', color: '#0f766e', border: '1px solid #99f6e4' }}
                                                             >
                                                                 <FiPrinter size={13} />
-                                                                <span>Wristband</span>
+                                                                <span>View / Print Wristband</span>
                                                             </button>
                                                             <button
                                                                 className="rec-tbl-btn rec-btn-transfer"
