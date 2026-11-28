@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { FiShield, FiCheckCircle, FiAlertCircle, FiX, FiLink2, FiPlusCircle, FiArrowRight } from 'react-icons/fi';
 import './AbdmSection.css';
 
-const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
+const AbdmSection = ({ patient, onPatientUpdate, compact = false, loadingStatus = false, statusError = '' }) => {
     const abdm = patient?.abdm || {};
     const isVerified = Boolean(abdm.isVerified);
     const patientId = patient?._id || patient?.id;
@@ -49,6 +49,8 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
         setModalMode(null);
         setStep(1);
         setErrorMessage('');
+        setAbhaIdentifier('');
+        setAadhaarInput('');
         setOtp('');
         setTxnId('');
         setLoading(false);
@@ -230,7 +232,16 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
             </div>
 
             {/* Body */}
-            {isVerified ? (
+            {loadingStatus ? (
+                <div className="abdm-unlinked-wrapper">
+                    <div className="abdm-unlinked-info">Loading ABHA verification status...</div>
+                </div>
+            ) : statusError ? (
+                <div className="abdm-alert-box abdm-alert-warning" style={{ marginBottom: 0 }}>
+                    <FiAlertCircle style={{ marginRight: '6px' }} />
+                    {statusError}
+                </div>
+            ) : isVerified ? (
                 <div>
                     <div className="abdm-verified-grid">
                         <div className="abdm-field-box">
@@ -253,7 +264,7 @@ const AbdmSection = ({ patient, onPatientUpdate, compact = false }) => {
                         </div>
                     </div>
                     <div className="abdm-verified-footer">
-                        <FiCheckCircle /> Linked securely with Medical365 Patient MRN: <strong>{patient?.patientId || patient?.mrn || 'N/A'}</strong>
+                        <FiCheckCircle /> Linked securely with Medical365 Patient MRN: <strong>{patient?.patientId || patient?.mrn || patient?.patientUid || 'N/A'}</strong>
                     </div>
                 </div>
             ) : (

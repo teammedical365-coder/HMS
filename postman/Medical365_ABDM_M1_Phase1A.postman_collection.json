@@ -1,0 +1,1517 @@
+{
+  "info": {
+    "_postman_id": "9f2a1d32-8c7b-4f19-a8d2-m365abdmphase1a",
+    "name": "Medical365 ABDM M1 Phase 1A",
+    "description": "API security hardening & M1 foundation testing collection for Medical365 HMS.\n\nCovers:\n1. Auth Helpers (Optional token setup)\n2. ABHA Status & RBAC Positive/Negative (401/403)\n3. Patient Access & Multi-Tenant / ClinicPatient Isolation\n4. ABHA OTP Generation (Cooldown & Rate Limits)\n5. ABHA OTP Verification (Lockout, Expiry & Replay Protection)\n6. HIP Bridge Admin & Role Resolution (/api/abdm/bridge/*)\n7. ABDM Callbacks & Signature Verification\n\nNotes:\n- Endpoints marked [Requires ABDM Sandbox] call ABDM gateway/ABHA v3 endpoints and return HTTP 503 when ABDM_CLIENT_ID / ABDM_CLIENT_SECRET are not configured.\n- Callback endpoints require ABDM_JWKS_URL or ABDM_CALLBACK_PUBLIC_KEY in production/staging (and by default in dev/test when ABDM_ALLOW_UNSIGNED_CALLBACKS=false); otherwise they return 503.\n- Set ABDM_TOKEN_ENCRYPTION_KEY on the server before calling token encryption/link-token flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Auth Token Helpers (Optional Setup)",
+      "description": "Use these helpers to acquire JWT tokens into environment variables if OTP is disabled/bypassed, or manually paste active tokens into the Postman environment.",
+      "item": [
+        {
+          "name": "Staff Password Login (POST /api/auth/login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{staffPassword}}\",\n  \"hospitalSlug\": \"{{hospitalSlug}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Existing endpoint: POST /api/auth/login (server/src/routes/auth.routes.js). Copies returned token if OTP is bypassed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Valid JSON response', function () { pm.expect(body).to.be.an('object'); });",
+                  "if (pm.response.code === 200 && body.token && body.user) {",
+                  "  const r = String(body.user.role || '').toLowerCase();",
+                  "  if (r === 'hospitaladmin') pm.environment.set('hospitalAdminToken', body.token);",
+                  "  if (r.includes('doctor') && !r.includes('assistant')) pm.environment.set('doctorToken', body.token);",
+                  "  if (r.includes('reception')) pm.environment.set('receptionToken', body.token);",
+                  "  if (r.includes('nurse')) pm.environment.set('nurseToken', body.token);",
+                  "  if (r.includes('accountant')) pm.environment.set('accountantToken', body.token);",
+                  "  if (r.includes('pharmac')) pm.environment.set('pharmacistToken', body.token);",
+                  "  if (r.includes('lab') || r.includes('pathologist')) pm.environment.set('labToken', body.token);",
+                  "  if (r === 'superadmin' || r === 'centraladmin') pm.environment.set('superAdminToken', body.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patient Portal Login (POST /api/patient-auth/login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginId\": \"{{patientLoginId}}\",\n  \"password\": \"{{patientPassword}}\",\n  \"hospitalId\": \"{{hospitalId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patient-auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "patient-auth", "login"]
+            },
+            "description": "Existing endpoint: POST /api/patient-auth/login (server/src/routes/patientAuth.routes.js). Stores patientToken on success."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200 && body.token) {",
+                  "  pm.environment.set('patientToken', body.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - ABHA Status & RBAC (Positive & Negative)",
+      "item": [
+        {
+          "name": "[Positive] Hospital Admin - Get ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            },
+            "description": "Expected 200: { success: true, isConfigured, patientId, patientType: 'hospital', name, mrn, abdm: { status, isVerified, verifiedAt, linkedAt, maskedAbhaNumber, maskedAbhaAddress } }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hospital Admin gets 200', function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "pm.test('Returns sanitized ABHA status', function () {",
+                  "  pm.expect(res.success).to.eql(true);",
+                  "  pm.expect(res.patientType).to.eql('hospital');",
+                  "  pm.expect(res.abdm).to.be.an('object');",
+                  "  pm.expect(res.abdm).to.not.have.property('abhaNumber');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Doctor - Get ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Doctor gets 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Receptionist - Get ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Receptionist gets 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Nurse - Get ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{nurseToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nurse gets 200 via _roleData.name resolution', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Custom Clinical Role (_roleData) - Get ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customClinicalRoleToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            },
+            "description": "Verifies _roleData.name & custom clinical permissions (e.g. visit_intake / abdm_manage) grant access."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Custom clinical role gets 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Clinic Admin - Get ClinicPatient ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{clinicAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{clinicPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{clinicPatientId}}"]
+            },
+            "description": "Verifies ClinicPatient resolution for simple clinics (clinicType === 'clinic'). Expected patientType: 'clinic'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Clinic Admin gets 200 for ClinicPatient', function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "pm.test('patientType is clinic', function () { pm.expect(res.patientType).to.eql('clinic'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Accountant Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accountantToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            },
+            "description": "Expected 403: { success: false, message: 'Access denied: Your role is not authorized for ABHA operations' }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Accountant receives 403 Forbidden', function () { pm.response.to.have.status(403); });",
+                  "pm.test('success is false', function () { pm.expect(pm.response.json().success).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Pharmacist Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{pharmacistToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pharmacist receives 403 Forbidden', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Lab Staff Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{labToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Lab staff receives 403 Forbidden', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Auth] Unauthenticated Request Denied (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing token receives 401', function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Validation] Invalid patientId Format (400)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/invalid-id-123",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "invalid-id-123"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid ObjectId gets 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Patient Self-Access & Multi-Tenant Isolation",
+      "item": [
+        {
+          "name": "[Positive] Patient Self-Access Own ABHA Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{patientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{patientId}}"]
+            },
+            "description": "Patient accessing their own _id or server-linked linkedPatientProfileId within same hospital."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Patient gets 200 on own profile', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Isolation] Patient Accessing Another Patient ABHA (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{otherPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{otherPatientId}}"]
+            },
+            "description": "Expected 403: { success: false, message: 'Forbidden: Patients can only access their own ABHA profile' }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cross-patient read rejected with 403', function () { pm.response.to.have.status(403); });",
+                  "pm.test('Forbidden message returned', function () { pm.expect(pm.response.json().success).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Tenant] Hospital A Staff Accessing Hospital B Patient (404)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{hospitalBPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{hospitalBPatientId}}"]
+            },
+            "description": "Expected 404: 'Patient record not found in this hospital' because hospitalId comes from verified JWT only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cross-hospital access blocked with 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Tenant Spoof] Forged body.hospitalId & x-hospital-id Ignored (404)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-hospital-id", "value": "{{hospitalBId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hospitalId\": \"{{hospitalBId}}\",\n  \"patientId\": \"{{hospitalBPatientId}}\",\n  \"abhaIdentifier\": \"{{abhaNumber14}}\",\n  \"authMethod\": \"AADHAAR_OTP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "start"]
+            },
+            "description": "Verifies tenant staff cannot spoof another hospitalId via x-hospital-id header or body.hospitalId (returns 404 if ABDM configured, or 503 if ABDM unconfigured)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Spoofed hospitalId cannot access Hospital B patient', function () {",
+                  "  pm.expect([403, 404, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Tenant] Clinic A Accessing Clinic B ClinicPatient (404)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{clinicAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{clinicBPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{clinicBPatientId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cross-clinic ClinicPatient access blocked with 404', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Isolation] Hospital Accessing ClinicPatient Record Blocked (404)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/status/{{clinicPatientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "status", "{{clinicPatientId}}"]
+            },
+            "description": "Ensures Hospital tenant queries User only and never leaks ClinicPatient records."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hospital cannot read ClinicPatient (404)', function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - ABHA OTP Generation (Cooldown & Rate Limits)",
+      "item": [
+        {
+          "name": "[Positive - Requires ABDM Sandbox] Create ABHA Start OTP (POST /create/start)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"aadhaarNumber\": \"{{aadhaarNumber}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/create/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "create", "start"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS. Success 200: { success: true, configured: true, txnId, message: 'OTP sent to the Aadhaar-registered mobile number' }. Save createTxnId automatically. Error 503 when ABDM unconfigured; 400 on invalid Aadhaar; 409 if already linked; 429 on resend cooldown or rate limit."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200 (or 503 if Sandbox creds disabled / 429 cooldown)', function () {",
+                  "  pm.expect([200, 429, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.txnId).to.be.a('string').and.not.empty;",
+                  "  pm.expect(JSON.stringify(body)).to.not.include('otp');",
+                  "  pm.environment.set('createTxnId', body.txnId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive - Requires ABDM Sandbox] Link Existing ABHA Start OTP (POST /link/start)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"abhaIdentifier\": \"{{abhaNumber14}}\",\n  \"authMethod\": \"AADHAAR_OTP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "start"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS. authMethod: 'AADHAAR_OTP' | 'MOBILE_OTP'. Saves returned txnId into linkTxnId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Status is 200 (or 503 if unconfigured / 429 rate-limited)', function () {",
+                  "  pm.expect([200, 429, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200 && body.txnId) {",
+                  "  pm.environment.set('linkTxnId', body.txnId);",
+                  "  pm.expect(body).to.not.have.property('otp');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Validation] Create ABHA - Invalid Aadhaar Format (400)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"aadhaarNumber\": \"12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/create/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "create", "start"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rejects invalid Aadhaar with 400 (or 503 if ABDM client unconfigured)', function () {",
+                  "  pm.expect([400, 409, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Validation] Link ABHA - Non-14-Digit Identifier (400)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"abhaIdentifier\": \"91-1234\",\n  \"authMethod\": \"AADHAAR_OTP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "start"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rejects invalid 14-digit ABHA with 400 (or 503 if unconfigured)', function () {",
+                  "  pm.expect([400, 409, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Start Link OTP - Pharmacist Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{pharmacistToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"abhaIdentifier\": \"{{abhaNumber14}}\",\n  \"authMethod\": \"AADHAAR_OTP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "start"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pharmacist receives 403 before rate limiter or ABDM call', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Security] Immediate OTP Resend Cooldown (429)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"aadhaarNumber\": \"{{aadhaarNumber}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/create/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "create", "start"]
+            },
+            "description": "Execute immediately (<45s) after a successful POST /create/start. Expect HTTP 429 cooldown error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Enforces resend cooldown or rate limit (429)', function () {",
+                  "  pm.expect([429, 503]).to.include(pm.response.code);",
+                  "  if (pm.response.code === 429) {",
+                  "    pm.expect(pm.response.json().message).to.match(/wait|too many/i);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Rate Limit] Link OTP Flood Test (Run 6x -> 429)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"abhaIdentifier\": \"{{abhaNumber14}}\",\n  \"authMethod\": \"AADHAAR_OTP\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "start"]
+            },
+            "description": "Run 6 times consecutively in Postman Runner with doctorToken. abdmOtpGenerateLimiter allows max 5 per 15 min per user+patient, then returns HTTP 429."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration >= 5) {",
+                  "  pm.test('6th OTP request blocked by abdmOtpGenerateLimiter (429)', function () {",
+                  "    pm.response.to.have.status(429);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - ABHA OTP Verification, Lockout & Replay Protection",
+      "item": [
+        {
+          "name": "[Positive - Requires ABDM Sandbox] Create ABHA Verify OTP (POST /create/verify)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{createTxnId}}\",\n  \"otp\": \"{{otpCode}}\",\n  \"mobile\": \"{{patientMobile}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/create/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "create", "verify"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS & OTP. Expected 200: { success: true, message: 'ABHA created and linked to the patient', abha: { status: 'Verified', isVerified: true, maskedAbhaNumber, maskedAbhaAddress } }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.test('ABHA created and linked', function () {",
+                  "    pm.expect(b.success).to.eql(true);",
+                  "    pm.expect(b.abha.isVerified).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive - Requires ABDM Sandbox] Link Existing ABHA Verify OTP (POST /link/verify)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{linkTxnId}}\",\n  \"otp\": \"{{otpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS & OTP. On 200, transaction becomes status=VERIFIED and subsequent replays of linkTxnId are rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.test('ABHA verified and linked', function () {",
+                  "    pm.expect(b.success).to.eql(true);",
+                  "    pm.expect(b.abha.isVerified).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Validation] Verify Link - Missing txnId or otp (400)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rejects missing txnId/otp with 400 (or 503 if unconfigured)', function () {",
+                  "  pm.expect([400, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Security] Verify Link - Unknown/Forged txnId (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"00000000-0000-4000-8000-000000000000\",\n  \"otp\": \"{{invalidOtpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rejects unbound txnId with 403 (or 503 if ABDM unconfigured)', function () {",
+                  "  pm.expect([403, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Security] Cross-User Transaction Replay Blocked (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{linkTxnId}}\",\n  \"otp\": \"{{otpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            },
+            "description": "Use doctorToken on a linkTxnId started by receptionToken. Must fail 403 because AbdmTxn binds userId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Another user cannot hijack txnId (403)', function () {",
+                  "  pm.expect([403, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Security] Verify Link - Wrong OTP Lockout After 5 Attempts (Run 6x -> 429)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{linkTxnId}}\",\n  \"otp\": \"11\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            },
+            "description": "With an active linkTxnId (generated by receptionToken), send bad OTP repeatedly. After ABDM_OTP_MAX_ATTEMPTS (5), AbdmTxn sets status=LOCKED for 15 min and returns HTTP 429."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid OTP or Lockout status returned (400/429)', function () {",
+                  "  pm.expect([400, 429, 502, 503]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.info.iteration >= 4 && pm.response.code !== 503) {",
+                  "  pm.test('Locked after max attempts (429)', function () {",
+                  "    pm.response.to.have.status(429);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Security] Verify Link - Completed Transaction Replay Rejected (409 / 403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{receptionToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{linkTxnId}}\",\n  \"otp\": \"{{otpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            },
+            "description": "Execute immediately after a successful /link/verify. Completed transaction is retained with status=VERIFIED so replay returns HTTP 409 (not 200)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Replayed verified txnId is rejected (409/403/404)', function () {",
+                  "  pm.expect([403, 404, 409, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Verify Link - Accountant Role Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accountantToken}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": \"{{patientId}}\",\n  \"txnId\": \"{{linkTxnId}}\",\n  \"otp\": \"{{otpCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/abha/link/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "abha", "link", "verify"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Accountant receives 403 Forbidden', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - HIP Bridge Admin & Role Resolution (/api/abdm/bridge/*)",
+      "item": [
+        {
+          "name": "[Positive] Hospital Admin - Own Hospital HIP Status (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/hospital",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "hospital"]
+            },
+            "description": "Expected 200: { success: true, hospital, enabled, hipId }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hospital Admin gets 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Has enabled flag', function () { pm.expect(pm.response.json()).to.have.property('enabled'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative RBAC] Doctor Accessing Hospital Bridge Status Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/hospital",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "hospital"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Non-admin doctor gets 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Privilege] Hospital Admin Accessing Platform Config Denied (403)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{hospitalAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "config"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Hospital Admin blocked from platform config with 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Super Admin - Get Bridge Config (200)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "config"]
+            },
+            "description": "Platform admin only (superadmin / centraladmin without hospitalId). Expected 200 with masked clientId and live services status (live call uses ABDM Sandbox if configured)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Super Admin gets 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Positive] Super Admin - Probe Configured Bridge URL (GET /probe)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/probe",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "probe"]
+            }
+          }
+        },
+        {
+          "name": "[Requires ABDM Sandbox] Super Admin - Verify Registered Services (GET /verify)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}", "type": "string" }] },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "verify"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS."
+          }
+        },
+        {
+          "name": "[Requires ABDM Sandbox] Super Admin - Register Bridge URL (PATCH /url)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}", "type": "string" }] },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"skipProbe\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/url",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "url"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS & ABDM_BRIDGE_URL. Server ignores any URL in request body and reads ABDM_BRIDGE_URL from env only."
+          }
+        },
+        {
+          "name": "[Requires ABDM Sandbox] Super Admin - Register Hospital HIP ID (PUT /hospitals/:hospitalId/hip)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}", "type": "string" }] },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hipId\": \"{{abdmHipId}}\",\n  \"name\": \"Pacific Hospital\",\n  \"alias\": [\"Pacific Hospital\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/abdm/bridge/hospitals/{{hospitalId}}/hip",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "abdm", "bridge", "hospitals", "{{hospitalId}}", "hip"]
+            },
+            "description": "REQUIRES VALID ABDM SANDBOX CREDENTIALS. hipId must match ^[A-Za-z0-9_-]{3,64}$."
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - ABDM Callbacks & Signature Verification (Public Bridge Mount)",
+      "description": "Mounted at app root before tenantResolver via ABDM_CALLBACK_PATH regex. REQUIRES ABDM_JWKS_URL or ABDM_CALLBACK_PUBLIC_KEY configured on server (unsigned callbacks are disabled by default and return 503 unless explicitly opted-in outside prod/staging).",
+      "item": [
+        {
+          "name": "[Negative Callback] Missing X-CM-ID Header (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" },\n  \"linkToken\": \"sample\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing X-CM-ID rejected with 401 (or 503 if ABDM unconfigured)', function () {",
+                  "  pm.expect([401, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Callback] Missing Bearer Token Blocked (401 or 503)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" },\n  \"linkToken\": \"sample\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            },
+            "description": "Expect 401 'Missing bearer token' when JWKS/PEM key is configured, or 503 when ABDM_JWKS_URL/ABDM_CALLBACK_PUBLIC_KEY is unset and unsigned bypass is disabled."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Unsigned callback blocked (401 or 503)', function () {",
+                  "  pm.expect([401, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Callback - Requires JWKS/PEM Config] Forged Callback JWT Signature (401)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{forgedAbdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" },\n  \"linkToken\": \"sample\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            },
+            "description": "REQUIRES ABDM_JWKS_URL or ABDM_CALLBACK_PUBLIC_KEY configured on server (returns 401 'Invalid or expired gateway callback signature', or 503 if verification key not yet configured)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Forged callback signature rejected (401 or 503 if unconfigured)', function () {",
+                  "  pm.expect([401, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Callback - Requires JWKS/PEM Config] Expired Callback JWT (401)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{expiredAbdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" },\n  \"linkToken\": \"sample\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Expired callback JWT rejected (401 or 503)', function () {",
+                  "  pm.expect([401, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Negative Callback] Timestamp Outside 15m Drift Window (400)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "2020-01-01T00:00:00.000Z" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            },
+            "description": "When signature passes (or test unsigned sandbox bypass), stale TIMESTAMP fails with HTTP 400 'Callback timestamp outside allowed window'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Stale timestamp rejected (400, or 401/503 if JWT missing/unconfigured)', function () {",
+                  "  pm.expect([400, 401, 503]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Requires JWKS/PEM & Encryption Key] Link Token Callback (POST /v3/hip/token/on-generate-token)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "X-HIP-ID", "value": "{{abdmHipId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"response\": { \"requestId\": \"{{$guid}}\" },\n  \"abhaAddress\": \"patient@sbx\",\n  \"linkToken\": \"sample-abdm-link-token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/hip/token/on-generate-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "hip", "token", "on-generate-token"]
+            },
+            "description": "REQUIRES configured ABDM_JWKS_URL/ABDM_CALLBACK_PUBLIC_KEY AND ABDM_TOKEN_ENCRYPTION_KEY (background processor encrypts linkToken in AbdmLinkToken). Expected sync HTTP 202: { status: 'ACK', requestId }."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  pm.expect(pm.response.json().status).to.eql('ACK');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[Requires JWKS/PEM & Sandbox] Care-Context Discover Callback (/user-initiated-linking/v3/patient/care-context/discover)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "X-HIP-ID", "value": "{{abdmHipId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{$guid}}\",\n  \"patient\": {\n    \"id\": \"patient@sbx\",\n    \"name\": \"Test Patient\",\n    \"gender\": \"M\",\n    \"yearOfBirth\": 1990,\n    \"verifiedIdentifiers\": [\n      { \"type\": \"MOBILE\", \"value\": \"+91{{patientMobile}}\" }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user-initiated-linking/v3/patient/care-context/discover",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-initiated-linking", "v3", "patient", "care-context", "discover"]
+            },
+            "description": "Expected sync 202 ACK. Inbox worker resolves Hospital User or ClinicPatient strictly inside hospital matching X-HIP-ID and replies via ABDM on-discover."
+          }
+        },
+        {
+          "name": "[Requires JWKS/PEM & Sandbox] Link Init Callback (/user-initiated-linking/v3/link/care-context/init)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "X-HIP-ID", "value": "{{abdmHipId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{$guid}}\",\n  \"patient\": {\n    \"id\": \"patient@sbx\",\n    \"referenceNumber\": \"{{patientId}}\",\n    \"careContexts\": [\n      { \"referenceNumber\": \"OPD-SAMPLE-1\" }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user-initiated-linking/v3/link/care-context/init",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-initiated-linking", "v3", "link", "care-context", "init"]
+            }
+          }
+        },
+        {
+          "name": "[Requires JWKS/PEM & Sandbox] Link Confirm Callback (/user-initiated-linking/v3/link/care-context/confirm)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "X-HIP-ID", "value": "{{abdmHipId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmation\": {\n    \"linkRefNumber\": \"{{abdmLinkRefNumber}}\",\n    \"token\": \"{{abdmLinkOtp}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user-initiated-linking/v3/link/care-context/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-initiated-linking", "v3", "link", "care-context", "confirm"]
+            },
+            "description": "Triggers atomic onLinkConfirm OTP verification (5-attempt lock & VERIFIED status against replay)."
+          }
+        },
+        {
+          "name": "[Requires JWKS/PEM] ABHA Deactivate Callback (POST /v3/abha/deactivate)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{abdmGatewayJwt}}", "type": "string" }] },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CM-ID", "value": "{{abdmXCmId}}" },
+              { "key": "X-HIP-ID", "value": "{{abdmHipId}}" },
+              { "key": "REQUEST-ID", "value": "{{$guid}}" },
+              { "key": "TIMESTAMP", "value": "{{$isoTimestamp}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"abhaAddress\": \"patient@sbx\",\n  \"abhaNumber\": \"{{abhaNumber14}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v3/abha/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["v3", "abha", "deactivate"]
+            },
+            "description": "Deactivates ABHA linkage in both User and ClinicPatient models strictly within hospital matching X-HIP-ID."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1174,6 +1174,7 @@ const PatientReportPanel = ({ patientId, patientName }) => {
 // PATIENTS MODE
 // ═══════════════════════════════════════════════════
 const PatientsMode = ({ onBookToken, setPendingDownload }) => {
+    const navigate = useNavigate();
     const [tab, setTab] = useState('list');
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1221,21 +1222,9 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
         clinicAPI.getPatients(search).then(r => { if (r.success) setPatients(r.patients); }).finally(() => setSearching(false));
     };
 
-    const openHistory = async (p) => {
-        setSelectedPatient(p);
-        setLoadingHistory(true);
-        setPatientHistory(null);
-        setPatientReports([]);
-        clinicAPI.getPatientHistory(p._id)
-            .then(r => {
-                if (r.success) {
-                    const cleanedAppts = filterValidVisits(r.appointments || []);
-                    setPatientHistory({ ...r, appointments: cleanedAppts });
-                    setPatientReports(r.patient?.reports || []);
-                }
-            })
-            .catch(console.error)
-            .finally(() => setLoadingHistory(false));
+    const openHistory = (p) => {
+        if (!p?._id) return;
+        navigate(`/patient/${p._id}`, { state: { isClinicPatient: true } });
     };
 
     const handleUploadReport = async (e) => {

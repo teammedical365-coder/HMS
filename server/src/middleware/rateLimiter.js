@@ -139,6 +139,56 @@ const pacificDemoSwitchLimiter = rateLimit({
     message: { success: false, message: 'Demo role switch rate limit reached. Please wait a few moments.' },
 });
 
+const abdmActorPatientKey = (req) => {
+    const uid = req.user?.id || req.user?.userId || req.user?._id || req.ip;
+    const pid = (req.body && req.body.patientId) || (req.params && req.params.patientId) || 'none';
+    return `${String(uid)}:${String(pid)}`;
+};
+
+// ABHA OTP Generation Limiter — per-user + per-patient (5 OTP generations per 15 min)
+const abdmOtpGenerateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.ABDM_OTP_GENERATE_MAX) || 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: abdmActorPatientKey,
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Too many ABDM OTP requests for this patient. Please wait before trying again.' },
+});
+
+// ABHA OTP Generation Per-User Cap — prevents spamming across many patients (25 per 15 min)
+const abdmOtpGenerateUserLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.ABDM_OTP_USER_GENERATE_MAX) || 25,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `abdm_gen_user:${String(req.user?.id || req.user?.userId || req.user?._id || req.ip)}`,
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Too many ABDM OTP generation requests from your account. Please slow down.' },
+});
+
+// ABHA OTP Verification Limiter — per-user + per-patient (10 attempts per 15 min)
+const abdmOtpVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.ABDM_OTP_VERIFY_MAX) || 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: abdmActorPatientKey,
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Too many ABDM OTP verification attempts. Please wait and try again.' },
+});
+
+// ABHA Status Read Limiter — 120 reads per 5 min per user
+const abdmStatusLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `abdm_status:${String(req.user?.id || req.user?.userId || req.user?._id || req.ip)}`,
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Too many ABHA status requests. Please slow down.' },
+});
+
 module.exports = { 
     loginLimiter, 
     signupLimiter, 
@@ -152,5 +202,9 @@ module.exports = {
     uploadLimiter,
     searchLimiter,
     pacificDemoLoginLimiter,
-    pacificDemoSwitchLimiter
+    pacificDemoSwitchLimiter,
+    abdmOtpGenerateLimiter,
+    abdmOtpGenerateUserLimiter,
+    abdmOtpVerifyLimiter,
+    abdmStatusLimiter
 };

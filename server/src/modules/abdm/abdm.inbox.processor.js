@@ -12,6 +12,7 @@ const MAX_ATTEMPTS = 5;
 
 const ROUTES = [
     [/\/hip\/v3\/links\/link\/token$/i, 'onLinkToken'],
+    [/\/token\/on-generate-token$/i, 'onLinkToken'],
     [/\/patient\/care-context\/discover$/i, 'onDiscover'],
     [/\/link\/care-context\/init$/i, 'onLinkInit'],
     [/\/link\/care-context\/confirm$/i, 'onLinkConfirm'],

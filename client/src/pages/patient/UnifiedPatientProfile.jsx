@@ -47,7 +47,7 @@ import PatientVialsSection from '../../components/vials/PatientVialsSection';
 import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
 import AbdmSection from '../../components/abdm/AbdmSection';
 
-const HospitalPatientProfileContent = () => {
+const HospitalPatientProfileContent = ({ onDetectedClinicPatient }) => {
     const { id: patientId, department: deptParam } = useParams();
     const departmentParam = deptParam && deptParam !== 'undefined' ? deptParam : 'Unassigned';
     const navigate = useNavigate();
@@ -228,6 +228,10 @@ const HospitalPatientProfileContent = () => {
         try {
             const res = await patientAPI.getFullHistory(patientId, departmentParam);
             if (res.success && res.user) {
+                if (res.user.clinicId && typeof onDetectedClinicPatient === 'function') {
+                    onDetectedClinicPatient();
+                    return;
+                }
                 setPatientData(res.user);
                 setTimeline(res.timeline || []);
                 setInsurancePolicies(res.insurancePolicies || []);
@@ -1565,7 +1569,35 @@ const HospitalPatientProfileContent = () => {
 };
 
 const UnifiedPatientProfile = () => {
-    return <HospitalPatientProfileContent />;
+    const location = useLocation();
+    const { id: patientId } = useParams();
+    const [detectedClinicPatient, setDetectedClinicPatient] = useState(false);
+
+    useEffect(() => {
+        setDetectedClinicPatient(false);
+    }, [patientId]);
+
+    let currentUser = {};
+    try {
+        currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    } catch {
+        currentUser = {};
+    }
+    const roleStr = String(currentUser.role || '').toLowerCase();
+    const dynRoleStr = String(currentUser._roleData?.name || '').toLowerCase();
+    const isClinicTenantUser = (
+        currentUser.clinicType === 'clinic' ||
+        currentUser.subscriptionPlan === 'starter' ||
+        roleStr === 'clinic doctor' ||
+        dynRoleStr === 'clinic doctor' ||
+        Boolean(location.state?.isClinicPatient)
+    );
+
+    if (isClinicTenantUser || detectedClinicPatient) {
+        return <ClinicPatientProfile />;
+    }
+
+    return <HospitalPatientProfileContent onDetectedClinicPatient={() => setDetectedClinicPatient(true)} />;
 };
 
 export default UnifiedPatientProfile;

@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
 const User = require('../../models/user.model');
+const ClinicPatient = require('../../models/clinicPatient.model');
 const Hospital = require('../../models/hospital.model');
 const AbdmTxn = require('../../models/abdmTxn.model');
 const AbdmCareContext = require('../../models/abdmCareContext.model');
@@ -42,12 +43,39 @@ const norm = (s) => String(s || '').toLowerCase()
 const yearOf = (dob) => { const m = String(dob || '').match(/(19|20)\d{2}/); return m ? Number(m[0]) : null; };
 const g1 = (g) => (g ? String(g).trim()[0].toUpperCase() : null);
 const sha = (txnId, otp) => crypto.createHash('sha256').update(`${txnId}:${otp}`).digest('hex');
-const patientRef = (p) => p.patientId || String(p._id);
+const patientRef = (p) => p.patientUid || p.patientId || String(p._id);
 
-async function findPatientByRef(hospitalId, ref) {
+async function findPatientByRef(hospitalId, ref, hospitalDoc = null) {
+    const h = hospitalDoc || await Hospital.findById(hospitalId).select('_id clinicType').lean();
+    if (!h) return null;
+
+    if (h.clinicType === 'clinic') {
+        const cpOr = [{ patientUid: String(ref) }];
+        if (mongoose.isValidObjectId(String(ref))) cpOr.push({ _id: String(ref) });
+        const cp = await ClinicPatient.findOne({ clinicId: h._id, isActive: { $ne: false }, $or: cpOr });
+        if (cp) return cp;
+    }
+
     const or = [{ patientId: String(ref) }];
     if (mongoose.isValidObjectId(String(ref))) or.push({ _id: String(ref) });
-    return User.findOne({ hospitalId, $or: or });
+    return User.findOne({ hospitalId: h._id, $or: or });
+}
+
+async function findPatientByIdForTenant(hospitalId, patientId, hospitalDoc = null) {
+    if (!mongoose.isValidObjectId(String(patientId))) return null;
+    const h = hospitalDoc || await Hospital.findById(hospitalId).select('_id clinicType').lean();
+    if (!h) return null;
+
+    if (h.clinicType === 'clinic') {
+        const cp = await ClinicPatient.findOne({ _id: patientId, clinicId: h._id, isActive: { $ne: false } })
+            .select('name phone patientUid abdm')
+            .lean();
+        if (cp) return { ...cp, patientModel: 'ClinicPatient' };
+    }
+    const u = await User.findOne({ _id: patientId, hospitalId: h._id })
+        .select('name phone patientId abdm')
+        .lean();
+    return u ? { ...u, patientModel: 'User' } : null;
 }
 
 function reply(hipId, path, requestId, body) {
@@ -115,7 +143,15 @@ async function onDiscover({ hospital, hipId, requestId, body }) {
         return { match: 'NO_STRONG_IDENTIFIER' };
     }
 
-    const candidates = await User.find({ hospitalId: hospital._id, $or: or }).select('name phone gender dob patientId abdm').lean();
+    let candidates = [];
+    if (hospital.clinicType === 'clinic') {
+        candidates = await ClinicPatient.find({ clinicId: hospital._id, isActive: { $ne: false }, $or: or })
+            .select('name phone gender dob patientUid abdm')
+            .lean();
+    }
+    if (!candidates.length) {
+        candidates = await User.find({ hospitalId: hospital._id, $or: or }).select('name phone gender dob patientId abdm').lean();
+    }
 
     // 2) WEAK identifiers must agree (name, gender, year of birth)
     const wantName = norm(p.name);
@@ -168,7 +204,7 @@ async function onLinkInit({ hospital, hipId, requestId, body }) {
     const abdmTxnId = body.transactionId;
     const refs = (Array.isArray(pr.careContexts) ? pr.careContexts : []).map((c) => String(c.referenceNumber));
 
-    const patient = await findPatientByRef(hospital._id, pr.referenceNumber);
+    const patient = await findPatientByRef(hospital._id, pr.referenceNumber, hospital);
     const owned = patient && refs.length
         ? await AbdmCareContext.countDocuments({ hospitalId: hospital._id, patientId: patient._id, referenceNumber: { $in: refs }, status: 'CREATED' })
         : 0;
@@ -182,8 +218,17 @@ async function onLinkInit({ hospital, hipId, requestId, body }) {
     await sendLinkOtp(patient.phone, otp);
 
     await AbdmTxn.create({
-        txnId: linkRef, flow: 'LINK', hospitalId: hospital._id, patientId: patient._id,
+        txnId: linkRef,
+        flow: 'LINK',
+        hospitalId: hospital._id,
+        patientId: patient._id,
+        patientModel: hospital.clinicType === 'clinic' && patient.clinicId ? 'ClinicPatient' : 'User',
         otpHash: sha(linkRef, otp),
+        status: 'ACTIVE',
+        attempts: 0,
+        maxAttempts: 5,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        lastOtpSentAt: new Date(),
         meta: { careContexts: refs, abdmTransactionId: abdmTxnId, abhaAddress: String(pr.id || '').toLowerCase() || null, expiresAt: Date.now() + 10 * 60 * 1000 },
     });
 
@@ -205,41 +250,74 @@ async function onLinkInit({ hospital, hipId, requestId, body }) {
 /** Callback: patient entered the OTP -> verify, mark LINKED, reply on-confirm */
 async function onLinkConfirm({ hospital, hipId, requestId, body }) {
     const c = body.confirmation || {};
-    const linkRef = String(c.linkRefNumber || '');
+    const linkRef = String(c.linkRefNumber || '').trim();
     const otp = String(c.token || '').trim();
 
-    const txn = linkRef ? await AbdmTxn.findOne({ txnId: linkRef, flow: 'LINK', hospitalId: hospital._id }) : null;
-    const expired = !txn || (txn.meta && txn.meta.expiresAt && Date.now() > txn.meta.expiresAt);
-    if (expired || txn.attempts >= 5) {
+    if (!linkRef || !otp) {
+        await reply(hipId, config.paths.onLinkConfirm, requestId, { error: ERR.BAD_OTP });
+        return { result: 'BAD_OTP' };
+    }
+
+    const now = new Date();
+    const txn = await AbdmTxn.findOneAndUpdate(
+        {
+            txnId: linkRef,
+            flow: 'LINK',
+            hospitalId: hospital._id,
+            status: 'ACTIVE',
+            attempts: { $lt: 5 },
+            $and: [
+                { $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+                { $or: [{ lockedUntil: null }, { lockedUntil: { $lte: now } }] },
+                { $or: [{ 'meta.expiresAt': { $exists: false } }, { 'meta.expiresAt': { $gt: Date.now() } }] }
+            ]
+        },
+        {
+            $set: { status: 'PROCESSING', processingStartedAt: now },
+            $inc: { attempts: 1 }
+        },
+        { new: true }
+    );
+
+    if (!txn) {
+        const existing = await AbdmTxn.findOne({ txnId: linkRef, flow: 'LINK', hospitalId: hospital._id }).lean();
+        const expired = !existing || (existing.meta && existing.meta.expiresAt && Date.now() > existing.meta.expiresAt);
         await reply(hipId, config.paths.onLinkConfirm, requestId, { error: ERR.BAD_OTP });
         return { result: expired ? 'EXPIRED' : 'LOCKED' };
     }
 
     const a = Buffer.from(sha(linkRef, otp));
-    const b = Buffer.from(txn.otpHash);
-    const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+    const b = Buffer.from(String(txn.otpHash || ''));
+    const ok = a.length === b.length && b.length > 0 && crypto.timingSafeEqual(a, b);
     if (!ok) {
-        await AbdmTxn.updateOne({ _id: txn._id }, { $inc: { attempts: 1 } });
+        const locked = txn.attempts >= (txn.maxAttempts || 5);
+        await AbdmTxn.updateOne(
+            { _id: txn._id },
+            locked
+                ? { $set: { status: 'LOCKED', lockedUntil: new Date(Date.now() + 15 * 60 * 1000), processingStartedAt: null } }
+                : { $set: { status: 'ACTIVE', processingStartedAt: null } }
+        );
         await reply(hipId, config.paths.onLinkConfirm, requestId, { error: ERR.BAD_OTP });
-        return { result: 'BAD_OTP' };
+        return { result: locked ? 'LOCKED' : 'BAD_OTP' };
     }
+
+    await AbdmTxn.updateOne({ _id: txn._id }, { $set: { status: 'VERIFIED', verifiedAt: new Date(), processingStartedAt: null } });
 
     const refs = txn.meta.careContexts || [];
     await AbdmCareContext.updateMany(
         { hospitalId: hospital._id, patientId: txn.patientId, referenceNumber: { $in: refs } },
         { $set: { status: 'LINKED', linkedAt: new Date(), abhaAddress: txn.meta.abhaAddress || null, error: null } }
     );
-    const patient = await User.findById(txn.patientId).select('name patientId').lean();
+    const patient = await findPatientByIdForTenant(hospital._id, txn.patientId, hospital);
     const ccs = await AbdmCareContext.find({ hospitalId: hospital._id, referenceNumber: { $in: refs } }).select('referenceNumber display').lean();
 
     await reply(hipId, config.paths.onLinkConfirm, requestId, {
         patient: {
-            referenceNumber: patientRef({ patientId: patient && patient.patientId, _id: txn.patientId }),
+            referenceNumber: patientRef({ patientUid: patient && patient.patientUid, patientId: patient && patient.patientId, _id: txn.patientId }),
             display: patient ? patient.name : '',
             careContexts: ccs.map((x) => ({ referenceNumber: x.referenceNumber, display: x.display })),
         },
     });
-    await AbdmTxn.deleteOne({ _id: txn._id });
     return { result: 'LINKED', careContexts: refs.length };
 }
 
@@ -290,13 +368,23 @@ async function onAbhaDeactivate({ hospital, body }) {
     if (!or.length) return { result: 'NO_IDENTIFIER' };
 
     const patients = await User.find({ hospitalId: hospital._id, $or: or }).select('_id').lean();
-    const ids = patients.map((p) => p._id);
-    if (!ids.length) return { result: 'NO_PATIENT' };
+    const userIds = patients.map((p) => p._id);
+    const clinicPatients = hospital.clinicType === 'clinic'
+        ? await ClinicPatient.find({ clinicId: hospital._id, $or: or }).select('_id').lean()
+        : [];
+    const cpIds = clinicPatients.map((p) => p._id);
+    const allIds = [...userIds, ...cpIds];
+    if (!allIds.length) return { result: 'NO_PATIENT' };
 
-    await User.updateMany({ _id: { $in: ids } }, { $set: { 'abdm.isVerified': false, 'abdm.status': 'Not Linked' } });
-    await AbdmLinkToken.deleteMany({ hospitalId: hospital._id, patientId: { $in: ids } });
-    await AbdmCareContext.updateMany({ hospitalId: hospital._id, patientId: { $in: ids } }, { $set: { status: 'CREATED', linkedAt: null, abhaAddress: null } });
-    return { result: 'DEACTIVATED', patients: ids.length };
+    if (userIds.length) {
+        await User.updateMany({ _id: { $in: userIds } }, { $set: { 'abdm.isVerified': false, 'abdm.status': 'Not Linked' } });
+    }
+    if (cpIds.length) {
+        await ClinicPatient.updateMany({ clinicId: hospital._id, _id: { $in: cpIds } }, { $set: { 'abdm.isVerified': false, 'abdm.status': 'Not Linked' } });
+    }
+    await AbdmLinkToken.deleteMany({ hospitalId: hospital._id, patientId: { $in: allIds } });
+    await AbdmCareContext.updateMany({ hospitalId: hospital._id, patientId: { $in: allIds } }, { $set: { status: 'CREATED', linkedAt: null, abhaAddress: null } });
+    return { result: 'DEACTIVATED', patients: allIds.length };
 }
 
 /** Callback: result of our HIP-initiated carecontext link call */
@@ -332,17 +420,25 @@ async function createCareContext({ hospitalId, patientId, hiType, sourceModel, s
 
 /** Ensure a link token exists (requesting one if needed), then link pending care contexts. */
 async function requestLinking({ hospitalId, patientId }) {
-    const hospital = await Hospital.findById(hospitalId).select('_id abdm').lean();
+    const hospital = await Hospital.findById(hospitalId).select('_id clinicType abdm').lean();
     if (!hospital || !hospital.abdm || !hospital.abdm.enabled || !hospital.abdm.hipId) {
         const e = new Error('ABDM is not enabled for this hospital'); e.status = 409; throw e;
     }
-    const patient = await User.findOne({ _id: patientId, hospitalId }).select('abdm').lean();
+    const patient = await findPatientByIdForTenant(hospitalId, patientId, hospital);
     if (!patient || !patient.abdm || !patient.abdm.isVerified || !patient.abdm.abhaAddress) {
         const e = new Error('Patient has no verified ABHA'); e.status = 409; throw e;
     }
 
     const tok = await AbdmLinkToken.findOne({ hospitalId, patientId });
-    const activeToken = tok ? (tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token) : null;
+    let activeToken = null;
+    if (tok && tok.status === 'READY') {
+        try {
+            activeToken = tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token;
+        } catch (err) {
+            // Preserve existing ciphertext without overwriting when encryption config/key differs
+            throw err;
+        }
+    }
     if (tok && tok.status === 'READY' && activeToken) {
         await linkPendingForPatient({ hospitalId, patientId });
         return { status: 'LINKING' };
@@ -363,7 +459,15 @@ async function requestLinking({ hospitalId, patientId }) {
     });
     await AbdmLinkToken.findOneAndUpdate(
         { hospitalId, patientId },
-        { $set: { abhaAddress: a.abhaAddress, requestId, status: 'PENDING', token: null, error: null } },
+        {
+            $set: {
+                patientModel: patient.patientModel || 'User',
+                abhaAddress: a.abhaAddress,
+                requestId,
+                status: 'PENDING',
+                error: null
+            }
+        },
         { upsert: true }
     );
     return { status: 'TOKEN_REQUESTED' };
@@ -371,17 +475,28 @@ async function requestLinking({ hospitalId, patientId }) {
 
 /** Link each CREATED care context, ONE PER CALL (batched calls have been seen to lose records). */
 async function linkPendingForPatient({ hospitalId, patientId }) {
-    const hospital = await Hospital.findById(hospitalId).select('_id abdm').lean();
+    const hospital = await Hospital.findById(hospitalId).select('_id clinicType abdm').lean();
     const tok = await AbdmLinkToken.findOne({ hospitalId, patientId, status: 'READY' });
-    const patient = await User.findOne({ _id: patientId, hospitalId }).select('name patientId abdm').lean();
+    if (!tok || !hospital || !hospital.abdm || !hospital.abdm.hipId) {
+        return { linked: 0, requested: 0 };
+    }
+    const patient = await findPatientByIdForTenant(hospitalId, patientId, hospital);
+    if (!patient || !patient.abdm || !patient.abdm.abhaAddress) {
+        return { linked: 0, requested: 0 };
+    }
     const ccs = await AbdmCareContext.find({ hospitalId, patientId, status: 'CREATED' }).limit(20);
     if (tok.isExpired && tok.isExpired()) {
         tok.status = 'EXPIRED';
         await tok.save();
-        return { linked: 0 };
+        return { linked: 0, requested: 0 };
     }
-    const bearerLinkToken = tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token;
-    if (!bearerLinkToken) return { linked: 0 };
+    let bearerLinkToken = null;
+    try {
+        bearerLinkToken = tok.getDecryptedToken ? tok.getDecryptedToken() : tok.token;
+    } catch (err) {
+        throw err;
+    }
+    if (!bearerLinkToken) return { linked: 0, requested: 0 };
 
     let requested = 0;
     for (const cc of ccs) {

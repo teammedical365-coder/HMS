@@ -99,5 +99,20 @@ clinicPatientSchema.index(
         partialFilterExpression: { aadhaarNumber: { $type: 'string', $gt: '' } }
     }
 );
+// ABHA identifiers unique per clinic only when non-empty string
+clinicPatientSchema.index(
+    { clinicId: 1, 'abdm.abhaNumber': 1 },
+    {
+        unique: true,
+        partialFilterExpression: { 'abdm.abhaNumber': { $type: 'string', $gt: '' } }
+    }
+);
+clinicPatientSchema.index(
+    { clinicId: 1, 'abdm.abhaAddress': 1 },
+    {
+        unique: true,
+        partialFilterExpression: { 'abdm.abhaAddress': { $type: 'string', $gt: '' } }
+    }
+);
 
 module.exports = mongoose.model('ClinicPatient', clinicPatientSchema);

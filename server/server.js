@@ -17,6 +17,15 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // server/server.js
 require('dotenv').config();
+try {
+    const abdmSecurity = require('./src/modules/abdm/abdm.config').validateSecurityStartup();
+    if (abdmSecurity.warnings && abdmSecurity.warnings.length > 0) {
+        abdmSecurity.warnings.forEach((w) => console.warn(`⚠️ [ABDM Security Warning]: ${w}`));
+    }
+} catch (abdmCfgErr) {
+    console.error('❌ [ABDM Security Startup Error]:', abdmCfgErr.message);
+    process.exit(1);
+}
 const app = require('./src/app');
 const connectDB = require('./src/db/db');
 const { ensurePortAvailableSync, killProcessOnPort } = require('./src/utils/portManager');

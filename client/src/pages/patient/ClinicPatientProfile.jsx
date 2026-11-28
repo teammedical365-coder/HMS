@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { patientAPI, clinicAPI, doctorAPI } from '../../utils/api';
+import { patientAPI, clinicAPI, doctorAPI, abdmAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -24,6 +24,7 @@ import { confirmToast } from '../../utils/confirmToast';
 
 import AppointmentReports from '../../components/AppointmentReports';
 import PatientVialsSection from '../../components/vials/PatientVialsSection';
+import AbdmSection from '../../components/abdm/AbdmSection';
 
 const ClinicPatientProfile = () => {
     const { id: patientId } = useParams();
@@ -41,11 +42,31 @@ const ClinicPatientProfile = () => {
                          ['reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(userRoleStr) ||
                          ['reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(dynRoleStr);
 
+    const normalizedRole = (dynRoleStr || userRoleStr || '').trim().replace(/\s+/g, ' ');
+    const normalizedRoleCompact = normalizedRole.replace(/[\s_]+/g, '');
+    const isDeniedAbhaRole =
+        ['accountant', 'pharmacist', 'pharmacy', 'cashier', 'billing', 'otmanager', 'otstaff', 'doctorassistant', 'assistant', 'clinicalassistant'].includes(normalizedRoleCompact) ||
+        normalizedRole.includes('lab') ||
+        normalizedRole.includes('patholog') ||
+        normalizedRole.includes('phlebotom') ||
+        normalizedRole.includes('sample') ||
+        normalizedRole.includes('pharmac') ||
+        normalizedRole.includes('accountant');
+    const canAccessAbha = !isDeniedAbhaRole && (
+        isHospitalAdmin ||
+        isNurse ||
+        ['doctor', 'clinicdoctor', 'resident', 'residentdoctor', 'reception', 'receptionist', 'patient'].includes(normalizedRoleCompact) ||
+        ['abdm_manage', 'abha_manage', 'visit_intake', 'visit_diagnose', 'appointment_manage'].some((p) => permissions.includes(p))
+    );
+
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [activeTab, setActiveTab] = useState('timeline');
+    const [abhaLoading, setAbhaLoading] = useState(false);
+    const [abhaError, setAbhaError] = useState('');
+    const [abhaVisible, setAbhaVisible] = useState(canAccessAbha);
 
     // Report upload states
     const [file, setFile] = useState(null);
@@ -64,6 +85,34 @@ const ClinicPatientProfile = () => {
         }
     }, [patientId]);
 
+    const fetchAbhaStatus = async (resolvedPatientId) => {
+        if (!resolvedPatientId || !canAccessAbha) return;
+        setAbhaLoading(true);
+        setAbhaError('');
+        try {
+            const statusRes = await abdmAPI.getStatus(resolvedPatientId);
+            if (statusRes?.success && statusRes.abdm) {
+                setAbhaVisible(true);
+                setPatientData((prev) => (prev ? {
+                    ...prev,
+                    abdm: {
+                        ...(prev.abdm || {}),
+                        ...statusRes.abdm
+                    }
+                } : prev));
+            }
+        } catch (abhaErr) {
+            const code = abhaErr?.response?.status;
+            if (code === 403 || code === 401) {
+                setAbhaVisible(false);
+            } else if (code !== 503) {
+                setAbhaError(abhaErr?.response?.data?.message || 'Unable to refresh ABHA status.');
+            }
+        } finally {
+            setAbhaLoading(false);
+        }
+    };
+
     const fetchProfile = async () => {
         setLoading(true);
         try {
@@ -74,6 +123,9 @@ const ClinicPatientProfile = () => {
                 }
                 setPatientData(res.user);
                 setTimeline(res.timeline || []);
+                if (res.user?._id && canAccessAbha) {
+                    fetchAbhaStatus(res.user._id);
+                }
             } else {
                 setError(res.message || 'Failed to load profile data.');
             }
@@ -498,6 +550,26 @@ const ClinicPatientProfile = () => {
                     <div className="cpp-metric-icon"><FiAlertCircle /></div>
                 </div>
             </div>
+
+            {/* ====== ABDM / ABHA INTEGRATION SECTION ====== */}
+            {abhaVisible && patientData?._id && (
+                <AbdmSection
+                    patient={patientData}
+                    loadingStatus={abhaLoading}
+                    statusError={abhaError}
+                    onPatientUpdate={(updatedAbha) => {
+                        setAbhaError('');
+                        setPatientData((prev) => ({
+                            ...prev,
+                            abdm: {
+                                ...(prev?.abdm || {}),
+                                ...updatedAbha
+                            }
+                        }));
+                        fetchAbhaStatus(patientData._id);
+                    }}
+                />
+            )}
 
             {/* Sidebar and content grid */}
             <div className="cpp-content-grid">

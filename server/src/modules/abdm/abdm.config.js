@@ -11,7 +11,30 @@ const e = process.env;
 const t = (v, d = '') => String(v === undefined || v === null ? d : v).trim();
 const stripSlash = (s) => s.replace(/\/+$/, '');
 
-const env = t(e.ABDM_ENV, 'sandbox');
+const env = t(e.ABDM_ENV, 'sandbox').toLowerCase();
+const nodeEnv = t(e.NODE_ENV, 'development').toLowerCase();
+const isProdOrStaging = ['production', 'staging'].includes(env) || ['production', 'staging'].includes(nodeEnv);
+
+function parseJwksUrl(raw) {
+    const val = t(raw);
+    if (!val) return { configured: false, valid: true, url: '' };
+    let u;
+    try {
+        u = new URL(val);
+    } catch (_) {
+        return { configured: true, valid: false, url: val, reason: 'ABDM_JWKS_URL is not a valid URL' };
+    }
+    const isLocalHost = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    if (u.protocol !== 'https:' && !( !isProdOrStaging && isLocalHost && u.protocol === 'http:' )) {
+        return {
+            configured: true,
+            valid: false,
+            url: val,
+            reason: 'ABDM_JWKS_URL must use HTTPS (localhost HTTP allowed only in non-production testing)'
+        };
+    }
+    return { configured: true, valid: true, url: val };
+}
 
 const config = {
     env, // 'sandbox' | 'production'
@@ -34,12 +57,15 @@ const config = {
     forbiddenBridgeHosts: (t(e.ABDM_FORBIDDEN_BRIDGE_HOSTS, 'medical365.in,www.medical365.in'))
         .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 
-    // Callback signature verification: URL of ABDM's published signing keys (JWKS)
+    // Callback signature verification: URL of ABDM's published signing keys (JWKS) or explicit SPKI PEM
     jwksUrl: t(e.ABDM_JWKS_URL),
-    // Strictly disallowed in production and staging environments (FINDING-09 Remediation)
+    callbackPublicKey: t(e.ABDM_CALLBACK_PUBLIC_KEY).replace(/\\n/g, '\n'),
+    jwtIssuers: t(e.ABDM_JWT_ISSUER).split(',').map((s) => s.trim()).filter(Boolean),
+    jwtAudience: t(e.ABDM_JWT_AUDIENCE),
+    // Disabled by default in ALL environments. Sandbox bypass only works if explicitly opted-in outside prod/staging.
     allowUnsignedCallbacks: t(e.ABDM_ALLOW_UNSIGNED_CALLBACKS) === 'true' &&
-        env !== 'production' && env !== 'staging' &&
-        process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'staging',
+        env === 'sandbox' &&
+        !isProdOrStaging,
 
     // Sandbox-only fixed OTP for care-context linking when no SMS provider is wired yet
     sandboxFixedOtp: env === 'sandbox' && /^\d{6}$/.test(t(e.ABDM_SANDBOX_FIXED_OTP)) ? t(e.ABDM_SANDBOX_FIXED_OTP) : '',
@@ -62,5 +88,35 @@ const config = {
 };
 
 config.isConfigured = () => Boolean(config.clientId && config.clientSecret);
+config.parseJwksUrl = parseJwksUrl;
+
+config.validateSecurityStartup = () => {
+    const AbdmLinkToken = require('../../models/abdmLinkToken.model');
+    const warnings = [];
+
+    // 1. Validate encryption key strictly if set (throws immediately if weak/JWT_SECRET/default)
+    const encCheck = AbdmLinkToken.validateEncryptionConfig({
+        requireKey: isProdOrStaging && config.isConfigured()
+    });
+    if (!encCheck.configured) {
+        warnings.push('ABDM_TOKEN_ENCRYPTION_KEY is not configured; ABDM link-token encryption/decryption will fail closed.');
+    }
+
+    // 2. Validate ABDM_JWKS_URL syntax/protocol when provided
+    const jwksCheck = parseJwksUrl(config.jwksUrl);
+    if (!jwksCheck.valid) {
+        throw new Error(`[ABDM Config Error] ${jwksCheck.reason}`);
+    }
+
+    // 3. Enforce callback verification configuration in production / staging when ABDM is enabled
+    if (isProdOrStaging && config.isConfigured() && !config.jwksUrl && !config.callbackPublicKey) {
+        throw new Error('[ABDM Config Error] ABDM_JWKS_URL (or ABDM_CALLBACK_PUBLIC_KEY) is required in production/staging.');
+    }
+    if (!config.jwksUrl && !config.callbackPublicKey) {
+        warnings.push('ABDM_JWKS_URL is not set; inbound ABDM callbacks will fail closed unless explicitly isolated in sandbox.');
+    }
+
+    return { ok: true, isProdOrStaging, encryption: encCheck, jwks: jwksCheck, warnings };
+};
 
 module.exports = config;
