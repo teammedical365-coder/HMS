@@ -20,11 +20,12 @@ const Navbar = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const { branding } = useBranding();
 
+  const userId = user?._id || user?.id || null;
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && userId) {
       dispatch(fetchNotifications());
     }
-  }, [isAuthenticated, user, dispatch]);
+  }, [isAuthenticated, userId, dispatch]);
 
   const handleLogout = () => {
     dispatch(logout());

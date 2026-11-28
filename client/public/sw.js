@@ -39,10 +39,10 @@ if (isLocalDev) {
   self.addEventListener('activate', (event) => {
     event.waitUntil(
       caches.keys()
-        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-        .then(() => self.registration.unregister())
-        .then(() => self.clients.claim())
-        .then(() => console.log('[SW] Service worker auto-unregistered in local dev'))
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k).catch(() => {}))))
+        .then(() => self.registration.unregister().catch(() => {}))
+        .then(() => self.clients.claim().catch(() => {}))
+        .catch(() => {})
     );
   });
 

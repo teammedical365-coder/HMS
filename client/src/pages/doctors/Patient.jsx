@@ -915,6 +915,12 @@ const Patient = () => {
                                                              <span>View Full Profile</span>
                                                          </div>
 
+                                                         {(() => {
+                                                             const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                                             const r = String(u._roleData?.name || u.role || '').toLowerCase();
+                                                             const p = u._roleData?.permissions || [];
+                                                             return r.includes('nurse') || p.includes('nurse_access');
+                                                         })() && (
                                                          <div 
                                                              className="doc-card-menu-action"
                                                              onClick={() => {
@@ -925,6 +931,7 @@ const Patient = () => {
                                                              <FiActivity size={14} />
                                                              <span>Enter Vitals</span>
                                                          </div>
+                                                         )}
 
                                                          <div 
                                                              className="doc-card-menu-action"

@@ -6,6 +6,7 @@ const Session = require('../models/session.model');
 
 const { JWT_SECRET } = require('../config/jwt');
 const { isDemoAccount, isDemoHospital, isPredefinedDemoUser } = require('../config/demoConfig');
+const { PACIFIC_DEMO_HOSPITAL_ID, isPacificDemoEmail } = require('../config/pacificDemoConfig');
 
 // ── Bounded In-Memory TTL Cache for Verified Auth Tokens ──────────────────────
 // Drastically reduces database round trips (from 5 DB queries down to 0) on repeat requests
@@ -114,6 +115,16 @@ exports.verifyToken = async (req, res, next) => {
                     req.user.isDemoUser = true;
                 }
             }
+            if (cachedAuth.isPacificDemo) {
+                req.user.isPacificDemo = true;
+                req.user.isDemoAccount = true;
+                req.user.demoRoleKey = cachedAuth.demoRoleKey || null;
+                req.user.isDemo = true;
+                req.user.isDemoUser = true;
+                req.user.isDemoTenant = true;
+                req.isPacificDemo = true;
+                req.isDemo = true;
+            }
             return next();
         } else {
             authCache.delete(token); // Version mismatch, invalidate entry
@@ -140,8 +151,9 @@ exports.verifyToken = async (req, res, next) => {
 
         // ── Session validation (single active session enforcement) ────────────
         // Tokens with sessionId are from the new OTP flow; legacy tokens without sessionId skip this check.
+        let activeSession = null;
         if (decoded.sessionId) {
-            const activeSession = await Session.findOne({
+            activeSession = await Session.findOne({
                 sessionId: decoded.sessionId,
                 userId: decoded.userId,
                 isActive: true,
@@ -152,6 +164,18 @@ exports.verifyToken = async (req, res, next) => {
                     success: false,
                     sessionExpired: true,
                     message: 'Your account has been logged in from another device. Please login again.',
+                });
+            }
+
+            if (activeSession.expiresAt && activeSession.expiresAt < new Date()) {
+                activeSession.isActive = false;
+                activeSession.logoutTime = new Date();
+                await activeSession.save().catch(() => {});
+                invalidateAuthCache({ jti: activeSession.jti, token });
+                return res.status(401).json({
+                    success: false,
+                    sessionExpired: true,
+                    message: 'Demo session expired. Please select a demo role again.',
                 });
             }
 
@@ -262,17 +286,39 @@ exports.verifyToken = async (req, res, next) => {
         const isPredefinedDemo = Boolean(decoded.isDemoUser) || 
                                  isPredefinedDemoUser(user);
 
-        if (isDemoTenant) {
+        // Server-side Pacific Hospital Interactive Demo Session verification (isolated to Pacific Hospital only)
+        const resolvedRoleLower = String(roleData?.name || user.role || '').toLowerCase().trim();
+        const isAllowedPacificDemoUser = Boolean(
+            decoded.isPacificDemo === true &&
+            decoded.isDemoSession === true &&
+            activeSession?.isDemoSession === true &&
+            user.isActive !== false &&
+            user.hospitalId &&
+            String(user.hospitalId) === String(PACIFIC_DEMO_HOSPITAL_ID) &&
+            !['superadmin', 'centraladmin', 'patient'].includes(resolvedRoleLower)
+        );
+        const isPacificDemo = isAllowedPacificDemoUser;
+        if (decoded.isPacificDemo && !isPacificDemo) {
+            return res.status(401).json({ success: false, message: 'Invalid or unauthorized demo session.' });
+        }
+
+        if (isDemoTenant || isPacificDemo) {
             req.user.isDemo = true;
             req.user.isDemoTenant = true;
             req.isDemo = true;
-            if (isPredefinedDemo) {
+            if (isPredefinedDemo || isPacificDemo) {
                 req.user.isDemoUser = true;
             }
         }
+        if (isPacificDemo) {
+            req.user.isPacificDemo = true;
+            req.user.isDemoAccount = true;
+            req.user.demoRoleKey = user.demoRoleKey || decoded.demoRoleKey || null;
+            req.isPacificDemo = true;
+        }
 
-        // Cache the verified auth details
-        if (token) {
+        // Cache the verified auth details (skip caching Pacific Demo tokens so session expiration & role switching take effect immediately)
+        if (token && !isPacificDemo) {
             if (authCache.size >= AUTH_CACHE_MAX_ENTRIES) pruneAuthCache();
             authCache.set(token, {
                 user: { ...user },
@@ -284,6 +330,8 @@ exports.verifyToken = async (req, res, next) => {
                 jti: decoded.jti,
                 isDemoTenant,
                 isPredefinedDemo,
+                isPacificDemo,
+                demoRoleKey: req.user.demoRoleKey || null,
                 expiresAt: now + AUTH_CACHE_TTL_MS
             });
         }
@@ -395,6 +443,9 @@ exports.hasPermission = (user, permission) => {
 exports.verifySuperAdmin = async (req, res, next) => {
     try {
         const checkRoleAndProceed = () => {
+            if (req.user?.isPacificDemo || req.user?.isDemoAccount) {
+                return res.status(403).json({ success: false, message: 'Super Admin access is disabled for demo sessions.' });
+            }
             const role = req.user?.role;
             if (role === 'superadmin' || role === 'centraladmin') {
                 return next();

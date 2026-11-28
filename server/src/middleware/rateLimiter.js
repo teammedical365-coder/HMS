@@ -119,6 +119,26 @@ const searchLimiter = rateLimit({
     message: { success: false, message: 'Too many search queries. Please wait a moment.' },
 });
 
+// Pacific Demo Login Limiter — 30 demo logins per 15 min per IP
+const pacificDemoLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'production' ? 30 : 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many demo login requests. Please wait a few minutes and try again.' },
+});
+
+// Pacific Demo Role Switch Limiter — 60 role switches per 15 min per session/IP
+const pacificDemoSwitchLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'production' ? 60 : 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user?.id || req.user?.userId ? String(req.user.id || req.user.userId) : req.ip),
+    validate: { keyGeneratorIpFallback: false },
+    message: { success: false, message: 'Demo role switch rate limit reached. Please wait a few moments.' },
+});
+
 module.exports = { 
     loginLimiter, 
     signupLimiter, 
@@ -130,5 +150,7 @@ module.exports = {
     publicConfigLimiter,
     aiWalletLimiter,
     uploadLimiter,
-    searchLimiter
+    searchLimiter,
+    pacificDemoLoginLimiter,
+    pacificDemoSwitchLimiter
 };

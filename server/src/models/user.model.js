@@ -140,6 +140,14 @@ const userSchema = new mongoose.Schema({
 
     // Predefined Demo Account flag for strict role-based OTP bypass (only true for allowlisted demo users)
     isPredefinedDemo: { type: Boolean, default: false },
+
+    // Pacific Hospital Interactive Demo account controls (strictly scoped to Pacific Hospital tenant)
+    isDemoAccount: { type: Boolean, default: false, index: true },
+    demoRoleKey: {
+        type: String,
+        enum: ['hospitaladmin', 'doctor', 'reception', 'lab', 'accountant', null],
+        default: null
+    },
 }, { timestamps: true });
 
 // Scoped compound indexes for multi-tenant isolation per hospital

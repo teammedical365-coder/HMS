@@ -52,11 +52,12 @@ router.get('/reports/:filename', async (req, res) => {
         const Report = require('../models/report.model');
         const LabReport = require('../models/labReport.model');
         const ClinicPatient = require('../models/clinicPatient.model');
+        const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
 
         const safeRegex = new RegExp(`^${safeFilename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
         const safeSubstringRegex = new RegExp(safeFilename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-        const [reportDoc, labReportDoc, clinicPatientDoc] = await Promise.all([
+        const [reportDoc, labReportDoc, clinicPatientDoc, policyCardDoc] = await Promise.all([
             Report.findOne({
                 $or: [
                     { fileName: safeRegex },
@@ -73,10 +74,18 @@ router.get('/reports/:filename', async (req, res) => {
             }).lean(),
             ClinicPatient.findOne({
                 'reports.filename': safeRegex
+            }).lean(),
+            PatientInsurancePolicy.findOne({
+                isActive: true,
+                $or: [
+                    { 'cardDocument.fileName': safeRegex },
+                    { 'cardDocument.fileId': safeRegex },
+                    { 'cardDocument.url': safeSubstringRegex }
+                ]
             }).lean()
         ]);
 
-        if (!reportDoc && !labReportDoc && !clinicPatientDoc) {
+        if (!reportDoc && !labReportDoc && !clinicPatientDoc && !policyCardDoc) {
             return res.status(404).json({ success: false, message: 'Medical report record not found or unassociated with any authorized clinical record.' });
         }
 
@@ -92,6 +101,9 @@ router.get('/reports/:filename', async (req, res) => {
         } else if (clinicPatientDoc) {
             docHospitalId = clinicPatientDoc.clinicId ? String(clinicPatientDoc.clinicId) : null;
             docPatientId = clinicPatientDoc._id ? String(clinicPatientDoc._id) : null;
+        } else if (policyCardDoc) {
+            docHospitalId = policyCardDoc.hospitalId ? String(policyCardDoc.hospitalId) : null;
+            docPatientId = policyCardDoc.patientId ? String(policyCardDoc.patientId) : null;
         }
 
         const isCentralAdmin = decoded.role === 'centraladmin' || decoded.role === 'superadmin';
@@ -425,7 +437,24 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
 
         timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        res.json({ success: true, user, timeline });
+        let insurancePolicies = [];
+        if (!isClinicPatient && user?._id) {
+            try {
+                const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+                const policyHospitalId = req.user.hospitalId || user.hospitalId;
+                if (policyHospitalId) {
+                    insurancePolicies = await PatientInsurancePolicy.find({
+                        hospitalId: policyHospitalId,
+                        patientId: user._id,
+                        isActive: true
+                    }).sort({ isPrimary: -1, updatedAt: -1 }).lean();
+                }
+            } catch (pErr) {
+                console.warn('[full-history-policies]', pErr.message);
+            }
+        }
+
+        res.json({ success: true, user, timeline, insurancePolicies });
     } catch (error) {
         console.error("CRITICAL PROFILE ROUTE TRACE:", error.message);
         return res.status(500).json({ success: false, message: 'Failed to retrieve patient profile' });

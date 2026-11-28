@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import LabAdminShell from '../lab/LabAdminShell';
+import PacificDemoRoleSwitcher from '../demo/PacificDemoRoleSwitcher';
 import './DashboardLayout.css';
 
 const DashboardSidebar = memo(({ isOpen, setOpen }) => {
@@ -326,6 +327,15 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                         </div>
                     </div>
                 )}
+
+                <PacificDemoRoleSwitcher
+                    compact={!isOpen}
+                    onRoleSwitched={() => {
+                        if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+                            setOpen(false);
+                        }
+                    }}
+                />
             </nav>
 
         </aside>
@@ -649,8 +659,10 @@ const DashboardLayout = ({ children }) => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    const activeAccountKey = user?.id || user?._id || 'guest';
+
     if (useDedicatedLabAdminShell) {
-        return <LabAdminShell>{children}</LabAdminShell>;
+        return <LabAdminShell key={activeAccountKey}>{children}</LabAdminShell>;
     }
 
     return (
@@ -663,7 +675,7 @@ const DashboardLayout = ({ children }) => {
             <div className={`erp-main-area ${sidebarOpen ? 'shifted' : 'full'}`}>
                 <TopBar sidebarOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
                 <main className={`erp-page-content ${isFullBleed ? 'erp-fullbleed-content' : ''}`}>
-                    {children}
+                    <React.Fragment key={activeAccountKey}>{children}</React.Fragment>
                 </main>
             </div>
         </div>

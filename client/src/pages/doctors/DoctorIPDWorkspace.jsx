@@ -20,6 +20,7 @@ import InpatientClinicalNotesModal from '../../components/ipd/InpatientClinicalN
 import IPDClinicalChartsModal from '../../components/ipd/IPDClinicalChartsModal';
 import ICUChartModal from '../../components/ipd/ICUChartModal';
 import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
+import { PatientPolicySummaryBanner } from '../../components/insurance/PatientPolicySection';
 import './DoctorIPDWorkspace.css';
 
 const DoctorIPDWorkspace = () => {
@@ -282,6 +283,13 @@ const DoctorIPDWorkspace = () => {
                             </button>
                         </div>
                     </div>
+
+                    {admission?.insurancePolicies?.length > 0 && (
+                        <PatientPolicySummaryBanner
+                            policies={admission.insurancePolicies}
+                            contextLabel="IPD Coverage / TPA / Health Scheme Readiness"
+                        />
+                    )}
 
                     {/* Integrated Full Doctor IPD Clinical Workspace */}
                     <div className="doc-ipd-workspace-body">

@@ -138,6 +138,23 @@ const requireNursingAdministerAccess = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Only authorized nursing staff can confirm medication administration' });
 };
 
+// Middleware: strictly enforce NURSE-ONLY vitals entry & editing (reject doctors, receptionists, etc.)
+const requireNurseOnlyVitalsAccess = (req, res, next) => {
+    const role = getUserRole(req);
+    const perms = req.user._roleData?.permissions || [];
+    const isNurse = ['nurse', 'staffnurse', 'headnurse', 'nursingstaff'].includes(role) ||
+        role.includes('nurse') ||
+        perms.includes('nurse_access') ||
+        perms.includes('vitals_write');
+    if (isNurse) {
+        return next();
+    }
+    return res.status(403).json({
+        success: false,
+        message: 'Access denied: Only authorized nursing staff can record or modify patient vitals.'
+    });
+};
+
 // Middleware: verify clinical execution permissions (Nurse, Doctor & Admin)
 const requireNurseOrDoctorAccess = (req, res, next) => {
     const role = getUserRole(req);
@@ -1014,8 +1031,8 @@ router.patch('/mar/:marId', verifyToken, resolveTenant, requireNursingAdminister
 // SECTION C: IPD TIME-SERIES VITALS (Append-Only)
 // ============================================================================
 
-// POST /api/ipd-clinical/admissions/:admissionId/vitals — Record vitals (Nurse/Doctor only)
-router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+// POST /api/ipd-clinical/admissions/:admissionId/vitals — Record vitals (Nurse only)
+router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requireNurseOnlyVitalsAccess, async (req, res) => {
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
@@ -1090,6 +1107,16 @@ router.post('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requi
         });
 
         await vitalEntry.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'VITALS_RECORDED',
+            targetModel: 'IPDVitals',
+            targetId: vitalEntry._id,
+            targetLabel: `Nurse recorded IPD vitals for admission ${admission._id}`,
+            req
+        });
 
         const io = req.app.get('io');
         if (io) {
@@ -1168,8 +1195,8 @@ router.get('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requir
     }
 });
 
-// PATCH /api/ipd-clinical/admissions/:admissionId/vitals/:vitalsId — Edit remark/observation on an existing vitals row (Nurse/Doctor/Admin)
-router.patch('/admissions/:admissionId/vitals/:vitalsId', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+// PATCH /api/ipd-clinical/admissions/:admissionId/vitals/:vitalsId — Edit remark/observation on an existing vitals row (Nurse only)
+router.patch('/admissions/:admissionId/vitals/:vitalsId', verifyToken, resolveTenant, requireNurseOnlyVitalsAccess, async (req, res) => {
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId, vitalsId } = req.params;
@@ -1651,12 +1678,16 @@ router.post('/admissions/:admissionId/discharge-summary', verifyToken, resolveTe
         const {
             diagnosis,
             admissionReason,
+            clinicalHistory,
+            clinicalExamination,
             hospitalCourse,
             proceduresSummary,
             keyInvestigationsSummary,
             treatmentSummary,
+            vitalsSummary,
             conditionAtDischarge = 'STABLE',
             dischargeMedications = [],
+            dischargeAdvice,
             followUpInstructions,
             returnPrecautions,
             followUpDate,
@@ -1675,19 +1706,26 @@ router.post('/admissions/:admissionId/discharge-summary', verifyToken, resolveTe
         const summaryData = {
             diagnosis: diagnosis ? String(diagnosis).trim() : '',
             admissionReason: admissionReason ? String(admissionReason).trim() : '',
+            clinicalHistory: clinicalHistory ? String(clinicalHistory).trim() : '',
+            clinicalExamination: clinicalExamination ? String(clinicalExamination).trim() : '',
             hospitalCourse: hospitalCourse ? String(hospitalCourse).trim() : '',
             proceduresSummary: proceduresSummary ? String(proceduresSummary).trim() : '',
             keyInvestigationsSummary: keyInvestigationsSummary ? String(keyInvestigationsSummary).trim() : '',
             treatmentSummary: treatmentSummary ? String(treatmentSummary).trim() : '',
+            vitalsSummary: vitalsSummary ? String(vitalsSummary).trim() : '',
             conditionAtDischarge,
             dischargeMedications: Array.isArray(dischargeMedications) ? dischargeMedications.map(m => ({
                 medicineName: String(m.medicineName || '').trim(),
+                composition: String(m.composition || m.salt || m.genericName || '').trim(),
                 dosage: String(m.dosage || '').trim(),
                 route: String(m.route || 'Oral').trim(),
                 frequency: String(m.frequency || 'OD').trim(),
-                duration: String(m.duration || '5 days').trim(),
-                instructions: String(m.instructions || '').trim()
+                duration: String(m.duration || '').trim(),
+                quantity: String(m.quantity || '').trim(),
+                instructions: String(m.instructions || '').trim(),
+                inventoryItemId: (m.inventoryItemId && mongoose.Types.ObjectId.isValid(m.inventoryItemId)) ? m.inventoryItemId : null
             })).filter(m => m.medicineName) : [],
+            dischargeAdvice: dischargeAdvice ? String(dischargeAdvice).trim() : '',
             followUpInstructions: followUpInstructions ? String(followUpInstructions).trim() : '',
             returnPrecautions: returnPrecautions ? String(returnPrecautions).trim() : '',
             followUpDate: followUpDate ? new Date(followUpDate) : undefined,
@@ -1761,57 +1799,61 @@ router.get('/admissions/:admissionId/discharge-summary', verifyToken, resolveTen
             return res.status(400).json({ success: false, message: 'Invalid admissionId' });
         }
 
-        const { Admission, IPDVitals, InpatientOrder, MARRecord, LabReport, SurgeryPlan, User } = getModels(req);
+        const { Admission, IPDVitals, InpatientOrder, InpatientClinicalNote, LabReport, SurgeryPlan, User } = getModels(req);
 
         const admission = await Admission.findOne({ _id: admissionId, hospitalId })
             .populate('patientId', 'name age gender patientId mrn phone address bloodGroup aadhaarNumber')
-            .populate('doctorId', 'name email phone specialization licenseNumber')
+            .populate('doctorId', 'name email phone specialization licenseNumber education departments')
             .populate('bedId', 'bedNumber ward bedType')
+            .populate('appointmentId', 'department')
             .lean();
 
         if (!admission) {
             return res.status(404).json({ success: false, message: 'Admission record not found' });
         }
 
-        // Fetch latest vitals for reference snapshot
-        const latestVitals = await IPDVitals.findOne({ admissionId, hospitalId })
-            .sort({ recordedAt: -1 })
-            .lean();
+        const [hospitalDoc, vitalsHistory, clinicalNote, inpatientOrders, labReports, surgeries] = await Promise.all([
+            Hospital.findById(hospitalId).select('name address city state pincode phone email website branding').lean(),
+            IPDVitals.find({ admissionId, hospitalId }).sort({ recordedAt: -1 }).limit(10).lean(),
+            InpatientClinicalNote ? InpatientClinicalNote.findOne({ admissionId, hospitalId }).lean().catch(() => null) : Promise.resolve(null),
+            InpatientOrder.find({ admissionId, hospitalId }).lean(),
+            LabReport.find({
+                $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }, { userId: admission.patientId?._id || admission.patientId }],
+                hospitalId
+            }).lean(),
+            SurgeryPlan.find({
+                $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }],
+                hospitalId
+            }).populate('surgeonId', 'name specialization').lean()
+        ]);
 
-        // Fetch active/past medications
-        const inpatientOrders = await InpatientOrder.find({ admissionId, hospitalId }).lean();
-
-        // Fetch completed lab investigations
-        const labReports = await LabReport.find({
-            $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }, { userId: admission.patientId?._id || admission.patientId }],
-            hospitalId
-        }).lean();
-
-        // Fetch surgeries if any
-        const surgeries = await SurgeryPlan.find({
-            $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }],
-            hospitalId
-        }).populate('surgeonId', 'name specialization').lean();
+        const latestVitals = vitalsHistory?.[0] || null;
 
         // Populate doctor who signed summary if populated
         let signingDoctor = null;
         if (admission.dischargeSummary?.doctorId) {
-            signingDoctor = await User.findById(admission.dischargeSummary.doctorId, 'name email specialization licenseNumber').lean();
+            signingDoctor = await User.findById(admission.dischargeSummary.doctorId, 'name email phone specialization licenseNumber education').lean();
         }
 
         res.json({
             success: true,
+            hospital: hospitalDoc || null,
             admission,
             dischargeSummary: admission.dischargeSummary || null,
+            clinicalNote: clinicalNote || null,
             latestVitals: latestVitals || null,
+            vitalsHistory: vitalsHistory || [],
             inpatientOrders: inpatientOrders || [],
             labReports: labReports || [],
             surgeries: surgeries || [],
             signingDoctor: signingDoctor || admission.doctorId,
             data: {
+                hospital: hospitalDoc || null,
                 admission,
                 dischargeSummary: admission.dischargeSummary || null,
+                clinicalNote: clinicalNote || null,
                 latestVitals,
+                vitalsHistory: vitalsHistory || [],
                 signingDoctor: signingDoctor || admission.doctorId
             }
         });

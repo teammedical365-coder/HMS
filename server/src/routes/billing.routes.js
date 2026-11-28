@@ -461,6 +461,22 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
             console.warn('[billing-refunds-fetch-error]', rErr.message);
         }
 
+        // Fetch saved Insurance / TPA / Govt Health Policies (read-only reference; never alters billing amounts)
+        let insurancePolicies = [];
+        try {
+            const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+            const policyHospitalId = req.hospitalId || req.user?.hospitalId || patient.hospitalId;
+            if (policyHospitalId) {
+                insurancePolicies = await PatientInsurancePolicy.find({
+                    hospitalId: policyHospitalId,
+                    patientId: { $in: allPatientUserIds },
+                    isActive: true
+                }).sort({ isPrimary: -1, updatedAt: -1 }).lean();
+            }
+        } catch (pErr) {
+            console.warn('[billing-policies-fetch-error]', pErr.message);
+        }
+
         res.json({
             success: true,
             patient: {
@@ -472,7 +488,8 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
                 gender: patient.gender,
                 dob: patient.dob,
             },
-            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions, refundRequests }
+            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions, refundRequests },
+            insurancePolicies
         });
 
     } catch (error) {

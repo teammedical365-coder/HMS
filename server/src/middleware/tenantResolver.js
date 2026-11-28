@@ -78,7 +78,7 @@ const tenantResolver = async (req, res, next) => {
                     { customDomain: slug }
                 ],
                 isActive: true
-            }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
+            }).select('_id name slug customDomain branding isWhitelabeled appConfig isDemoEnabled').lean();
 
             setTenantCache(hostname, {
                 tenant: hospital || null,
@@ -105,7 +105,7 @@ const tenantResolver = async (req, res, next) => {
             const hospital = await Hospital.findOne({
                 slug: slug,
                 isActive: true
-            }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
+            }).select('_id name slug customDomain branding isWhitelabeled appConfig isDemoEnabled').lean();
 
             // Cache the result (even null, to prevent repeated DB queries for invalid slugs)
             setTenantCache(hostname, {

@@ -595,7 +595,12 @@ const RoleDashboard = () => {
                                                                 >
                                                                     Profile
                                                                 </button>
-                                                                {!isReception && (
+                                                                {(() => {
+                                                                    const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                                                    const r = String(u._roleData?.name || u.role || '').toLowerCase();
+                                                                    const p = u._roleData?.permissions || [];
+                                                                    return r.includes('nurse') || p.includes('nurse_access');
+                                                                })() && (
                                                                     <button 
                                                                         onClick={() => {
                                                                             setVitalsModal({ open: true, patient: appt.userId });

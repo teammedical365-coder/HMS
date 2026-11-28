@@ -3,39 +3,57 @@
 
 <head>
   <meta charset="UTF-8" />
-  <!-- Immediate Service Worker Purge for Local Development -->
+  <!-- Safe Service Worker Purge for Local Development -->
   <script>
     (function () {
-      const hostname = window.location.hostname;
-      const port = window.location.port;
-      const isLocalDev =
-        hostname === 'localhost' ||
-        hostname.endsWith('.localhost') ||
-        hostname === '127.0.0.1' ||
-        hostname.endsWith('.test') ||
-        hostname.endsWith('.local') ||
-        port === '5173' ||
-        port === '5174' ||
-        port === '3000';
+      try {
+        var hostname = window.location.hostname;
+        var port = window.location.port;
+        var isLocalDev =
+          hostname === 'localhost' ||
+          hostname.endsWith('.localhost') ||
+          hostname === '127.0.0.1' ||
+          hostname.endsWith('.test') ||
+          hostname.endsWith('.local') ||
+          port === '5173' ||
+          port === '5174' ||
+          port === '3000';
 
-      if (isLocalDev && 'serviceWorker' in navigator) {
-        const hadController = !!navigator.serviceWorker.controller;
-        navigator.serviceWorker.getRegistrations().then(function (registrations) {
-          for (var i = 0; i < registrations.length; i++) {
-            registrations[i].unregister();
-          }
-        });
-        if (typeof caches !== 'undefined') {
-          caches.keys().then(function (keys) {
-            keys.forEach(function (k) { caches.delete(k); });
-          });
+        if (!isLocalDev || !('serviceWorker' in navigator)) return;
+
+        function purgeDevServiceWorkers() {
+          try {
+            if (document.readyState === 'loading') return;
+            var hadController = !!navigator.serviceWorker.controller;
+            if (typeof navigator.serviceWorker.getRegistrations === 'function') {
+              navigator.serviceWorker.getRegistrations()
+                .then(function (registrations) {
+                  for (var i = 0; i < registrations.length; i++) {
+                    registrations[i].unregister().catch(function () {});
+                  }
+                })
+                .catch(function () {});
+            }
+            if (typeof caches !== 'undefined' && typeof caches.keys === 'function') {
+              caches.keys()
+                .then(function (keys) {
+                  keys.forEach(function (k) { caches.delete(k).catch(function () {}); });
+                })
+                .catch(function () {});
+            }
+            if (hadController && !sessionStorage.getItem('__hms_sw_purged__')) {
+              sessionStorage.setItem('__hms_sw_purged__', 'true');
+              window.location.reload();
+            }
+          } catch (_) {}
         }
-        // If an old worker was still controlling this tab, reload once cleanly without the worker
-        if (hadController && !sessionStorage.getItem('__hms_sw_purged__')) {
-          sessionStorage.setItem('__hms_sw_purged__', 'true');
-          window.location.reload();
+
+        if (document.readyState === 'loading') {
+          window.addEventListener('DOMContentLoaded', purgeDevServiceWorkers, { once: true });
+        } else {
+          purgeDevServiceWorkers();
         }
-      }
+      } catch (_) {}
     })();
   </script>
   <link rel="icon" type="image/jpeg" href="/assets/medical365fav.jpg" />
@@ -121,11 +139,19 @@
         port === '3000';
 
       if (!isLocalDev && 'serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js')
-            .then(function () { console.log('Service Worker Registered!'); })
-            .catch(function (err) { console.error('SW Error:', err); });
-        });
+        var registerSW = function () {
+          try {
+            if (document.visibilityState === 'prerender') return;
+            navigator.serviceWorker.register('/sw.js')
+              .then(function () { console.log('Service Worker Registered!'); })
+              .catch(function (err) { console.warn('SW registration skipped:', err && err.message ? err.message : err); });
+          } catch (_) {}
+        };
+        if (document.readyState === 'complete') {
+          registerSW();
+        } else {
+          window.addEventListener('load', registerSW, { once: true });
+        }
       }
     })();
   </script>

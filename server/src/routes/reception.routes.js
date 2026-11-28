@@ -235,6 +235,25 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
 
         await newUser.save();
 
+        // Optional: Save patient Insurance / TPA / Gov Health Policy details if provided during registration
+        let savedInsurancePolicy = null;
+        if (req.body.insurancePolicy && typeof req.body.insurancePolicy === 'object') {
+            try {
+                const { upsertPatientPolicy, hasAnyMeaningfulPolicyData } = require('./patientPolicy.routes');
+                if (hasAnyMeaningfulPolicyData(req.body.insurancePolicy) && newUser.hospitalId) {
+                    const policyRes = await upsertPatientPolicy({
+                        hospitalId: newUser.hospitalId,
+                        patientId: newUser._id,
+                        policyPayload: req.body.insurancePolicy,
+                        actorId: req.user._id
+                    });
+                    savedInsurancePolicy = policyRes?.policy || null;
+                }
+            } catch (polErr) {
+                console.warn('[register-insurance-policy-warning]', polErr.message);
+            }
+        }
+
         if (req.user.role === 'patient') {
             const PatientAuth = require('../models/patientAuth.model');
             const authRecord = await PatientAuth.findById(req.user.patientId || req.user._id);
@@ -244,7 +263,7 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             }
         }
 
-        res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser });
+        res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser, insurancePolicy: savedInsurancePolicy });
     } catch (error) {
         console.error("Register Error:", error);
         if (error.code === 11000) {
@@ -655,7 +674,21 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
         }
         const patient = await User.findOne(patientQuery);
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
-        const hospitalId = req.user.hospitalId || patient.hospitalId;
+        const hospitalId = req.user.hospitalId || patient.hospitalId || doctor.hospitalId;
+
+        // Ensure doctorUserId is always linked when booking so the assigned doctor sees the appointment
+        let resolvedDoctorUserId = doctor.userId || null;
+        if (!resolvedDoctorUserId && doctor.email && hospitalId) {
+            const linkedDocUser = await User.findOne({
+                hospitalId,
+                email: doctor.email.toLowerCase().trim(),
+                isActive: { $ne: false }
+            }).select('_id').lean();
+            if (linkedDocUser?._id) {
+                resolvedDoctorUserId = linkedDocUser._id;
+                Doctor.updateOne({ _id: doctor._id }, { $set: { userId: linkedDocUser._id } }).catch(() => {});
+            }
+        }
         if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
 
         const Hospital = require('../models/hospital.model');
@@ -836,7 +869,21 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             return res.status(400).json({ success: false, message: `Doctor ${doctor.name} is not available on ${capitalizedDay}s` });
         }
 
-        const hospitalId = req.user.hospitalId || patient.hospitalId;
+        const hospitalId = req.user.hospitalId || patient.hospitalId || doctor.hospitalId;
+
+        // Ensure doctorUserId is always linked when booking so the assigned doctor sees the appointment
+        let resolvedDoctorUserId = doctor.userId || null;
+        if (!resolvedDoctorUserId && doctor.email && hospitalId) {
+            const linkedDocUser = await User.findOne({
+                hospitalId,
+                email: doctor.email.toLowerCase().trim(),
+                isActive: { $ne: false }
+            }).select('_id').lean();
+            if (linkedDocUser?._id) {
+                resolvedDoctorUserId = linkedDocUser._id;
+                Doctor.updateOne({ _id: doctor._id }, { $set: { userId: linkedDocUser._id } }).catch(() => {});
+            }
+        }
 
         // Determine appointment mode
         const Hospital = require('../models/hospital.model');
@@ -931,6 +978,32 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         const finalCardRef = (isUpiInvolved || isCardInvolved) ? (transactionId || bankReference || cardDetails || '') : '';
         const finalUpiId = isUpiInvolved ? (upiId || '') : '';
 
+        // Optional: Link or update saved Insurance / TPA / Govt Health Policy during booking without duplicating
+        let linkedPolicyDoc = null;
+        if (req.body.insurancePolicy && typeof req.body.insurancePolicy === 'object') {
+            const { upsertPatientPolicy, hasAnyMeaningfulPolicyData } = require('./patientPolicy.routes');
+            if (hasAnyMeaningfulPolicyData(req.body.insurancePolicy)) {
+                const upsertRes = await upsertPatientPolicy({
+                    hospitalId,
+                    patientId: patient._id,
+                    policyPayload: req.body.insurancePolicy,
+                    actorId: req.user._id
+                });
+                linkedPolicyDoc = upsertRes?.policy || null;
+            }
+        } else if (req.body.selectedPolicyId) {
+            const mongoose = require('mongoose');
+            if (mongoose.Types.ObjectId.isValid(req.body.selectedPolicyId)) {
+                const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+                linkedPolicyDoc = await PatientInsurancePolicy.findOne({
+                    _id: req.body.selectedPolicyId,
+                    hospitalId,
+                    patientId: patient._id,
+                    isActive: true
+                });
+            }
+        }
+
         // Atomic Daily Appointment Quota Reservation (Free Doctor OPD Plan)
         const quotaResult = await quotaService.reserveAppointmentSlot({
             hospitalId,
@@ -947,7 +1020,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             hospitalId,
             patientId: patient.patientId || 'WALK-IN',
             doctorId: doctor._id,
-            doctorUserId: doctor.userId,
+            doctorUserId: resolvedDoctorUserId || doctor.userId,
             doctorName: doctor.name,
             serviceId: doctor.services?.[0] || 'general',
             serviceName: 'Walk-in Visit',
@@ -964,7 +1037,18 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             upiScreenshotUrl: finalProofUrl,
             cardRef: finalCardRef,
             notes: (notes && String(notes).trim() !== 'Walk-in created by reception') ? String(notes).trim() : '',
-            bookedBy: req.user._id
+            bookedBy: req.user._id,
+            ...(linkedPolicyDoc ? {
+                selectedPolicyId: linkedPolicyDoc._id,
+                policySnapshot: {
+                    policyType: linkedPolicyDoc.policyType || '',
+                    providerName: linkedPolicyDoc.providerName || '',
+                    policyNumber: linkedPolicyDoc.policyNumber || '',
+                    tpaOrMemberId: linkedPolicyDoc.tpaOrMemberId || '',
+                    policyHolderName: linkedPolicyDoc.policyHolderName || '',
+                    verificationStatus: linkedPolicyDoc.verificationStatus || 'Not Verified'
+                }
+            } : {})
         });
 
         try {

@@ -70,8 +70,17 @@ const notificationSlice = createSlice({
             .addCase(fetchNotifications.pending, (state) => { state.loading = true; })
             .addCase(fetchNotifications.fulfilled, (state, action) => {
                 state.loading = false;
-                state.items = action.payload;
-                state.unreadCount = action.payload.filter(n => n.status === 'Unread').length;
+                const rawList = Array.isArray(action.payload) ? action.payload : [];
+                state.items = rawList.slice(0, 25).map((n) => ({
+                    _id: n._id,
+                    title: n.title || '',
+                    message: n.message || '',
+                    type: n.type || 'info',
+                    status: n.status || 'Unread',
+                    createdAt: n.createdAt || null,
+                    senderName: n.senderId?.name || ''
+                }));
+                state.unreadCount = rawList.filter((n) => n.status === 'Unread').length;
             })
             .addCase(fetchNotifications.rejected, (state, action) => {
                 state.loading = false;

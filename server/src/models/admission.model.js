@@ -32,26 +32,33 @@ const nurseAssignmentSchema = new mongoose.Schema({
 
 const dischargeMedicationSchema = new mongoose.Schema({
     medicineName: { type: String, required: true, trim: true },
+    composition: { type: String, default: '', trim: true },
     dosage: { type: String, default: '', trim: true },
     route: { type: String, default: 'Oral', trim: true },
     frequency: { type: String, default: 'OD', trim: true },
     duration: { type: String, default: '5 days', trim: true },
-    instructions: { type: String, default: 'After meals', trim: true }
+    quantity: { type: String, default: '', trim: true },
+    instructions: { type: String, default: 'After meals', trim: true },
+    inventoryItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', default: null }
 }, { _id: true });
 
 const dischargeSummarySchema = new mongoose.Schema({
     diagnosis: { type: String, default: '', trim: true },
     admissionReason: { type: String, default: '', trim: true },
+    clinicalHistory: { type: String, default: '', trim: true },
+    clinicalExamination: { type: String, default: '', trim: true },
     hospitalCourse: { type: String, default: '', trim: true },
     proceduresSummary: { type: String, default: '', trim: true },
     keyInvestigationsSummary: { type: String, default: '', trim: true },
     treatmentSummary: { type: String, default: '', trim: true },
+    vitalsSummary: { type: String, default: '', trim: true },
     conditionAtDischarge: {
         type: String,
         enum: ['STABLE', 'IMPROVED', 'RECOVERED', 'CRITICAL', 'TRANSFERRED', 'LAMA', 'EXPIRED'],
         default: 'STABLE'
     },
     dischargeMedications: [dischargeMedicationSchema],
+    dischargeAdvice: { type: String, default: '', trim: true },
     followUpInstructions: { type: String, default: '', trim: true },
     returnPrecautions: { type: String, default: '', trim: true },
     followUpDate: { type: Date },

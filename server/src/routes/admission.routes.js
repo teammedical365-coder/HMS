@@ -622,6 +622,33 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
             }
         }
 
+        // Batch attach active insurance/TPA/gov policies (read-only IPD visibility; never auto-deducts billing)
+        try {
+            const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+            const admPatientIds = Array.from(new Set(admissions.map(a => {
+                const pid = (a.patientId && typeof a.patientId === 'object') ? a.patientId._id : a.patientId;
+                return pid ? String(pid) : null;
+            }).filter(Boolean)));
+            if (admPatientIds.length > 0) {
+                const admHospitalScope = req.hospitalId || req.user?.hospitalId;
+                const policyFilter = { patientId: { $in: admPatientIds }, isActive: true };
+                if (admHospitalScope) policyFilter.hospitalId = admHospitalScope;
+                const activePolicies = await PatientInsurancePolicy.find(policyFilter).sort({ isPrimary: -1, updatedAt: -1 }).lean();
+                const policyMap = new Map();
+                for (const pol of activePolicies) {
+                    const key = String(pol.patientId);
+                    if (!policyMap.has(key)) policyMap.set(key, []);
+                    policyMap.get(key).push(pol);
+                }
+                for (const adm of admissions) {
+                    const pid = (adm.patientId && typeof adm.patientId === 'object') ? String(adm.patientId._id) : (adm.patientId ? String(adm.patientId) : null);
+                    adm.insurancePolicies = pid ? (policyMap.get(pid) || []) : [];
+                }
+            }
+        } catch (polErr) {
+            console.warn('[admission-active-policies-fetch]', polErr.message);
+        }
+
         res.json({ success: true, admissions });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -668,6 +695,33 @@ router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
                 adm.wardRatePerDay = await getWardRate(adm.hospitalId, adm.ward);
                 adm.wardHourlyRate = Math.round((adm.wardRatePerDay / 24) * 100) / 100;
             }
+        }
+
+        // Batch attach active insurance/TPA/gov policies (read-only IPD visibility; never auto-deducts billing)
+        try {
+            const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+            const admPatientIds = Array.from(new Set(admissions.map(a => {
+                const pid = (a.patientId && typeof a.patientId === 'object') ? a.patientId._id : a.patientId;
+                return pid ? String(pid) : null;
+            }).filter(Boolean)));
+            if (admPatientIds.length > 0) {
+                const admHospitalScope = req.hospitalId || req.user?.hospitalId;
+                const policyFilter = { patientId: { $in: admPatientIds }, isActive: true };
+                if (admHospitalScope) policyFilter.hospitalId = admHospitalScope;
+                const activePolicies = await PatientInsurancePolicy.find(policyFilter).sort({ isPrimary: -1, updatedAt: -1 }).lean();
+                const policyMap = new Map();
+                for (const pol of activePolicies) {
+                    const key = String(pol.patientId);
+                    if (!policyMap.has(key)) policyMap.set(key, []);
+                    policyMap.get(key).push(pol);
+                }
+                for (const adm of admissions) {
+                    const pid = (adm.patientId && typeof adm.patientId === 'object') ? String(adm.patientId._id) : (adm.patientId ? String(adm.patientId) : null);
+                    adm.insurancePolicies = pid ? (policyMap.get(pid) || []) : [];
+                }
+            }
+        } catch (polErr) {
+            console.warn('[admission-active-policies-fetch]', polErr.message);
         }
 
         res.json({ success: true, admissions });
@@ -865,6 +919,18 @@ router.get('/:id', verifyAdmissionAccess, async (req, res) => {
         if (!admission.wardRatePerDay || admission.wardRatePerDay === 0) {
             admission.wardRatePerDay = await getWardRate(admission.hospitalId, admission.ward);
             admission.wardHourlyRate = Math.round((admission.wardRatePerDay / 24) * 100) / 100;
+        }
+
+        // Attach saved patient insurance/TPA/gov policies for IPD readiness (read-only reference)
+        try {
+            const PatientInsurancePolicy = require('../models/patientInsurancePolicy.model');
+            const pid = (admission.patientId && typeof admission.patientId === 'object') ? admission.patientId._id : (admission.patientId || admission.userId);
+            const hId = req.hospitalId || req.user?.hospitalId || admission.hospitalId;
+            admission.insurancePolicies = (pid && hId)
+                ? await PatientInsurancePolicy.find({ hospitalId: hId, patientId: pid, isActive: true }).sort({ isPrimary: -1, updatedAt: -1 }).lean()
+                : [];
+        } catch (polErr) {
+            admission.insurancePolicies = [];
         }
 
         res.json({ success: true, admission, data: admission });

@@ -214,6 +214,9 @@ const hospitalSchema = new mongoose.Schema({
         ratePerLogin:  { type: Number, default: 0 },   // for per_login (future)
         billingCycle:  { type: String, enum: ['monthly', 'quarterly', 'annual'], default: 'monthly' },
     },
+
+    // CodeCanyon-style interactive demo portal switch (enabled ONLY for Pacific Hospital)
+    isDemoEnabled: { type: Boolean, default: false },
 }, { timestamps: true });
 
 function deriveBaseCode(name) {

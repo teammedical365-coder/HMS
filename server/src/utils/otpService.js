@@ -83,9 +83,10 @@ const sendViaTwilio = async (phone, otp) => {
  */
 const sendOTP = async (phone) => {
     const otp = generateOTP();
+    const { isInPacificDemoSandbox } = require('../config/pacificDemoConfig');
 
-    // Demo safeguard: fictional numbers never send real external SMS
-    if (!phone || phone.startsWith('555') || phone.startsWith('000') || phone === '9876543210' || phone === '9999999999') {
+    // Demo safeguard: fictional numbers or active Pacific Demo sandbox sessions never send real external SMS
+    if (isInPacificDemoSandbox() || !phone || phone.startsWith('555') || phone.startsWith('000') || phone === '9876543210' || phone === '9999999999') {
         console.log(`[SMS-OTP] [DEMO SAFEGUARD] Simulated OTP dispatch for demo phone ${phone}: ${otp}`);
         return { otp };
     }

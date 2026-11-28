@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { patientAPI, receptionAPI, reportAPI, consentAPI, doctorAPI } from '../../utils/api';
+import { patientAPI, receptionAPI, reportAPI, consentAPI, doctorAPI, patientPolicyAPI } from '../../utils/api';
+import PatientPolicySection from '../../components/insurance/PatientPolicySection';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -63,12 +64,14 @@ const HospitalPatientProfileContent = () => {
                         permissions.includes('*');
 
     const isDoctor = dynRole.includes('doctor') || userRole.includes('doctor');
+    const isNurse = dynRole.includes('nurse') || userRole.includes('nurse') || permissions.includes('nurse_access');
 
     const [searchParams] = useSearchParams();
 
     // State
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
+    const [insurancePolicies, setInsurancePolicies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'timeline');
@@ -122,7 +125,7 @@ const HospitalPatientProfileContent = () => {
         notes: ''
     });
     const [savingVitals, setSavingVitals] = useState(false);
-    const [showVitalsForm, setShowVitalsForm] = useState(true);
+    const [showVitalsForm, setShowVitalsForm] = useState(false);
 
     // Auto-calculate BMI
     useEffect(() => {
@@ -227,6 +230,7 @@ const HospitalPatientProfileContent = () => {
             if (res.success && res.user) {
                 setPatientData(res.user);
                 setTimeline(res.timeline || []);
+                setInsurancePolicies(res.insurancePolicies || []);
 
                 const fp = res.user.fertilityProfile || {};
                 if (Array.isArray(fp.consentForms) && fp.consentForms.length > 0) {
@@ -679,6 +683,25 @@ const HospitalPatientProfileContent = () => {
                          permissions.includes('reception_access') ||
                          permissions.includes('admin_manage_roles');
 
+    const canVerifyInsurance = ['admin', 'hospitaladmin', 'centraladmin', 'superadmin', 'accountant', 'billing'].includes(userRole) ||
+                               ['admin', 'hospitaladmin', 'centraladmin', 'superadmin', 'accountant', 'billing'].includes(dynRole) ||
+                               permissions.includes('*') ||
+                               permissions.includes('verify_insurance') ||
+                               permissions.includes('billing_access');
+
+    const refreshInsurancePolicies = async () => {
+        const targetId = patientData?._id || patientId;
+        if (!targetId) return;
+        try {
+            const res = await patientPolicyAPI.getPatientPolicies(targetId);
+            if (res?.success) {
+                setInsurancePolicies(res.policies || []);
+            }
+        } catch (err) {
+            console.warn('Could not refresh insurance policies:', err?.message);
+        }
+    };
+
     // Tab definitions (Clean icons, no raw emojis, unified documents tab)
     const tabs = [
         { key: 'timeline', label: 'Timeline', icon: <FiClock />, count: displayTimeline?.length },
@@ -688,6 +711,7 @@ const HospitalPatientProfileContent = () => {
         { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText />, count: medications?.length },
         { key: 'notes', label: 'Notes', icon: <FiMessageSquare /> },
         ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial Location', icon: <FiBox /> }] : []),
+        { key: 'insurance', label: 'Insurance & Policies', icon: <FiShield />, count: insurancePolicies?.length },
         { key: 'documents', label: 'Documents', icon: <FiFileText />, count: (displayDocuments?.length || 0) + (consentList?.length || 0) + (recentLabs?.length || 0) },
     ];
 
@@ -925,6 +949,18 @@ const HospitalPatientProfileContent = () => {
                 <div className="upp-tab-content-wrapper">
                     <DoctorIPDOrdersPanel patientId={patientData?._id || patientId} patient={patientData} />
                 </div>
+            ) : activeTab === 'insurance' ? (
+                <div className="upp-tab-content-wrapper">
+                    <PatientPolicySection
+                        mode="profile"
+                        patientId={patientData?._id || patientId}
+                        patientName={patientData?.name || ''}
+                        policies={insurancePolicies}
+                        onRefreshPolicies={refreshInsurancePolicies}
+                        canVerify={canVerifyInsurance}
+                        canEdit={isReception || canVerifyInsurance}
+                    />
+                </div>
             ) : (
                 <div className="upp-main-layout">
                     {/* ---- LEFT PANEL ---- */}
@@ -1106,18 +1142,20 @@ const HospitalPatientProfileContent = () => {
                                 <h2 className="upp-section-title">
                                     <FaHeartbeat style={{ color: '#ef4444' }} /> Patient Vitals
                                 </h2>
-                                <button 
-                                    type="button"
-                                    className="upp-btn-action upp-btn-edit"
-                                    onClick={() => setShowVitalsForm(!showVitalsForm)}
-                                    style={{ fontSize: '12.5px', padding: '6px 14px' }}
-                                >
-                                    <FiPlus /> {showVitalsForm ? 'Hide Form' : 'Record Vitals'}
-                                </button>
+                                {isNurse && (
+                                    <button 
+                                        type="button"
+                                        className="upp-btn-action upp-btn-edit"
+                                        onClick={() => setShowVitalsForm(!showVitalsForm)}
+                                        style={{ fontSize: '12.5px', padding: '6px 14px' }}
+                                    >
+                                        <FiPlus /> {showVitalsForm ? 'Hide Form' : 'Record Vitals'}
+                                    </button>
+                                )}
                             </div>
 
-                            {/* Vitals Entry Form */}
-                            {showVitalsForm && (
+                            {/* Vitals Entry Form — strictly restricted to Nurses */}
+                            {isNurse && showVitalsForm && (
                                 <form onSubmit={handleSaveVitals} className="upp-vitals-form-box">
                                     <div className="upp-vitals-form-title">
                                         <span>🩺 Record New Patient Vitals</span>
@@ -1262,6 +1300,16 @@ const HospitalPatientProfileContent = () => {
                                     <div className="upp-current-vitals-summary">
                                         <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#334155', margin: '0 0 10px 0' }}>
                                             📊 Most Recent Recorded Vitals
+                                            {currentV.lastRecorded && (
+                                                <span style={{ fontWeight: '500', fontSize: '11.5px', color: '#64748b', marginLeft: '8px' }}>
+                                                    ({new Date(currentV.lastRecorded).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })})
+                                                </span>
+                                            )}
+                                            {currentV.recordedByName && (
+                                                <span style={{ fontWeight: '500', fontSize: '11.5px', color: '#0f766e', marginLeft: '8px' }}>
+                                                    • Recorded by {currentV.recordedByName}
+                                                </span>
+                                            )}
                                         </h4>
                                         <div className="upp-tl-vitals-grid">
                                             {currentV.weight && <span className="upp-vital-pill">Weight: <strong>{currentV.weight} kg</strong></span>}
@@ -1271,8 +1319,13 @@ const HospitalPatientProfileContent = () => {
                                             {currentV.pulse && <span className="upp-vital-pill">Pulse: <strong>{currentV.pulse} bpm</strong></span>}
                                             {currentV.temperature && <span className="upp-vital-pill">Temp: <strong>{currentV.temperature}°F</strong></span>}
                                             {currentV.spo2 && <span className="upp-vital-pill">SpO2: <strong>{currentV.spo2}%</strong></span>}
-                                            {(currentV.respiratoryRate || currentV.rr) && <span className="upp-vital-pill">RR: <strong>{currentV.respiratoryRate || currentV.rr}</strong></span>}
+                                            {(currentV.respiratoryRate || currentV.rr) && <span className="upp-vital-pill">RR: <strong>{currentV.respiratoryRate || currentV.rr} /min</strong></span>}
                                         </div>
+                                        {currentV.notes && (
+                                            <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
+                                                Observations: {currentV.notes}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}
@@ -1283,25 +1336,34 @@ const HospitalPatientProfileContent = () => {
                                     📅 Vitals History Timeline
                                 </h4>
                                 {(() => {
-                                    const vitalsHistory = displayTimeline.filter(t => t.data?.vitals && Object.keys(t.data.vitals).length > 0);
+                                    const profileVitalsHist = (Array.isArray(patientData?.fertilityProfile?.vitalsHistory) ? patientData.fertilityProfile.vitalsHistory : []).map((v) => ({
+                                        date: v.recordedAt || v.lastRecorded,
+                                        recordedByName: v.recordedByName || '',
+                                        data: { vitals: v }
+                                    }));
+                                    const timelineVitalsHist = displayTimeline.filter(t => t.data?.vitals && Object.keys(t.data.vitals).length > 0);
+                                    const vitalsHistory = [...profileVitalsHist, ...timelineVitalsHist];
                                     if (vitalsHistory.length === 0) {
-                                        return <div className="upp-empty-state">No previous vitals recordings found. Use the form above to record vitals.</div>;
+                                        return <div className="upp-empty-state">{isNurse ? 'No previous vitals recordings found. Use the form above to record vitals.' : 'No nurse-recorded vitals found yet.'}</div>;
                                     }
                                     return (
                                         <div className="upp-timeline">
                                             {vitalsHistory.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, i) => (
                                                 <div key={i} className="upp-timeline-item" style={{ borderLeftColor: '#ef4444' }}>
                                                     <div className="upp-tl-top">
-                                                        <span className="upp-tl-date">{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        <span className="upp-tl-date">
+                                                            {new Date(item.date).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                            {item.recordedByName ? ` · Recorded by ${item.recordedByName}` : ''}
+                                                        </span>
                                                     </div>
                                                     <div className="upp-tl-vitals-grid">
                                                         {item.data.vitals.weight && <span className="upp-vital-pill">Weight: {item.data.vitals.weight} kg</span>}
                                                         {item.data.vitals.height && <span className="upp-vital-pill">Height: {item.data.vitals.height} cm</span>}
-                                                        {item.data.vitals.bp && <span className="upp-vital-pill">BP: {item.data.vitals.bp}</span>}
-                                                        {item.data.vitals.bloodPressure && <span className="upp-vital-pill">BP: {item.data.vitals.bloodPressure}</span>}
+                                                        {(item.data.vitals.bp || item.data.vitals.bloodPressure) && <span className="upp-vital-pill">BP: {item.data.vitals.bp || item.data.vitals.bloodPressure}</span>}
                                                         {item.data.vitals.pulse && <span className="upp-vital-pill">Pulse: {item.data.vitals.pulse} bpm</span>}
                                                         {item.data.vitals.temperature && <span className="upp-vital-pill">Temp: {item.data.vitals.temperature}°F</span>}
                                                         {item.data.vitals.spo2 && <span className="upp-vital-pill">SpO2: {item.data.vitals.spo2}%</span>}
+                                                        {(item.data.vitals.respiratoryRate || item.data.vitals.rr) && <span className="upp-vital-pill">RR: {item.data.vitals.respiratoryRate || item.data.vitals.rr} /min</span>}
                                                         {item.data.vitals.bmi && <span className="upp-vital-pill">BMI: {item.data.vitals.bmi}</span>}
                                                     </div>
                                                 </div>

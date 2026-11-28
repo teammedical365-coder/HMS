@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
 import IPDWristbandModal from '../../components/ipd/IPDWristbandModal';
+import { PatientPolicySummaryBanner } from '../../components/insurance/PatientPolicySection';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
@@ -2335,6 +2336,16 @@ const PatientBillingProfile = () => {
                                     🖨️ Print Consolidated Bill
                                 </button>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Patient Insurance / TPA / Government Scheme Reference Banner (Read-only, never auto-deducts billing) */}
+                    {data?.insurancePolicies?.length > 0 && (
+                        <div className="no-print">
+                            <PatientPolicySummaryBanner
+                                policies={data.insurancePolicies}
+                                contextLabel="Patient Insurance / TPA / Health Policy"
+                            />
                         </div>
                     )}
 

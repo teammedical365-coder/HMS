@@ -70,12 +70,31 @@ export function initOfflineDb(userId) {
  * @returns {Promise<IDBDatabase>}
  */
 function getDb() {
+  if (typeof indexedDB === 'undefined') {
+    return Promise.reject(new Error('IndexedDB unavailable'));
+  }
   if (dbInstance && dbInstance._closed !== true) {
     return Promise.resolve(dbInstance);
   }
 
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, DB_VERSION);
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('IndexedDB open timed out'));
+      }
+    }, 1500);
+
+    let request;
+    try {
+      request = indexedDB.open(dbName, DB_VERSION);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      settled = true;
+      reject(err);
+      return;
+    }
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
@@ -107,22 +126,42 @@ function getDb() {
       }
     };
 
+    request.onblocked = () => {
+      if (!settled) {
+        clearTimeout(timeoutId);
+        settled = true;
+        reject(new Error('IndexedDB open blocked'));
+      }
+    };
+
     request.onsuccess = (event) => {
       dbInstance = event.target.result;
       dbInstance._closed = false;
 
-      // Handle unexpected close (e.g., browser GC)
+      // Handle unexpected close (e.g., browser GC or version change)
       dbInstance.onclose = () => {
-        dbInstance._closed = true;
+        if (dbInstance) dbInstance._closed = true;
+        dbInstance = null;
+      };
+      dbInstance.onversionchange = () => {
+        try { dbInstance.close(); } catch (_) {}
         dbInstance = null;
       };
 
-      resolve(dbInstance);
+      if (!settled) {
+        clearTimeout(timeoutId);
+        settled = true;
+        resolve(dbInstance);
+      }
     };
 
     request.onerror = (event) => {
-      console.error('[OfflineDB] Failed to open:', event.target.error);
-      reject(event.target.error);
+      if (!settled) {
+        clearTimeout(timeoutId);
+        settled = true;
+        console.error('[OfflineDB] Failed to open:', event.target.error);
+        reject(event.target.error);
+      }
     };
   });
 }
@@ -135,10 +174,15 @@ function getDb() {
 async function readStore(storeName, callback) {
   const db = await getDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const store = tx.objectStore(storeName);
-    callback(store, resolve, reject);
-    tx.onerror = () => reject(tx.error);
+    try {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction error'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+      callback(store, resolve, reject);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -148,10 +192,15 @@ async function readStore(storeName, callback) {
 async function writeStore(storeName, callback) {
   const db = await getDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    const store = tx.objectStore(storeName);
-    callback(store, resolve, reject);
-    tx.onerror = () => reject(tx.error);
+    try {
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction error'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+      callback(store, resolve, reject);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -182,8 +231,9 @@ export function buildCacheKey(url, params = null) {
  */
 export async function getCached(cacheKey) {
   try {
-    return await readStore('cache', (store, resolve) => {
+    return await readStore('cache', (store, resolve, reject) => {
       const req = store.get(cacheKey);
+      req.onerror = () => reject(req.error);
       req.onsuccess = () => {
         const record = req.result;
         if (!record) return resolve(null);
@@ -212,12 +262,13 @@ export async function getCached(cacheKey) {
  */
 export async function putCache(cacheKey, data) {
   try {
-    await writeStore('cache', (store, resolve) => {
+    await writeStore('cache', (store, resolve, reject) => {
       const req = store.put({
         cacheKey,
         data,
         timestamp: Date.now(),
       });
+      req.onerror = () => reject(req.error);
       req.onsuccess = () => resolve();
     });
   } catch (err) {

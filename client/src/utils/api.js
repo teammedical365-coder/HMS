@@ -14,6 +14,7 @@ export const baseURL = rawBaseURL.startsWith('http') ? rawBaseURL : `https://${r
 
 const apiClient = axios.create({
     baseURL: baseURL,
+    timeout: 25000,
     headers: { 'Content-Type': 'application/json' },
 });
 
@@ -263,12 +264,11 @@ function isOfflineWritable(method, url) {
  * Response interceptor: Cache successful GET responses in IndexedDB & Queue offline writes
  */
 apiClient.interceptors.response.use(
-    async (response) => {
-        // Cache successful GET responses
+    (response) => {
+        // Cache successful GET responses asynchronously without blocking response delivery
         if (response.config.method === 'get' && response.status === 200) {
             try {
                 const url = response.config.url || '';
-                // Don't cache auth endpoints, uploads, or streaming responses
                 if (
                     !url.includes('/auth/') &&
                     !url.includes('/upload') &&
@@ -277,7 +277,7 @@ apiClient.interceptors.response.use(
                     response.data
                 ) {
                     const cacheKey = buildCacheKey(url, response.config.params);
-                    await putCache(cacheKey, response.data);
+                    putCache(cacheKey, response.data).catch(() => {});
                 }
             } catch {
                 // Caching failure should never break the app
@@ -518,6 +518,35 @@ export const authAPI = {
     },
     getAuthConfig: async () => {
         const response = await apiClient.get('/api/public/auth-config');
+        return response.data;
+    },
+};
+
+export const pacificDemoAPI = {
+    getConfig: async () => {
+        const response = await apiClient.get('/api/pacific-demo/config');
+        return response.data;
+    },
+    loginRole: async (payload = {}) => {
+        const body = typeof payload === 'string'
+            ? { roleKey: payload }
+            : {
+                ...(payload.userId ? { userId: payload.userId } : {}),
+                ...(payload.roleKey ? { roleKey: payload.roleKey } : {}),
+                ...(payload.doctorUserId ? { doctorUserId: payload.doctorUserId } : {})
+            };
+        const response = await apiClient.post('/api/pacific-demo/login', body);
+        return response.data;
+    },
+    switchRole: async (payload = {}) => {
+        const body = typeof payload === 'string'
+            ? { roleKey: payload }
+            : {
+                ...(payload.userId ? { userId: payload.userId } : {}),
+                ...(payload.roleKey ? { roleKey: payload.roleKey } : {}),
+                ...(payload.doctorUserId ? { doctorUserId: payload.doctorUserId } : {})
+            };
+        const response = await apiClient.post('/api/pacific-demo/switch-role', body);
         return response.data;
     },
 };
@@ -782,7 +811,9 @@ const getCachedOrFetch = async (key, fetcher) => {
         return cached.data;
     }
     const data = await fetcher();
-    metaCache.set(key, { data, timestamp: now });
+    if (data && data.success !== false) {
+        metaCache.set(key, { data, timestamp: now });
+    }
     return data;
 };
 
@@ -807,7 +838,8 @@ export const adminAPI = {
             if (search) url += `search=${encodeURIComponent(search)}&`;
             if (excludeDoctors !== undefined) url += `excludeDoctors=${encodeURIComponent(excludeDoctors)}&`;
         }
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
     deleteUser: async (id) => (await apiClient.delete(`/api/admin/users/${id}`)).data,
@@ -861,16 +893,19 @@ export const publicAPI = {
         if (params.length > 0) {
             url += '?' + params.join('&');
         }
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     getTenantConfig: async (domain) => {
         const url = `/api/public/tenant-config?domain=${encodeURIComponent(domain)}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     getBookedSlots: async (doctorId, date, hospitalId = '') => {
         let url = `/api/doctor/${doctorId}/booked-slots?date=${date}`;
         if (hospitalId) url += `&hospitalId=${encodeURIComponent(hospitalId)}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     freeOpdSignup: async (data) => {
         return (await apiClient.post('/api/public/free-opd-signup', data)).data;
@@ -1203,7 +1238,8 @@ export const pharmacyAPI = {
         if (endDate) params.append('endDate', endDate);
         const qs = params.toString();
         if (qs) url += `?${qs}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     uploadPurchaseInvoice: async (formData) => (await apiClient.post('/api/pharmacy/purchase-invoice/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
     bulkImportPurchaseInvoice: async (id, data) => (await apiClient.post(`/api/pharmacy/purchase-invoice/${id}/bulk-import`, data)).data,
@@ -1218,7 +1254,8 @@ export const pharmacyAPI = {
     getDepartmentStocks: async (departmentId = '') => {
         let url = '/api/pharmacy/department-stocks';
         if (departmentId) url += `?departmentId=${departmentId}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     transferToDepartment: async (data) => (await apiClient.post('/api/pharmacy/departments/transfer', data)).data,
     recordDepartmentUsage: async (data) => (await apiClient.post('/api/pharmacy/departments/usage', data)).data
@@ -1245,7 +1282,8 @@ export const patientAPI = {
         const params = new URLSearchParams();
         if (department) params.append('department', department);
         if (params.toString()) url += `?${params.toString()}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     uploadConsent: async (id, formData) => (await apiClient.post(`/api/patients/${id}/consent`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
     getConsent: async (id) => (await apiClient.get(`/api/patients/${id}/consent`)).data,
@@ -1256,7 +1294,8 @@ export const patientAPI = {
         const params = new URLSearchParams();
         if (department) params.append('department', department);
         if (params.toString()) url += `?${params.toString()}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     deleteDocument: async (id, index, fileId, url, fileName) => (await apiClient.delete(`/api/patients/${id}/documents/${index}`, { data: { fileId, url, fileName } })).data,
     updateProfile: async (id, data) => (await apiClient.put(`/api/reception/intake/${id}`, data)).data,
@@ -1276,7 +1315,8 @@ export const notificationAPI = {
 export const labTestAPI = {
     getLabTests: async (hospitalId = '') => {
         const url = hospitalId ? `/api/lab-tests?hospitalId=${hospitalId}` : '/api/lab-tests';
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     createLabTest: async (data) => (await apiClient.post('/api/lab-tests', data)).data,
     updateLabTest: async (id, data) => (await apiClient.put(`/api/lab-tests/${id}`, data)).data,
@@ -1354,7 +1394,8 @@ export const hospitalAPI = {
         if (endDate) params.append('endDate', endDate);
         const qs = params.toString();
         if (qs) url += `?${qs}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     // White-label branding
     getBranding: async (id) => (await apiClient.get(`/api/hospitals/${id}/branding`)).data,
@@ -1402,7 +1443,8 @@ export const financeAPI = {
         if (endDate) params.append('endDate', endDate);
         const qs = params.toString();
         if (qs) url += `?${qs}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     }
 };
 
@@ -1520,7 +1562,8 @@ export const simpleClinicAPI = {
     getClinics: async (plan) => {
         let url = '/api/simple-clinics';
         if (plan) url += `?plan=${encodeURIComponent(plan)}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     createClinic: async (data) => (await apiClient.post('/api/simple-clinics', data)).data,
     updateClinic: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}`, data)).data,
@@ -1532,7 +1575,8 @@ export const simpleClinicAPI = {
         if (endDate) params.append('endDate', endDate);
         const qs = params.toString();
         if (qs) url += `?${qs}`;
-        return (await apiClient.get(url)).data;
+        const cleanUrl = url.replace(/[?&]+$/, '');
+        return (await apiClient.get(cleanUrl)).data;
     },
     createManager: async (id, data) => (await apiClient.post(`/api/simple-clinics/${id}/manager`, data)).data,
     getStaff: async (id) => (await apiClient.get(`/api/simple-clinics/${id}/staff`)).data,
@@ -2140,6 +2184,24 @@ export const abdmAPI = {
     verifyBridgeServices: async () => (await apiClient.get('/api/abdm/bridge/verify')).data,
     registerHospitalHip: async (hospitalId, data) => (await apiClient.put(`/api/abdm/bridge/hospitals/${hospitalId}/hip`, data)).data,
     getHospitalStatus: async () => (await apiClient.get('/api/abdm/bridge/hospital')).data,
+};
+
+// ── PATIENT INSURANCE / TPA / GOVT HEALTH POLICY API ──────────────────────────
+export const patientPolicyAPI = {
+    getPatientPolicies: async (patientId) => (await apiClient.get(`/api/patient-policies/patient/${patientId}`)).data,
+    savePatientPolicy: async (patientId, data) => (await apiClient.post(`/api/patient-policies/patient/${patientId}`, data)).data,
+    updatePolicy: async (policyId, data) => (await apiClient.put(`/api/patient-policies/${policyId}`, data)).data,
+    verifyPolicy: async (policyId, data) => (await apiClient.patch(`/api/patient-policies/${policyId}/verify`, data)).data,
+    deletePolicy: async (policyId) => (await apiClient.delete(`/api/patient-policies/${policyId}`)).data,
+    uploadCard: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return (await apiClient.post('/api/patient-policies/upload-card', formData)).data;
+    },
+    fetchCardBlob: async (url) => {
+        const response = await apiClient.get(url, { responseType: 'blob' });
+        return response.data;
+    }
 };
 
 

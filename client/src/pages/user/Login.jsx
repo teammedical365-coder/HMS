@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAppDispatch, useAuth } from '../../store/hooks';
-import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow } from '../../store/slices/authSlice';
+import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow, pacificDemoLogin } from '../../store/slices/authSlice';
 import NeuralAuthPortal from '../../components/auth/NeuralAuthPortal';
+import PacificDemoLogin from '../../components/auth/PacificDemoLogin';
 import { Capacitor } from '@capacitor/core';
-import { baseURL } from '../../utils/api';
+import { baseURL, pacificDemoAPI } from '../../utils/api';
 import { useBranding } from '../../context/BrandingContext';
 import { getSubdomain } from '../../utils/subdomain';
+import { isPacificDemoHost, getDemoDashboardPath } from '../../utils/pacificDemo';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -18,6 +20,32 @@ const Login = () => {
     
     const [formData, setFormData] = useState({ email: searchParams.get('email') || '', password: '' });
     const [nativeSlug, setNativeSlug] = useState(null);
+    const [demoState, setDemoState] = useState({ checked: !isPacificDemoHost(), enabled: false, hospital: null, accounts: [] });
+    const [showStandardLogin, setShowStandardLogin] = useState(false);
+
+    // Activate Pacific Hospital Interactive Demo portal ONLY on exact Pacific Hospital subdomain AND when confirmed by backend
+    useEffect(() => {
+        if (!isPacificDemoHost()) return;
+        let active = true;
+        pacificDemoAPI.getConfig()
+            .then((res) => {
+                if (!active) return;
+                if (res?.success && res.demoEnabled && Array.isArray(res.accounts) && res.accounts.length > 0) {
+                    setDemoState({
+                        checked: true,
+                        enabled: true,
+                        hospital: res.hospital || null,
+                        accounts: res.accounts
+                    });
+                } else {
+                    setDemoState({ checked: true, enabled: false, hospital: null, accounts: [] });
+                }
+            })
+            .catch(() => {
+                if (active) setDemoState({ checked: true, enabled: false, hospital: null, accounts: [] });
+            });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         const qEmail = searchParams.get('email');
@@ -99,7 +127,9 @@ const Login = () => {
                 ot: '/ot/dashboard'
             };
             const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
-            let targetPath = redirectMap[role] || redirectMap[(user.role || '').toLowerCase()] || searchParams.get('redirect') || '/my-dashboard';
+            let targetPath = user.isPacificDemo && user.demoRoleKey
+                ? getDemoDashboardPath(user.demoRoleKey, user.dashboardPath)
+                : (redirectMap[role] || redirectMap[(user.role || '').toLowerCase()] || user.dashboardPath || searchParams.get('redirect') || '/my-dashboard');
             if (isFreeOpd || user.subscriptionPlan === 'free_doctor_opd') {
                 targetPath = '/opd/tray';
             } else if (role === 'doctor' && user.clinicType === 'clinic') {
@@ -148,6 +178,42 @@ const Login = () => {
     const handleBackToLogin = () => dispatch(resetOtpFlow());
     const handleForceLogin = async () => await dispatch(forceLogin({ preAuthToken }));
     const handleCancelSession = () => dispatch(resetOtpFlow());
+
+    const handlePacificDemoSelect = async (account) => {
+        dispatch(clearError());
+        try {
+            const payload = typeof account === 'string'
+                ? { roleKey: account }
+                : { userId: account.userId, roleKey: account.roleCategory };
+            const res = await dispatch(pacificDemoLogin(payload)).unwrap();
+            const target = getDemoDashboardPath(res?.user?.demoRoleKey || payload.roleKey, res?.user?.dashboardPath || account?.dashboardPath);
+            navigate(target, { replace: true });
+        } catch (err) {
+            const msg = typeof err === 'string' ? err : (err?.message || 'Demo login failed');
+            toast.error(msg);
+        }
+    };
+
+    if (isPacificDemoHost() && !demoState.checked) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07192f', color: '#5eead4', fontFamily: 'Inter, system-ui, sans-serif' }}>
+                Loading Pacific Hospital Demo Portal...
+            </div>
+        );
+    }
+
+    if (isPacificDemoHost() && demoState.enabled && !showStandardLogin) {
+        return (
+            <PacificDemoLogin
+                hospital={demoState.hospital}
+                accounts={demoState.accounts}
+                loading={loading}
+                error={error}
+                onSelectAccount={handlePacificDemoSelect}
+                onShowStandardLogin={() => setShowStandardLogin(true)}
+            />
+        );
+    }
 
     return (
         <NeuralAuthPortal

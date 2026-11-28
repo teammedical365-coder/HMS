@@ -190,6 +190,7 @@ const CentralAdminDashboard = () => {
     // Hospital list
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
+    const [hospitalsError, setHospitalsError] = useState('');
     const [hospitalSort, setHospitalSort] = useState('a-z'); // 'a-z' | 'z-a' | 'newest' | 'oldest'
     const [hospitalSearch, setHospitalSearch] = useState('');
     const [showHospitalForm, setShowHospitalForm] = useState(false);
@@ -740,14 +741,19 @@ const CentralAdminDashboard = () => {
         } else if (!centralAdminCache.hospitals[plan]) {
             setLoadingHospitals(true);
         }
+        setHospitalsError('');
         try {
             const res = await hospitalAPI.getHospitals(plan);
-            if (res.success) {
-                centralAdminCache.hospitals[plan] = res.hospitals;
-                setHospitals(res.hospitals);
+            if (res?.success) {
+                const list = Array.isArray(res.hospitals) ? res.hospitals : (Array.isArray(res.data?.hospitals) ? res.data.hospitals : []);
+                centralAdminCache.hospitals[plan] = list;
+                setHospitals(list);
+            } else {
+                setHospitalsError(res?.message || 'Failed to load hospitals.');
             }
         } catch (err) {
             console.error('Failed to load hospitals:', err);
+            setHospitalsError(err?.response?.data?.message || err?.message || 'Unable to connect to hospital API.');
         } finally {
             setLoadingHospitals(false);
         }
@@ -3636,6 +3642,13 @@ const CentralAdminDashboard = () => {
                         {!showHospitalForm && !showHospitalAdminForm && !editHospital && (
                             loadingHospitals ? (
                                 <div className="loading-message">⏳ Loading hospitals...</div>
+                            ) : hospitalsError ? (
+                                <div className="cad-empty-banner">
+                                    <p style={{ color: '#b91c1c', marginBottom: '10px' }}>⚠️ {hospitalsError}</p>
+                                    <button type="button" onClick={() => fetchHospitals(getActivePlanName(), true)} className="cad-btn-primary">
+                                        Retry Loading Hospitals
+                                    </button>
+                                </div>
                             ) : (() => {
                                 const planHospitals = hospitals.filter(h => 
                                     activeTab === 'multi-speciality' 

@@ -1059,11 +1059,16 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const Appointment = require('../models/appointment.model');
         const Doctor = require('../models/doctor.model');
         const Lab = require('../models/lab.model');
+        const LabLocation = require('../models/labLocation.model');
+        const LabOrder = require('../models/labOrder.model');
         const Pharmacy = require('../models/pharmacy.model');
         const LabReport = require('../models/labReport.model');
         const PharmacyOrder = require('../models/pharmacyOrder.model');
+        const PaymentTransaction = require('../models/paymentTransaction.model');
         const Role = require('../models/role.model');
         const Bed = require('../models/bed.model');
+        const { getTenantConnection } = require('../db/tenantDb');
+        const { getTenantModels } = require('../db/tenantModels');
 
         // Parallel initial fetch: Hospital record + All Roles lookup map
         const [hospital, roles, doctorIds] = await Promise.all([
@@ -1107,23 +1112,49 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+
+        let tenantBedCount = 0;
+        let tenantOccupiedCount = 0;
+        let activeAdmissionsCount = 0;
+        try {
+            const tConn = await getTenantConnection(String(hospitalId));
+            if (tConn) {
+                const { Bed: TenantBed, Admission: TenantAdmission } = getTenantModels(tConn);
+                [tenantBedCount, tenantOccupiedCount, activeAdmissionsCount] = await Promise.all([
+                    TenantBed.countDocuments({ hospitalId }),
+                    TenantBed.countDocuments({ hospitalId, status: 'OCCUPIED' }),
+                    TenantAdmission.countDocuments({ hospitalId, status: 'Admitted' })
+                ]);
+            }
+        } catch (_) {}
+
         // Run ALL remaining analytics and list queries concurrently in parallel
         const [
             totalStaff,
             staffByRole,
             doctorCount,
             labCount,
+            labLocationCount,
             pharmacyCount,
-            totalBeds,
-            occupiedBeds,
+            masterTotalBeds,
+            masterOccupiedBeds,
+            registeredPatientCount,
             uniquePatientIds,
             totalAppointments,
+            todayAppointments,
             completedAppointments,
             pendingAppointments,
             revenueData,
+            paymentTxnData,
             monthlyRevenue,
             labReportCount,
+            completedLabReportsCount,
             pendingLabReports,
+            pendingLabOrdersCount,
             pharmacyOrderCount,
             recentAppointments,
             staffList
@@ -1147,20 +1178,30 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             Doctor.countDocuments({ hospitalId }),
             // 3. Lab count
             Lab.countDocuments({ hospitalId }),
+            LabLocation.countDocuments({ hospitalId, isActive: true }).catch(() => 0),
             // 4. Pharmacy count
             Pharmacy.countDocuments({ hospitalId }),
-            // 4b. Bed Occupancy
+            // 4b. Bed Occupancy (master fallback)
             Bed.countDocuments({ hospitalId }),
             Bed.countDocuments({ hospitalId, status: 'OCCUPIED' }),
-            // 5. Unique Patients
+            // 5. Registered & Unique Patients
+            User.countDocuments({ hospitalId, role: { $in: ['patient', ...patientRoleIds] } }),
             Appointment.distinct('userId', {
-                doctorId: { $in: doctorObjectIds },
+                $or: [
+                    { hospitalId: new mongoose.Types.ObjectId(hospitalId) },
+                    { doctorId: { $in: doctorObjectIds } }
+                ],
                 ...dateFilter
             }),
             // 6. Appointments stats
             Appointment.countDocuments({
                 ...appointmentMatch,
                 ...dateFilter
+            }),
+            Appointment.countDocuments({
+                ...appointmentMatch,
+                appointmentDate: { $gte: todayStart, $lte: todayEnd },
+                status: { $ne: 'cancelled' }
             }),
             Appointment.countDocuments({
                 ...appointmentMatch,
@@ -1172,7 +1213,7 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                 status: { $in: ['pending', 'confirmed'] },
                 ...dateFilter
             }),
-            // 7. Revenue
+            // 7. Revenue (Appointments + PaymentTransactions)
             Appointment.aggregate([
                 {
                     $match: {
@@ -1195,6 +1236,21 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                     }
                 }
             ]),
+            PaymentTransaction.aggregate([
+                {
+                    $match: {
+                        hospitalId: new mongoose.Types.ObjectId(hospitalId),
+                        paymentStatus: { $regex: /^paid$/i },
+                        ...(startDate || endDate ? { createdAt: createdDateFilter.createdAt } : {})
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalCollected: { $sum: '$amount' }
+                    }
+                }
+            ]).catch(() => []),
             // 7b. Monthly revenue
             Appointment.aggregate([
                 {
@@ -1223,24 +1279,46 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                 },
                 { $sort: { '_id.year': 1, '_id.month': 1 } }
             ]),
-            // 8. Lab reports
+            // 8. Lab reports & orders
             LabReport.countDocuments({
-                doctorId: { $in: doctorUserIds },
+                $or: [
+                    { hospitalId },
+                    ...(doctorUserIds.length > 0 ? [{ doctorId: { $in: doctorUserIds } }] : [])
+                ],
                 ...createdDateFilter
             }),
             LabReport.countDocuments({
-                doctorId: { $in: doctorUserIds },
-                reportStatus: 'PENDING',
+                $or: [
+                    { hospitalId },
+                    ...(doctorUserIds.length > 0 ? [{ doctorId: { $in: doctorUserIds } }] : [])
+                ],
+                reportStatus: { $in: ['UPLOADED', 'RELEASED', 'APPROVED', 'DONE'] },
                 ...createdDateFilter
             }),
+            LabReport.countDocuments({
+                $or: [
+                    { hospitalId },
+                    ...(doctorUserIds.length > 0 ? [{ doctorId: { $in: doctorUserIds } }] : [])
+                ],
+                reportStatus: { $in: ['PENDING', 'GENERATED', 'UNDER_REVIEW'] },
+                ...createdDateFilter
+            }),
+            LabOrder.countDocuments({
+                hospitalId,
+                status: { $in: ['Confirmed', 'In Progress'] },
+                ...createdDateFilter
+            }).catch(() => 0),
             // 9. Pharmacy orders
             PharmacyOrder.countDocuments({
-                doctorId: { $in: doctorUserIds },
+                $or: [
+                    { hospitalId },
+                    ...(doctorUserIds.length > 0 ? [{ doctorId: { $in: doctorUserIds } }] : [])
+                ],
                 ...createdDateFilter
             }),
             // 10. Recent appointments
             Appointment.find({
-                doctorId: { $in: doctorObjectIds },
+                ...appointmentMatch,
                 ...dateFilter
             })
                 .populate('userId', 'name patientId phone')
@@ -1251,7 +1329,7 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             // 11. Staff list
             User.find({
                 hospitalId,
-                role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin'] }
+                role: { $nin: excludedRoles }
             }, { password: 0 })
                 .sort({ createdAt: -1 })
                 .lean()
@@ -1268,8 +1346,14 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             return { ...u, roleName };
         }).filter(u => !['patient'].includes(u.roleName?.toLowerCase()));
 
-        const totalRevenue = revenueData[0]?.totalRevenue || 0;
-        const totalPatients = uniquePatientIds.length;
+        const totalBeds = tenantBedCount > 0 ? tenantBedCount : masterTotalBeds;
+        const occupiedBeds = tenantBedCount > 0
+            ? Math.min(totalBeds, Math.max(tenantOccupiedCount, activeAdmissionsCount))
+            : masterOccupiedBeds;
+        const appointmentRevenue = revenueData[0]?.totalRevenue || 0;
+        const paymentTxnRevenue = paymentTxnData[0]?.totalCollected || 0;
+        const totalRevenue = Math.max(appointmentRevenue, paymentTxnRevenue);
+        const totalPatients = Math.max(uniquePatientIds.length, (startDate || endDate) ? 0 : registeredPatientCount);
         const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
         const callerRole = String(req.user._roleData?.name || req.user.role || '').toLowerCase();
@@ -1296,20 +1380,24 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                 totalStaff,
                 doctorCount,
                 totalDoctors: doctorCount,
-                labCount,
+                labCount: Math.max(labCount, labLocationCount),
                 pharmacyCount,
                 totalBeds,
                 occupiedBeds,
+                activeAdmissions: activeAdmissionsCount,
                 occupancyRate,
                 staffBreakdown,
                 totalPatients,
                 totalAppointments,
+                todayAppointments,
                 completedAppointments,
                 pendingAppointments,
                 totalRevenue,
                 monthlyRevenue,
                 labReportCount,
+                completedLabReports: completedLabReportsCount,
                 pendingLabReports,
+                pendingLabOrders: pendingLabOrdersCount,
                 pharmacyOrderCount
             },
             recentAppointments,

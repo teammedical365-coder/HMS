@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ipdClinicalAPI, admissionAPI, doctorAPI, nursingNoteAPI, pharmacyAPI, bedAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
+import { useBranding } from '../../context/BrandingContext';
 import {
     FiActivity,
     FiAlertCircle,
@@ -9,6 +10,7 @@ import {
     FiCheck,
     FiCheckCircle,
     FiClock,
+    FiDownload,
     FiDroplet,
     FiEye,
     FiFileText,
@@ -19,6 +21,7 @@ import {
     FiPrinter,
     FiRefreshCw,
     FiSave,
+    FiSearch,
     FiSend,
     FiTrash2,
     FiMapPin,
@@ -31,6 +34,7 @@ import TPRChartModal from './TPRChartModal';
 import InpatientClinicalNotesModal from './InpatientClinicalNotesModal';
 import IPDClinicalChartsModal from './IPDClinicalChartsModal';
 import ICUChartModal from './ICUChartModal';
+import { downloadDischargeSummaryPdf, printDischargeSummaryDocument } from '../../utils/dischargeSummaryPdf';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -151,11 +155,14 @@ const createEmptyMedRow = () => ({
 
 const createEmptyDischargeMedRow = () => ({
     medicineName: '',
+    composition: '',
     dosage: '',
     route: 'Oral',
     frequency: 'BD',
     duration: '5 days',
-    instructions: 'After meals'
+    quantity: '',
+    instructions: 'After meals',
+    inventoryItemId: null
 });
 
 const DoctorIPDOrdersPanel = ({
@@ -170,6 +177,7 @@ const DoctorIPDOrdersPanel = ({
     hideHeaderBanner = false
 }) => {
     const { user: authUser } = useAuth();
+    const { branding } = useBranding();
     const activeDoctor = currentUser || authUser;
     const hospitalId = activeDoctor?.hospitalId;
 
@@ -290,17 +298,24 @@ const DoctorIPDOrdersPanel = ({
     const [dischargeSummary, setDischargeSummary] = useState({
         diagnosis: appointment?.diagnosis || '',
         admissionReason: '',
+        clinicalHistory: '',
+        clinicalExamination: '',
         hospitalCourse: '',
         proceduresSummary: '',
         keyInvestigationsSummary: '',
         treatmentSummary: '',
+        vitalsSummary: '',
         conditionAtDischarge: 'STABLE',
         dischargeMedications: [createEmptyDischargeMedRow()],
+        dischargeAdvice: '',
         followUpInstructions: '',
         returnPrecautions: 'Seek emergency care immediately if experiencing high fever, chest pain, shortness of breath, severe pain, or bleeding.',
         followUpDate: '',
         status: 'DRAFT'
     });
+    const [dischargeDocMeta, setDischargeDocMeta] = useState({});
+    const [dischargeMedSearch, setDischargeMedSearch] = useState('');
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [savingSummary, setSavingSummary] = useState(false);
     const [summaryDoctorSigned, setSummaryDoctorSigned] = useState(false);
@@ -608,22 +623,49 @@ const DoctorIPDOrdersPanel = ({
         setLoadingSummary(true);
         try {
             const res = await ipdClinicalAPI.getDischargeSummary(activeAdmission._id);
+            if (res.success) {
+                setDischargeDocMeta({
+                    hospital: res.hospital || null,
+                    admission: res.admission || null,
+                    clinicalNote: res.clinicalNote || null,
+                    latestVitals: res.latestVitals || null,
+                    inpatientOrders: res.inpatientOrders || [],
+                    labReports: res.labReports || [],
+                    surgeries: res.surgeries || [],
+                    signingDoctor: res.signingDoctor || null
+                });
+            }
             if (res.success && res.dischargeSummary) {
                 const s = res.dischargeSummary;
                 setDischargeSummary({
                     diagnosis: s.diagnosis || '',
                     admissionReason: s.admissionReason || '',
+                    clinicalHistory: s.clinicalHistory || '',
+                    clinicalExamination: s.clinicalExamination || '',
                     hospitalCourse: s.hospitalCourse || '',
                     proceduresSummary: s.proceduresSummary || '',
                     keyInvestigationsSummary: s.keyInvestigationsSummary || '',
                     treatmentSummary: s.treatmentSummary || '',
+                    vitalsSummary: s.vitalsSummary || '',
                     conditionAtDischarge: s.conditionAtDischarge || 'STABLE',
                     dischargeMedications: s.dischargeMedications?.length > 0
-                        ? s.dischargeMedications
+                        ? s.dischargeMedications.map(m => ({
+                            medicineName: m.medicineName || '',
+                            composition: m.composition || m.salt || '',
+                            dosage: m.dosage || '',
+                            route: m.route || 'Oral',
+                            frequency: m.frequency || 'BD',
+                            duration: m.duration || '5 days',
+                            quantity: m.quantity || '',
+                            instructions: m.instructions || '',
+                            inventoryItemId: m.inventoryItemId || null
+                        }))
                         : [createEmptyDischargeMedRow()],
+                    dischargeAdvice: s.dischargeAdvice || '',
                     followUpInstructions: s.followUpInstructions || '',
                     returnPrecautions: s.returnPrecautions || '',
-                    followUpDate: s.followUpDate ? s.followUpDate.split('T')[0] : '',
+                    followUpDate: s.followUpDate ? String(s.followUpDate).split('T')[0] : '',
+                    doctorSignedAt: s.doctorSignedAt || null,
                     status: s.status || 'DRAFT'
                 });
                 setSummaryDoctorSigned(s.status === 'FINALIZED');
@@ -635,13 +677,36 @@ const DoctorIPDOrdersPanel = ({
         }
     }, [activeAdmission]);
 
-    // Fetch Pharmacy Inventory
+    // Fetch Pharmacy Inventory & Doctor Medicine Catalogue (OPD + IPD shared source, read-only)
     const fetchPharmacyInventory = useCallback(async () => {
         try {
             setLoadingPharmacy(true);
-            const res = await pharmacyAPI.getInventory();
-            const items = res?.data || res?.inventory || [];
-            setPharmacyMedicines(items);
+            const [invRes, docMedRes] = await Promise.all([
+                pharmacyAPI.getInventory().catch(() => null),
+                doctorAPI.getMedicines().catch(() => null)
+            ]);
+            const invItems = invRes?.data || invRes?.inventory || [];
+            const docMeds = docMedRes?.medicines || [];
+            const mergedMap = new Map();
+
+            for (const m of invItems) {
+                if (!m?.name) continue;
+                mergedMap.set(m.name.toLowerCase().trim(), {
+                    ...m,
+                    salt: m.salt || m.genericName || ''
+                });
+            }
+            for (const m of docMeds) {
+                if (!m?.name) continue;
+                const key = m.name.toLowerCase().trim();
+                if (!mergedMap.has(key)) {
+                    mergedMap.set(key, {
+                        ...m,
+                        salt: m.genericName || m.salt || ''
+                    });
+                }
+            }
+            setPharmacyMedicines(Array.from(mergedMap.values()));
         } catch (err) {
             console.warn('Could not fetch pharmacy inventory for auto-complete', err);
         } finally {
@@ -1046,9 +1111,56 @@ const DoctorIPDOrdersPanel = ({
         }
     };
 
-    // Print Discharge Summary
+    const handleSelectCatalogDischargeMed = (catalogItem) => {
+        if (!catalogItem?.name) return;
+        setDischargeSummary(prev => {
+            const cleaned = prev.dischargeMedications.filter(m => String(m.medicineName || '').trim() !== '');
+            const nextRow = {
+                medicineName: catalogItem.name,
+                composition: catalogItem.salt || catalogItem.genericName || '',
+                dosage: catalogItem.strength || catalogItem.dosage || '1 tab',
+                route: catalogItem.route || 'Oral',
+                frequency: 'BD',
+                duration: '5 days',
+                quantity: '',
+                instructions: 'After meals',
+                inventoryItemId: catalogItem._id || null
+            };
+            return {
+                ...prev,
+                dischargeMedications: [...cleaned, nextRow]
+            };
+        });
+        setDischargeMedSearch('');
+    };
+
+    const getDischargeDocPayload = () => ({
+        hospital: dischargeDocMeta.hospital || {},
+        branding: branding || {},
+        admission: dischargeDocMeta.admission || activeAdmission || {},
+        patient,
+        dischargeSummary,
+        clinicalNote: dischargeDocMeta.clinicalNote || clinicalNotesData || null,
+        latestVitals: dischargeDocMeta.latestVitals || vitalsList?.[0] || null,
+        inpatientOrders: dischargeDocMeta.inpatientOrders?.length ? dischargeDocMeta.inpatientOrders : existingOrders,
+        labReports: dischargeDocMeta.labReports || [],
+        surgeries: dischargeDocMeta.surgeries || [],
+        signingDoctor: dischargeDocMeta.signingDoctor || activeDoctor
+    });
+
+    // Print Complete Discharge Summary
     const handlePrintSummary = () => {
-        window.print();
+        printDischargeSummaryDocument(getDischargeDocPayload());
+    };
+
+    // Download Complete Discharge Summary PDF
+    const handleDownloadSummaryPdf = async () => {
+        setDownloadingPdf(true);
+        try {
+            await downloadDischargeSummaryPdf(getDischargeDocPayload());
+        } finally {
+            setDownloadingPdf(false);
+        }
     };
 
     const patientName = patient?.name || patient?.userId?.name || 'Selected Patient';
@@ -2686,7 +2798,7 @@ const DoctorIPDOrdersPanel = ({
                             <h4>Structured Inpatient Discharge Summary</h4>
                             <p>Official medical documentation of hospitalization course, take-home prescriptions, and clinical exit sign-off</p>
                         </div>
-                        <div className="discharge-header-actions">
+                        <div className="discharge-header-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 className="btn-print-summary"
@@ -2695,6 +2807,15 @@ const DoctorIPDOrdersPanel = ({
                             >
                                 <FiPrinter />
                                 <span>Print Summary</span>
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-download-summary"
+                                onClick={handleDownloadSummaryPdf}
+                                disabled={!activeAdmission || downloadingPdf}
+                            >
+                                <FiDownload />
+                                <span>{downloadingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
                             </button>
                         </div>
                     </div>
@@ -2777,6 +2898,54 @@ const DoctorIPDOrdersPanel = ({
 
                                 <div className="ipd-form-grid-2" style={{ marginTop: '12px' }}>
                                     <div className="ipd-field-group">
+                                        <label>Clinical History</label>
+                                        <textarea
+                                            className="ipd-textarea"
+                                            placeholder="History of present illness, relevant medical/surgical history, allergies..."
+                                            value={dischargeSummary.clinicalHistory}
+                                            onChange={(e) => setDischargeSummary(p => ({ ...p, clinicalHistory: e.target.value }))}
+                                            rows={2}
+                                        />
+                                    </div>
+
+                                    <div className="ipd-field-group">
+                                        <label>Clinical Examination</label>
+                                        <textarea
+                                            className="ipd-textarea"
+                                            placeholder="General & systemic examination findings..."
+                                            value={dischargeSummary.clinicalExamination}
+                                            onChange={(e) => setDischargeSummary(p => ({ ...p, clinicalExamination: e.target.value }))}
+                                            rows={2}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="ipd-form-grid-2" style={{ marginTop: '12px' }}>
+                                    <div className="ipd-field-group">
+                                        <label>Treatment Provided During Hospitalization</label>
+                                        <textarea
+                                            className="ipd-textarea"
+                                            placeholder="Medications, IV therapy, supportive care provided during stay..."
+                                            value={dischargeSummary.treatmentSummary}
+                                            onChange={(e) => setDischargeSummary(p => ({ ...p, treatmentSummary: e.target.value }))}
+                                            rows={2}
+                                        />
+                                    </div>
+
+                                    <div className="ipd-field-group">
+                                        <label>Vitals &amp; Clinical Observations at Discharge</label>
+                                        <textarea
+                                            className="ipd-textarea"
+                                            placeholder="Latest recorded vitals or clinical observations..."
+                                            value={dischargeSummary.vitalsSummary}
+                                            onChange={(e) => setDischargeSummary(p => ({ ...p, vitalsSummary: e.target.value }))}
+                                            rows={2}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="ipd-form-grid-2" style={{ marginTop: '12px' }}>
+                                    <div className="ipd-field-group">
                                         <label>Procedures / Surgeries Performed</label>
                                         <textarea
                                             className="ipd-textarea"
@@ -2800,9 +2969,9 @@ const DoctorIPDOrdersPanel = ({
                                 </div>
                             </div>
 
-                            {/* Section B: Take-Home Discharge Medications */}
+                            {/* Section B: Take-Home Discharge Medications (OPD Prescription-Style Pharmacy Search) */}
                             <div className="ipd-section">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                                     <h4 className="ipd-section-title" style={{ margin: 0 }}>
                                         💊 Take-Home Discharge Medications
                                     </h4>
@@ -2811,27 +2980,92 @@ const DoctorIPDOrdersPanel = ({
                                         className="ipd-btn-add-row-sm"
                                         onClick={addDischargeMed}
                                     >
-                                        <FiPlus /> Add Take-Home Med
+                                        <FiPlus /> Add Medicine Row
                                     </button>
+                                </div>
+
+                                {/* Pharmacy Catalog Search (matching OPD Prescription workflow) */}
+                                <div className="dmed-search-wrap">
+                                    <div className="dmed-search-input-box">
+                                        <FiSearch size={14} className="dmed-search-ico" />
+                                        <input
+                                            type="text"
+                                            className="ipd-input dmed-search-input"
+                                            placeholder="Search pharmacy medicines or composition/salt to prescribe (e.g. Paracetamol, Cefixime)..."
+                                            value={dischargeMedSearch}
+                                            onChange={(e) => setDischargeMedSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    {dischargeMedSearch.trim() && (
+                                        <div className="dmed-search-dropdown">
+                                            {(() => {
+                                                const q = dischargeMedSearch.trim().toLowerCase();
+                                                const matches = pharmacyMedicines.filter((item) =>
+                                                    (item.name || '').toLowerCase().includes(q) ||
+                                                    (item.salt || item.genericName || '').toLowerCase().includes(q)
+                                                ).slice(0, 25);
+
+                                                if (matches.length === 0) {
+                                                    return (
+                                                        <div className="dmed-search-empty">
+                                                            No catalog match for "{dischargeMedSearch}". You can type directly in the medicine fields below.
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return matches.map((item, i) => (
+                                                    <div
+                                                        key={item._id || i}
+                                                        className="dmed-search-item"
+                                                        onClick={() => handleSelectCatalogDischargeMed(item)}
+                                                    >
+                                                        <div>
+                                                            <strong>{item.name}</strong>
+                                                            {item.category ? <span className="dmed-cat-tag">({item.category})</span> : null}
+                                                        </div>
+                                                        <div className="dmed-salt-tag">
+                                                            {item.salt || item.genericName || 'Pharmacy Catalog'}
+                                                        </div>
+                                                    </div>
+                                                ));
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {dischargeSummary.dischargeMedications.map((med, idx) => (
                                     <div key={idx} className="discharge-med-row">
-                                        <div className="dmed-grid">
+                                        <div className="dmed-grid-extended">
                                             <input
                                                 type="text"
                                                 className="ipd-input"
-                                                placeholder="Medicine Name (e.g. Tab. Cefixime 200mg)"
+                                                placeholder="Medicine Name *"
                                                 value={med.medicineName}
                                                 onChange={(e) => handleDischargeMedChange(idx, 'medicineName', e.target.value)}
                                             />
                                             <input
                                                 type="text"
                                                 className="ipd-input"
-                                                placeholder="Dosage (e.g. 1 tab)"
+                                                placeholder="Salt / Composition"
+                                                value={med.composition || ''}
+                                                onChange={(e) => handleDischargeMedChange(idx, 'composition', e.target.value)}
+                                            />
+                                            <input
+                                                type="text"
+                                                className="ipd-input"
+                                                placeholder="Dosage (e.g. 500mg / 1 tab)"
                                                 value={med.dosage}
                                                 onChange={(e) => handleDischargeMedChange(idx, 'dosage', e.target.value)}
                                             />
+                                            <select
+                                                className="ipd-select"
+                                                value={med.route || 'Oral'}
+                                                onChange={(e) => handleDischargeMedChange(idx, 'route', e.target.value)}
+                                            >
+                                                {COMMON_ROUTES.map(r => (
+                                                    <option key={r} value={r}>{r}</option>
+                                                ))}
+                                            </select>
                                             <select
                                                 className="ipd-select"
                                                 value={med.frequency}
@@ -2851,6 +3085,13 @@ const DoctorIPDOrdersPanel = ({
                                             <input
                                                 type="text"
                                                 className="ipd-input"
+                                                placeholder="Qty (e.g. 10)"
+                                                value={med.quantity || ''}
+                                                onChange={(e) => handleDischargeMedChange(idx, 'quantity', e.target.value)}
+                                            />
+                                            <input
+                                                type="text"
+                                                className="ipd-input"
                                                 placeholder="Instructions (e.g. After meals)"
                                                 value={med.instructions}
                                                 onChange={(e) => handleDischargeMedChange(idx, 'instructions', e.target.value)}
@@ -2859,6 +3100,7 @@ const DoctorIPDOrdersPanel = ({
                                                 type="button"
                                                 className="ipd-btn-remove"
                                                 onClick={() => removeDischargeMed(idx)}
+                                                title="Remove Medicine"
                                             >
                                                 <FiTrash2 />
                                             </button>
@@ -2867,9 +3109,19 @@ const DoctorIPDOrdersPanel = ({
                                 ))}
                             </div>
 
-                            {/* Section C: Follow-up & Red Flags */}
+                            {/* Section C: Discharge Advice, Follow-up & Red Flags */}
                             <div className="ipd-section">
-                                <h4 className="ipd-section-title">📅 Follow-Up & Emergency Return Precautions</h4>
+                                <h4 className="ipd-section-title">📅 Discharge Advice, Follow-Up &amp; Emergency Precautions</h4>
+                                <div className="ipd-field-group" style={{ marginBottom: '12px' }}>
+                                    <label>Discharge Advice / Home Care</label>
+                                    <textarea
+                                        className="ipd-textarea"
+                                        placeholder="Rest, wound care, activity restrictions, monitoring advice..."
+                                        value={dischargeSummary.dischargeAdvice}
+                                        onChange={(e) => setDischargeSummary(p => ({ ...p, dischargeAdvice: e.target.value }))}
+                                        rows={2}
+                                    />
+                                </div>
                                 <div className="ipd-form-grid-2 ipd-discharge-followup-grid">
                                     <div className="ipd-field-group">
                                         <label>Follow-Up Review Date</label>

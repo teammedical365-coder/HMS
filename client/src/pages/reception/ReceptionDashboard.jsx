@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI, policyAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI, policyAPI, patientPolicyAPI } from '../../utils/api';
+import PatientPolicySection, { EMPTY_POLICY_DRAFT, hasAnyPolicyInput } from '../../components/insurance/PatientPolicySection';
 import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
@@ -274,6 +275,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [hospitalContext, setHospitalContext] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
     const [followupStatus, setFollowupStatus] = useState(null);    const [showCameraModal, setShowCameraModal] = useState(false);
+    const [policyDraft, setPolicyDraft] = useState({ ...EMPTY_POLICY_DRAFT });
+    const [existingPatientPolicies, setExistingPatientPolicies] = useState([]);
+    const [selectedPolicyId, setSelectedPolicyId] = useState(null);
     const [cameraCapturedPreview, setCameraCapturedPreview] = useState(null); // blob URL for preview before saving
     const [cameraCapturedBlob, setCameraCapturedBlob] = useState(null);
     const [cameraFacingMode, setCameraFacingMode] = useState('user'); // 'user' (front) or 'environment' (back)
@@ -1142,8 +1146,57 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }));
     };
 
+    const applySavedPolicyToDraft = (pol) => {
+        if (!pol) {
+            setSelectedPolicyId(null);
+            setPolicyDraft({ ...EMPTY_POLICY_DRAFT });
+            return;
+        }
+        setSelectedPolicyId(pol._id);
+        setPolicyDraft({
+            _id: pol._id,
+            policyType: pol.policyType || 'Private Health Insurance',
+            providerName: pol.providerName || '',
+            policyNumber: pol.policyNumber || '',
+            tpaOrMemberId: pol.tpaOrMemberId || '',
+            policyHolderName: pol.policyHolderName || '',
+            relationshipWithPatient: pol.relationshipWithPatient || 'Self',
+            validFrom: pol.validFrom ? String(pol.validFrom).slice(0, 10) : '',
+            validUntil: pol.validUntil ? String(pol.validUntil).slice(0, 10) : '',
+            cardDocument: pol.cardDocument || null,
+            notes: pol.notes || ''
+        });
+    };
+
+    const loadPatientPolicies = async (patientObjId) => {
+        if (!patientObjId || isPatientPortal) {
+            setExistingPatientPolicies([]);
+            applySavedPolicyToDraft(null);
+            return;
+        }
+        try {
+            const res = await patientPolicyAPI.getPatientPolicies(patientObjId);
+            if (res?.success && Array.isArray(res.policies)) {
+                setExistingPatientPolicies(res.policies);
+                if (res.policies.length > 0) {
+                    applySavedPolicyToDraft(res.policies[0]);
+                } else {
+                    applySavedPolicyToDraft(null);
+                }
+            } else {
+                setExistingPatientPolicies([]);
+                applySavedPolicyToDraft(null);
+            }
+        } catch {
+            setExistingPatientPolicies([]);
+            applySavedPolicyToDraft(null);
+        }
+    };
+
     const handleNewWalkIn = () => {
         setSelectedPatientId(null);
+        setExistingPatientPolicies([]);
+        applySavedPolicyToDraft(null);
         setOtpSent(false);
         setAadhaarOtp('');
         setVerifyingAadhaar(false);
@@ -1170,6 +1223,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleEditPatient = (patient, isEditOnly = false) => {
         setIsEditingProfileOnly(isEditOnly);
         setSelectedPatientId(patient._id);
+        loadPatientPolicies(patient._id);
         setOtpSent(false);
         setAadhaarOtp('');
         setVerifyingAadhaar(false);
@@ -1915,12 +1969,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
 
         try {
+            const hasPolicyInput = hasAnyPolicyInput(policyDraft);
+            if (hasPolicyInput && policyDraft.validFrom && policyDraft.validUntil && new Date(policyDraft.validUntil) < new Date(policyDraft.validFrom)) {
+                toast.error('Policy Valid Until date cannot be earlier than Policy Valid From date.');
+                setSaving(false);
+                return;
+            }
+
             let userId = selectedPatientId;
 
             if (isPatientPortal && !userId) {
                 const pU = JSON.parse(localStorage.getItem('patientUser') || '{}');
                 userId = pU.linkedPatientProfileId;
             }
+
+            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+            const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
 
             // 1. Register/Find User (If new walk-in OR new patient portal onboarding)
             if (!userId) {
@@ -1929,7 +1993,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     email: intakeForm.email,
                     phone: intakeForm.mobile,
                     age: intakeForm.age,
-                    aadhaarNumber: intakeForm.aadhaar
+                    aadhaarNumber: intakeForm.aadhaar,
+                    ...(hasPolicyInput && !canBook ? { insurancePolicy: policyDraft } : {})
                 });
 
                 if (regRes.success && regRes.user) {
@@ -1976,8 +2041,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             if (avatarUrl) intakePayload.avatar = avatarUrl;
             await receptionAPI.updateIntake(userId, intakePayload);
 
-            const isTokenMode = hospitalContext?.appointmentMode === 'token';
-            const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+            // Save/update optional policy when updating an existing patient without booking
+            if (!canBook && selectedPatientId && hasPolicyInput && !isPatientPortal) {
+                await patientPolicyAPI.savePatientPolicy(userId, policyDraft);
+            }
 
             if (!canBook) {
                 if (isPatientPortal) {
@@ -2046,7 +2113,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     transactionId: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.transactionId || '') : '',
                     upiId: (isUpiInvolved || isOnlineInvolved) ? (intakePaymentData?.upiId || '') : '',
                     cardDetails: isCardInvolved ? (intakePaymentData?.cardDetails || '') : '',
-                    bankReference: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.bankReference || '') : ''
+                    bankReference: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.bankReference || '') : '',
+                    ...(hasPolicyInput ? { insurancePolicy: policyDraft } : (selectedPolicyId ? { selectedPolicyId } : {}))
                 });
 
                 if (bookingRes.success) {
@@ -2126,6 +2194,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     setPendingDownload({ doc, filename: `Receipt_${receiptPatientId}.pdf`, title: 'Registration Receipt' });
 
                     setPaymentScreenshot(null);
+                    setPolicyDraft({ ...EMPTY_POLICY_DRAFT });
+                    setExistingPatientPolicies([]);
+                    setSelectedPolicyId(null);
                     fetchAppointments();
                     if (intakeForm.doctor && intakeForm.visitDate) {
                         fetchBookedSlots(intakeForm.doctor, intakeForm.visitDate);
@@ -2873,6 +2944,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* OPTIONAL INSURANCE, TPA & GOVERNMENT HEALTH POLICY SECTION */}
+                                {!isPatientPortal && (
+                                    <PatientPolicySection
+                                        mode="form"
+                                        value={policyDraft}
+                                        onChange={setPolicyDraft}
+                                        existingPolicies={existingPatientPolicies}
+                                        selectedPolicyId={selectedPolicyId}
+                                        onSelectExistingPolicy={applySavedPolicyToDraft}
+                                        patientName={`${intakeForm.firstName || ''} ${intakeForm.lastName || ''}`.trim()}
+                                    />
+                                )}
 
                                 {/* CARD 4: ASSIGN TO DOCTOR / COUNSELLOR */}
                                 {!isEditingProfileOnly && (

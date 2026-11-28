@@ -16,6 +16,7 @@ const imagekit = require('../utils/imagekit');
 const ClinicPatient = require('../models/clinicPatient.model');
 const doctorOpdCtrl = require('../controllers/doctorOpd.controller');
 const appointmentQuotaService = require('../services/appointmentQuota.service');
+const { PACIFIC_DEMO_HOSPITAL_ID } = require('../config/pacificDemoConfig');
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
 const upload = multer({
@@ -30,7 +31,21 @@ const upload = multer({
 // --- HELPER ---
 const getDoctorQuery = async (userId, hospitalId) => {
     try {
-        const doctorProfile = await Doctor.findOne({ userId });
+        let doctorProfile = await Doctor.findOne({
+            userId,
+            ...(hospitalId ? { hospitalId } : {})
+        }) || await Doctor.findOne({ userId });
+
+        if (!doctorProfile && hospitalId) {
+            const docUser = await User.findById(userId).select('email').lean();
+            if (docUser?.email) {
+                doctorProfile = await Doctor.findOne({
+                    hospitalId,
+                    email: docUser.email.toLowerCase().trim()
+                });
+            }
+        }
+
         const query = { $or: [{ doctorUserId: userId }] };
         if (doctorProfile) {
             query.$or.push({ doctorId: doctorProfile._id });
@@ -228,12 +243,44 @@ router.get('/patients/:patientId/full-profile', verifyToken, async (req, res) =>
     }
 });
 
-// 2. NEW: Update Patient Profile (Intake Data) by Doctor
+// 2. NEW: Update Patient Profile (Intake Data) — enforces Nurse-Only Vitals recording
 router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
     try {
         const { patientId } = req.params;
-        const updates = req.body;
+        const updates = req.body || {};
         const hospitalId = req.user.hospitalId;
+
+        const hasVitalsMutation = Boolean(
+            updates.vitals !== undefined ||
+            updates.height !== undefined ||
+            updates.weight !== undefined ||
+            updates.bmi !== undefined ||
+            updates.historyBp !== undefined ||
+            updates.bp !== undefined ||
+            updates.bloodPressure !== undefined ||
+            updates.historyPulse !== undefined ||
+            updates.pulse !== undefined ||
+            updates.pulseRate !== undefined ||
+            updates.temperature !== undefined ||
+            updates.temp !== undefined ||
+            updates.spo2 !== undefined ||
+            updates.respiratoryRate !== undefined ||
+            updates.rr !== undefined
+        );
+        if (hasVitalsMutation) {
+            const roleRaw = String(req.user?._roleData?.name || req.user?.role || '').toLowerCase().replace(/\s+/g, '');
+            const perms = req.user?._roleData?.permissions || [];
+            const isNurse = ['nurse', 'staffnurse', 'headnurse', 'nursingstaff'].includes(roleRaw) ||
+                roleRaw.includes('nurse') ||
+                perms.includes('nurse_access') ||
+                perms.includes('vitals_write');
+            if (!isNurse) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Access denied: Only authorized nursing staff can record or update patient vitals.'
+                });
+            }
+        }
 
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
@@ -251,8 +298,29 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
         }
 
         if (user) {
-            // Merge existing profile with updates
+            // Merge existing profile with updates (attach Nurse identity on vitals updates)
+            if (hasVitalsMutation && updates.vitals && typeof updates.vitals === 'object') {
+                updates.vitals.recordedBy = req.user._id || req.user.userId || null;
+                updates.vitals.recordedByName = req.user.name || 'Nurse';
+                updates.vitals.recordedByRole = req.user._roleData?.name || req.user.role || 'Nurse';
+                updates.vitals.lastRecorded = updates.vitals.lastRecorded || new Date().toISOString();
+            }
             user.fertilityProfile = { ...user.fertilityProfile, ...updates };
+            if (hasVitalsMutation && updates.vitals && typeof updates.vitals === 'object') {
+                const existingVitalsHist = Array.isArray(user.fertilityProfile.vitalsHistory)
+                    ? user.fertilityProfile.vitalsHistory
+                    : [];
+                user.fertilityProfile.vitalsHistory = [
+                    {
+                        ...updates.vitals,
+                        recordedBy: req.user._id || req.user.userId || null,
+                        recordedByName: req.user.name || 'Nurse',
+                        recordedByRole: req.user._roleData?.name || req.user.role || 'Nurse',
+                        recordedAt: updates.vitals.lastRecorded || new Date().toISOString()
+                    },
+                    ...existingVitalsHist
+                ].slice(0, 50);
+            }
 
             // Ensure Doctor uploaded reports also sync directly into fertilityProfile.documents
             if (!Array.isArray(user.fertilityProfile.documents)) {
@@ -509,13 +577,19 @@ router.get('/appointments', verifyToken, async (req, res) => {
 
         // Safe pagination / bounded limits to prevent Node OOM on large datasets
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 100), 500);
+        const defaultLimit = req.user?.isPacificDemo ? 250 : 100;
+        const limit = Math.min(Math.max(1, parseInt(req.query.limit) || defaultLimit), 500);
         const skip = (page - 1) * limit;
+
+        const sortOrder = req.user?.isPacificDemo
+            ? { appointmentDate: -1, createdAt: -1 }
+            : { appointmentDate: 1, appointmentTime: 1 };
 
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
             .populate('clinicPatientId')
-            .sort({ appointmentDate: 1, appointmentTime: 1 })
+            .populate('doctorId', 'name specialty departments')
+            .sort(sortOrder)
             .skip(skip)
             .limit(limit)
             .lean();

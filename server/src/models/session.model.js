@@ -17,6 +17,9 @@ const sessionSchema = new mongoose.Schema({
     lastActive:{ type: Date, default: Date.now },
     isActive:  { type: Boolean, default: true },
     logoutTime:{ type: Date, default: null },
+    isDemoSession: { type: Boolean, default: false },
+    demoDoctorSwitch: { type: Boolean, default: false },
+    expiresAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // Fast lookup: find the active session for a user

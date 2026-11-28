@@ -1,7 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
+import { authAPI, adminAPI, hospitalAdminAPI, pacificDemoAPI, invalidateMetaCache } from '../../utils/api';
 
 const persistAuthSession = (token, user) => {
+  invalidateMetaCache();
   if (token) localStorage.setItem('token', token);
   if (user) {
     const loginTime = user.lastLogin || new Date().toISOString();
@@ -14,6 +15,46 @@ const persistAuthSession = (token, user) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // OTP-Based Login Thunks
 // ══════════════════════════════════════════════════════════════════════════════
+
+/** Pacific Hospital Interactive Demo One-Click Login (OTP-free for Pacific Hospital ONLY) */
+export const pacificDemoLogin = createAsyncThunk(
+  'auth/pacificDemoLogin',
+  async ({ userId = null, roleKey = null, doctorUserId = null }, { rejectWithValue }) => {
+    try {
+      const response = await pacificDemoAPI.loginRole({ userId, roleKey, doctorUserId });
+      if (response.success && response.token) {
+        persistAuthSession(response.token, response.user);
+        if (response.tenant) {
+          localStorage.setItem('tenant', JSON.stringify(response.tenant));
+        }
+        return response;
+      }
+      return rejectWithValue(response.message || 'Pacific Demo login failed');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Pacific Demo login failed');
+    }
+  }
+);
+
+/** Pacific Hospital Interactive Demo Sidebar Account Switch */
+export const pacificDemoSwitchRole = createAsyncThunk(
+  'auth/pacificDemoSwitchRole',
+  async ({ userId = null, roleKey = null, doctorUserId = null }, { rejectWithValue }) => {
+    try {
+      const response = await pacificDemoAPI.switchRole({ userId, roleKey, doctorUserId });
+      if (response.success && response.token) {
+        persistAuthSession(response.token, response.user);
+        if (response.tenant) {
+          localStorage.setItem('tenant', JSON.stringify(response.tenant));
+        }
+        return response;
+      }
+      return rejectWithValue(response.message || 'Account switch failed');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message || 'Account switch failed');
+    }
+  }
+);
 
 /** Step 1: Validate credentials and send OTP email (or bypass OTP if disabled) */
 export const sendOtp = createAsyncThunk(
@@ -232,6 +273,7 @@ const authSlice = createSlice({
   initialState: loadInitialState(),
   reducers: {
     logout: (state) => {
+      invalidateMetaCache();
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
@@ -434,6 +476,41 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
     });
     builder.addCase(loginHospitalAdmin.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
+
+    // ── Pacific Hospital Demo Login & Role Switch ─────────────────────────
+    builder.addCase(pacificDemoLogin.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+      state.otpStep = null;
+    });
+    builder.addCase(pacificDemoLogin.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+      state.otpStep = null;
+      state.preAuthToken = null;
+      state.activeSession = null;
+    });
+    builder.addCase(pacificDemoLogin.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+    });
+
+    builder.addCase(pacificDemoSwitchRole.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(pacificDemoSwitchRole.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(pacificDemoSwitchRole.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+    });
   },
 });
 

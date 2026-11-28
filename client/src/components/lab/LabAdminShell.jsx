@@ -8,6 +8,7 @@ import {
     FiGrid, FiFileText, FiCreditCard, FiSearch,
     FiMenu, FiX, FiLogOut, FiEdit3, FiCheckSquare, FiAlertOctagon, FiClock
 } from 'react-icons/fi';
+import PacificDemoRoleSwitcher from '../demo/PacificDemoRoleSwitcher';
 import './LabAdminShell.css';
 
 const LabAdminContext = createContext(null);
@@ -435,6 +436,8 @@ const LabAdminShell = ({ children }) => {
                             );
                         })}
                     </nav>
+
+                    <PacificDemoRoleSwitcher onRoleSwitched={() => setSidebarOpen(false)} />
 
                     {portalCfg.showTenantFooter && (
                         <div className="lms-sidebar-footer">

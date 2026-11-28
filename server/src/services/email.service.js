@@ -1,12 +1,16 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const { isDemoAccount, isDemoHospital, isPredefinedDemoEmail } = require('../config/demoConfig');
+const { isInPacificDemoSandbox, isPacificDemoEmail } = require('../config/pacificDemoConfig');
 
 function isDemoRecipient(email, hospitalId) {
+    // Only suppress external SMTP when explicitly inside an active Pacific Demo session OR targeting a demo account/email
+    if (isInPacificDemoSandbox()) return true;
     if (hospitalId && isDemoHospital(hospitalId)) return true;
     if (!email || typeof email !== 'string') return false;
     const clean = email.toLowerCase().trim();
-    return isPredefinedDemoEmail(clean) || 
+    return isPacificDemoEmail(clean) ||
+           isPredefinedDemoEmail(clean) || 
            isDemoAccount(clean) || 
            clean.endsWith('@demo.com') || 
            clean.endsWith('@medical365.com') || 
@@ -265,7 +269,7 @@ async function sendLoginOtpEmail({
 
         if (isDemoRecipient(email)) {
             console.log(`[email-service] [DEMO SAFEGUARD] Simulated login OTP email delivery for demo address: ${email}`);
-            return;
+            return { demoSkipped: true };
         }
 
         const effectiveDisplayName = emailDisplayName || hospitalName || 'Medical365 Authentication';

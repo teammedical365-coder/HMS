@@ -18,19 +18,23 @@ const App = () => {
   const dispatch = useAppDispatch();
   const { loadBranding, resetBranding } = useBranding();
 
+  const activeUserId = user?._id || user?.id || null;
+  const activeHospitalId = user?.hospitalId || null;
+  const activeUserRole = typeof user?.role === 'string'
+    ? user.role.toLowerCase()
+    : (user?._roleData?.name?.toLowerCase() || '');
+
   // Auto-load hospital branding when user logs in
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const hospitalId = user.hospitalId;
-      const role = (user.role || '').toLowerCase();
+    if (isAuthenticated && activeUserId) {
       // Apply branding only for hospital-scoped users (not central admins)
-      if (hospitalId && !['centraladmin', 'superadmin'].includes(role)) {
-        loadBranding(hospitalId);
+      if (activeHospitalId && !['centraladmin', 'superadmin'].includes(activeUserRole)) {
+        loadBranding(activeHospitalId);
       }
     } else {
       resetBranding();
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, activeUserId, activeHospitalId, activeUserRole]);
 
   // ── Offline-First System Initialization ─────────────────────────────────────
   useEffect(() => {
@@ -44,12 +48,9 @@ const App = () => {
 
   // Initialize offline DB and sync engine when user logs in
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const userId = user._id || user.id;
-      if (userId) {
-        initOfflineDb(userId);
-        startSyncEngine();
-      }
+    if (isAuthenticated && activeUserId) {
+      initOfflineDb(activeUserId);
+      startSyncEngine();
     } else {
       stopSyncEngine();
     }
@@ -57,19 +58,15 @@ const App = () => {
     return () => {
       stopSyncEngine();
     };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, activeUserId]);
 
   // Socket Connection Management
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && activeUserId) {
       socket.connect();
-      socket.emit('join', user._id || user.id);
+      socket.emit('join', activeUserId);
 
-      const roleStr = typeof user.role === 'string'
-        ? user.role.toLowerCase()
-        : user._roleData?.name?.toLowerCase();
-
-      if (roleStr) socket.emit('join', roleStr);
+      if (activeUserRole) socket.emit('join', activeUserRole);
 
       const handleNewNotification = (notification) => {
         dispatch({ type: 'notifications/addNotification', payload: notification });
@@ -86,7 +83,7 @@ const App = () => {
     }
 
     return () => { socket.disconnect(); };
-  }, [isAuthenticated, user, dispatch]);
+  }, [isAuthenticated, activeUserId, activeUserRole, dispatch]);
 
   // Initialize Global Modal Scroll Lock (detects any modal in DOM and freezes background)
   useEffect(() => {

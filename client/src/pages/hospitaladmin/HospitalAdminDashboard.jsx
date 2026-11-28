@@ -203,6 +203,7 @@ const HospitalAdminDashboard = () => {
     // Users state
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
+    const [usersError, setUsersError] = useState('');
     const [roles, setRoles] = useState([]);
     const [labLocations, setLabLocations] = useState([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -543,26 +544,31 @@ const HospitalAdminDashboard = () => {
     const fetchUsers = async () => {
         try {
             setLoadingUsers(true);
+            setUsersError('');
             const res = await adminAPI.getUsers();
-            if (res.success) {
-                const docCount = res.users.filter(u => {
-                    const r = (u.role || '').toLowerCase();
+            if (res?.success) {
+                const list = Array.isArray(res.users) ? res.users : (Array.isArray(res.data) ? res.data : []);
+                const docCount = list.filter(u => {
+                    const r = (u.role || u.roleName || '').toLowerCase();
                     return (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
                 }).length;
-                setUsers(res.users);
+                setUsers(list);
                 setStats(prev => ({
                     ...prev,
-                    totalUsers: res.users.length,
+                    totalUsers: list.length,
                     totalDoctors: Math.max(
                         docCount,
                         hospitalStats?.stats?.totalDoctors ?? hospitalStats?.stats?.doctorCount ?? prev.totalDoctors ?? 0
                     ),
-                    totalPatients: res.users.filter(u => (u.role || '').toLowerCase() === 'patient').length,
+                    totalPatients: list.filter(u => (u.role || u.roleName || '').toLowerCase() === 'patient').length,
                     totalRoles: prev.totalRoles || 0
                 }));
+            } else {
+                setUsersError(res?.message || 'Failed to load staff & doctors.');
             }
         } catch (err) {
             console.error('Error fetching users:', err);
+            setUsersError(err?.response?.data?.message || err?.message || 'Unable to load staff & doctors.');
         } finally {
             setLoadingUsers(false);
         }
@@ -571,9 +577,10 @@ const HospitalAdminDashboard = () => {
     const fetchRoles = async () => {
         try {
             const res = await adminAPI.getRoles();
-            if (res.success) {
-                setRoles(res.data);
-                setStats(prev => ({ ...prev, totalRoles: res.data.length }));
+            if (res?.success) {
+                const roleList = Array.isArray(res.data) ? res.data : (Array.isArray(res.roles) ? res.roles : []);
+                setRoles(roleList);
+                setStats(prev => ({ ...prev, totalRoles: roleList.length }));
             }
         } catch (err) {
             console.error('Error fetching roles:', err);
@@ -2173,7 +2180,7 @@ const HospitalAdminDashboard = () => {
                             return !(r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
                         }).length + doctorCount)
                     );
-                    const activeRolesCount = uniqueRoles.length;
+                    const activeRolesCount = uniqueRoles.length || roles.length || 0;
 
                     return (
                         <div className="ha-staff-section-container">
@@ -2310,6 +2317,15 @@ const HospitalAdminDashboard = () => {
                                     <div className="ha-staff-loading-wrap">
                                         <div className="ha-staff-spinner"></div>
                                         <p>Loading staff & doctors...</p>
+                                    </div>
+                                ) : usersError ? (
+                                    <div className="ha-staff-empty-state">
+                                        <div className="ha-staff-empty-icon">⚠️</div>
+                                        <h3>Unable to Load Staff</h3>
+                                        <p>{usersError}</p>
+                                        <button type="button" onClick={fetchUsers} className="ha-btn-clear-filters">
+                                            Retry Loading Staff
+                                        </button>
                                     </div>
                                 ) : filteredStaffUsers.length === 0 ? (
                                     <div className="ha-staff-empty-state">

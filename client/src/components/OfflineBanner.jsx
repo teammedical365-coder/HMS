@@ -105,12 +105,15 @@ const OfflineBanner = () => {
   const dispatch = useAppDispatch();
   const resetTimeoutRef = useRef(null);
   const prevOnlineRef = useRef(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const prevDispatchedCountRef = useRef(0);
 
   // ── Network status listener ──
   useEffect(() => {
     try {
       const unsubscribe = onStatusChange((online) => {
-        dispatch(setOnlineStatus(online));
+        if (online !== prevOnlineRef.current) {
+          dispatch(setOnlineStatus(online));
+        }
 
         // When switching from online to offline
         if (!online && prevOnlineRef.current) {
@@ -209,8 +212,11 @@ const OfflineBanner = () => {
   useEffect(() => {
     const updateCount = async () => {
       try {
-        const count = await getQueueCount();
-        dispatch(setPendingCount(count || 0));
+        const count = (await getQueueCount()) || 0;
+        if (count !== prevDispatchedCountRef.current) {
+          prevDispatchedCountRef.current = count;
+          dispatch(setPendingCount(count));
+        }
       } catch {}
     };
 

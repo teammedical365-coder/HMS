@@ -332,6 +332,30 @@ if (process.env.NODE_ENV !== 'test') {
 const tenantResolver = require('./middleware/tenantResolver');
 app.use(tenantResolver);
 
+// ── Pacific Demo Sandbox Execution Context (suppresses real SMS/Email for active demo sessions only) ──
+const jwtForDemoSandbox = require('jsonwebtoken');
+const { JWT_SECRET: DEMO_SANDBOX_JWT_SECRET } = require('./config/jwt');
+const { pacificDemoAls } = require('./config/pacificDemoConfig');
+app.use('/api', (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const tok = authHeader.split(' ')[1];
+        const preview = jwtForDemoSandbox.decode(tok);
+        if (preview && preview.isPacificDemo === true) {
+            try {
+                const verified = jwtForDemoSandbox.verify(tok, DEMO_SANDBOX_JWT_SECRET);
+                if (verified && verified.isPacificDemo === true) {
+                    req.isPacificDemo = true;
+                    return pacificDemoAls.run({ isPacificDemo: true }, next);
+                }
+            } catch (_) {
+                // Let verifyToken handle invalid/expired tokens normally
+            }
+        }
+    }
+    return next();
+});
+
 // ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -397,6 +421,7 @@ app.use('/api/patient-app', patientAppRoutes);
 app.use('/api/patient-local', patientLocalRoutes);
 app.use('/api/mfa', mfaRoutes);
 app.use('/api/auth/otp', emailOtpRoutes);
+app.use('/api/pacific-demo', require('./routes/pacificDemo.routes'));
 app.use('/api/search', searchRoutes);
 app.use('/api/consent', consentRoutes);
 app.use('/api/beds', bedRoutes);
@@ -414,6 +439,7 @@ app.use('/api/migrations', require('./routes/migration.routes'));
 app.use('/api/local-agent', require('./routes/localAgent.routes'));
 app.use('/api/local-sync', require('./routes/localSync.routes'));
 app.use('/api/nabh', require('./routes/nabh.routes'));
+app.use('/api/patient-policies', require('./routes/patientPolicy.routes'));
 app.use('/api/abdm/abha', require('./modules/abdm/abha.routes'));
 const { bridgeRouter } = require('./modules/abdm/abdm.bridge.routes');
 app.use('/api/abdm/bridge', bridgeRouter);

@@ -94,7 +94,18 @@ const appointmentSchema = new mongoose.Schema({
         name: { type: String },
         uploadedAt: { type: Date, default: Date.now },
         type: { type: String }
-    }]
+    }],
+
+    // Optional patient insurance / TPA / government health policy reference at time of booking
+    selectedPolicyId: { type: mongoose.Schema.Types.ObjectId, ref: 'PatientInsurancePolicy', default: null },
+    policySnapshot: {
+        policyType: { type: String, trim: true, default: '' },
+        providerName: { type: String, trim: true, default: '' },
+        policyNumber: { type: String, trim: true, default: '' },
+        tpaOrMemberId: { type: String, trim: true, default: '' },
+        policyHolderName: { type: String, trim: true, default: '' },
+        verificationStatus: { type: String, trim: true, default: '' }
+    }
 }, {
     timestamps: true
 });

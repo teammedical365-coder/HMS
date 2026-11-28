@@ -1,0 +1,284 @@
+.patient-policy-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.patient-policy-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.patient-policy-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.patient-policy-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.patient-policy-optional-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.patient-policy-saved-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: #ecfeff;
+    color: #0e7490;
+    border: 1px solid #a5f3fc;
+}
+
+.patient-policy-toggle-btn {
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.patient-policy-toggle-btn:hover {
+    background: #e2e8f0;
+}
+
+.patient-policy-saved-strip {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.patient-policy-saved-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.patient-policy-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.patient-policy-chip.active {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #1d4ed8;
+}
+
+.patient-policy-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+    margin-top: 14px;
+}
+
+.patient-policy-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.patient-policy-field.full-width {
+    grid-column: 1 / -1;
+}
+
+.patient-policy-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.patient-policy-field input,
+.patient-policy-field select,
+.patient-policy-field textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #0f172a;
+    background: #ffffff;
+    box-sizing: border-box;
+}
+
+.patient-policy-field input:focus,
+.patient-policy-field select:focus,
+.patient-policy-field textarea:focus {
+    outline: none;
+    border-color: #0f766e;
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+}
+
+.patient-policy-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.patient-policy-suggestion-btn {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.patient-policy-suggestion-btn:hover {
+    background: #f0fdfa;
+    border-color: #14b8a6;
+    color: #0f766e;
+}
+
+.patient-policy-upload-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border: 1px dashed #94a3b8;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.patient-policy-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.patient-policy-status-badge.not-verified {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+.patient-policy-status-badge.pending {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+}
+
+.patient-policy-status-badge.verified {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #86efac;
+}
+
+.patient-policy-status-badge.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+}
+
+.patient-policy-status-badge.expired {
+    background: #ffedd5;
+    color: #9a3412;
+    border-color: #fdba74;
+}
+
+.patient-policy-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.patient-policy-profile-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    background: #ffffff;
+}
+
+.patient-policy-profile-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px 14px;
+    margin-top: 12px;
+    font-size: 13px;
+}
+
+.patient-policy-meta-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.patient-policy-meta-value {
+    color: #0f172a;
+    font-weight: 600;
+    margin-top: 2px;
+    word-break: break-word;
+}
+
+.patient-policy-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f0fdfa 0%, #f8fafc 100%);
+    border: 1px solid #99f6e4;
+    margin: 10px 0;
+}
+
+@media (max-width: 700px) {
+    .patient-policy-grid {
+        grid-template-columns: 1fr;
+    }
+}

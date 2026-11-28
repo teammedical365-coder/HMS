@@ -33,6 +33,8 @@ const ClinicPatientProfile = () => {
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     const userRoleStr = (currentUser.role || '').toLowerCase();
     const dynRoleStr = (currentUser._roleData?.name || '').toLowerCase();
+    const permissions = currentUser._roleData?.permissions || [];
+    const isNurse = userRoleStr.includes('nurse') || dynRoleStr.includes('nurse') || permissions.includes('nurse_access');
     const isHospitalAdmin = ['hospitaladmin', 'centraladmin', 'superadmin'].includes(userRoleStr) ||
                             ['hospitaladmin', 'centraladmin', 'superadmin'].includes(dynRoleStr);
     const canViewVials = isHospitalAdmin || 
@@ -728,7 +730,8 @@ const ClinicPatientProfile = () => {
                         <div className="cpp-card">
                             <h3 className="cpp-card-title"><FiActivity /> Patient Vitals</h3>
 
-                            {/* Vitals Form */}
+                            {/* Vitals Entry Form — strictly restricted to Nurses */}
+                            {isNurse && (
                             <form onSubmit={handleSaveVitals} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
                                 {[
                                     { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
@@ -755,6 +758,7 @@ const ClinicPatientProfile = () => {
                                     </button>
                                 </div>
                             </form>
+                            )}
 
                             <h3 className="cpp-card-title" style={{ marginTop: '24px', fontSize: '15px' }}>Vitals Log</h3>
                             {displayTimeline.filter(t => t.data?.vitals && Object.values(t.data.vitals).some(Boolean)).length === 0 ? (

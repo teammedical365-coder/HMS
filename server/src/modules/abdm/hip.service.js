@@ -60,6 +60,11 @@ let smsSender = null;
 function setSmsSender(fn) { smsSender = fn; }
 
 async function sendLinkOtp(phone, otp) {
+    const { isInPacificDemoSandbox } = require('../../config/pacificDemoConfig');
+    if (isInPacificDemoSandbox()) {
+        console.log(`[ABDM-SMS] [DEMO SAFEGUARD] Suppressed external SMS in Pacific Demo sandbox for ${last10(phone)}`);
+        return undefined;
+    }
     if (smsSender) return smsSender(last10(phone), `Your Medical365 record-linking OTP is ${otp}. Valid for 10 minutes.`);
     if (config.sandboxFixedOtp) return undefined; // sandbox only
     throw new Error('SMS provider not configured for ABDM linking (call setSmsSender)');
